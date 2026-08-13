@@ -67,17 +67,23 @@ uretilen rapor gercek gibi gorunur ve Telegram'a gercek gibi duser.
 
 Gercek parayla baslarken: pozisyonlari yaz, `sablon: true` satirini sil.
 
-## Otomatik calistirma
+## Otomatik calistirma — GitHub Actions
 
-Windows Task Scheduler gorevi: **`IkinciBeyin-YatirimRaporu`**
-Hafta ici her gun 19:00'da `scripts/yatirim/gunluk.ps1` calisir
-(simulasyon raporu + Telegram ozeti). Log: `scripts/yatirim/loglar/gunluk.log`
+Repo: **`baduone03/yatirim-sistemi`** (private)
+Workflow: `.github/workflows/gunluk-rapor.yml`, hafta ici 16:00 UTC = **19:00 TR**
+
+Akis: testleri kos -> rapor uret -> Telegram -> raporu repoya commit et.
+Testler kirikken rapor uretilmez. Hata olursa Telegram'a calisma linkiyle uyari duser.
 
 ```powershell
-Get-ScheduledTask -TaskName IkinciBeyin-YatirimRaporu        # durum
-Start-ScheduledTask -TaskName IkinciBeyin-YatirimRaporu      # elle tetikle
-Unregister-ScheduledTask -TaskName IkinciBeyin-YatirimRaporu # kaldir
+gh workflow run gunluk-rapor.yml --repo baduone03/yatirim-sistemi   # elle tetikle
+gh run list --repo baduone03/yatirim-sistemi --limit 5              # gecmis
+git pull                                                            # raporu vault'a cek
 ```
+
+Bilgisayar kapali olsa da calisir. Yerel Task Scheduler gorevi **kaldirildi** -
+iki sistem ayni anda calisirsa Telegram'a gunde iki mesaj duserdi.
+`gunluk.ps1` yerel yedek olarak duruyor ama zamanlanmis degil.
 
 ## Testler
 
