@@ -16,9 +16,10 @@ from pathlib import Path
 
 import requests
 
-from config import PROJE_DIZINI
+from config import PROJE_DIZINI, Esikler
 from portfolio import Portfoy, SinifSapmasi
-from report import REBALANCING_ESIGI
+
+VARSAYILAN_ESIKLER = Esikler(rebalancing_sapma=0.05, risk_katkisi_ust=0.25)
 
 ENV_DOSYASI = PROJE_DIZINI.parents[1] / ".env"
 API_KOKU = "https://api.telegram.org"
@@ -130,7 +131,8 @@ def _islem_satirlari(durum, tarih: str) -> list[str]:
 
 
 def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
-                durum=None, baslik: str = "Yatirim", fiyatlar=None) -> str:
+                durum=None, baslik: str = "Yatirim", fiyatlar=None,
+                esikler: Esikler = VARSAYILAN_ESIKLER) -> str:
     """Rapordan kisa Telegram ozeti uretir - detay markdown raporda kalir."""
     if durum:
         taban = durum.baslangic_nakit_try
@@ -153,7 +155,7 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
     if durum:
         satirlar += _islem_satirlari(durum, date.today().isoformat())
 
-    sapanlar = [s for s in sapmalar if abs(s.sapma) >= REBALANCING_ESIGI]
+    sapanlar = [s for s in sapmalar if abs(s.sapma) >= esikler.rebalancing_sapma]
     if sapanlar:
         satirlar += ["", "<b>Rebalancing uyarisi</b>"]
         for sapma in sapanlar:
@@ -164,13 +166,14 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
                 f"{abs(sapma.sapma) * 100:.1f} puan {yon}"
             )
 
-    yogun = [r for r in risk.varlik_riskleri if r.risk_katkisi >= 0.25]
+    yogun = [r for r in risk.varlik_riskleri if esikler.kisilmali(r)]
     if yogun:
-        satirlar += ["", "<b>Risk yogunlasmasi</b>"]
+        satirlar += ["", "<b>Kisilmali</b>"]
         for varlik_riski in yogun:
             satirlar.append(
-                f"• {_kacis(varlik_riski.sembol)}: risk katkisi "
-                f"{varlik_riski.risk_katkisi * 100:.1f}%"
+                f"• {_kacis(varlik_riski.sembol)}: katki "
+                f"{varlik_riski.risk_katkisi * 100:.1f}%, "
+                f"beta {varlik_riski.beta:.2f}"
             )
 
     if not sapanlar and not yogun:

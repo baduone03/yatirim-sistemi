@@ -1,4 +1,4 @@
-"""Yatirim sistemi testleri.
+﻿"""Yatirim sistemi testleri.
 
 Calistirma:
     python -m unittest discover -s scripts/yatirim -v
@@ -23,12 +23,20 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from config import Ayarlar, Varlik, Yapilandirma, sablonu_reddet, yapilandirmayi_oku
+from config import (
+    Ayarlar,
+    Esikler,
+    Varlik,
+    Yapilandirma,
+    sablonu_reddet,
+    yapilandirmayi_oku,
+)
 from fetch import FiyatVerisi
 from ledger import durumu_hesapla, islemleri_oku
 from notify import _islem_satirlari, _kacis, env_oku, ozet_mesaji
 from portfolio import portfoyu_hesapla, portfoyu_ledgerdan_hesapla, sinif_sapmalari
 from risk import (
+    VarlikRiski,
     _max_drawdown,
     ortak_getiriler,
     riski_hesapla,
@@ -36,6 +44,7 @@ from risk import (
 )
 
 AYARLAR = Ayarlar(kur_sembolu="USDTRY=X", gecmis_gun=365, islem_gunu_yil=252)
+ESIKLER = Esikler(rebalancing_sapma=0.03, risk_katkisi_ust=0.20)
 
 
 def gecici_yaz(icerik: str, ad: str = "test.yaml") -> Path:
@@ -117,6 +126,7 @@ class CarpanTesti(unittest.TestCase):
     def _altin_yapilandirmasi(self) -> Yapilandirma:
         return Yapilandirma(
             ayarlar=AYARLAR,
+            esikler=ESIKLER,
             hedef_dagilim={"maden": 1.0},
             varliklar={"GC=F": Varlik("GC=F", "Altin", "maden", "USD", carpan=0.1)},
             nakit_try=0.0,
@@ -141,6 +151,7 @@ class SinifDagilimiTesti(unittest.TestCase):
     def test_nakit_agirliga_dahil_edilir(self):
         yapilandirma = Yapilandirma(
             ayarlar=AYARLAR,
+            esikler=ESIKLER,
             hedef_dagilim={"bist": 0.5, "nakit": 0.5},
             varliklar={"A.IS": Varlik("A.IS", "A", "bist", "TRY")},
             nakit_try=500.0,
@@ -188,7 +199,7 @@ class TakvimHizalamaTesti(unittest.TestCase):
         self.assertEqual(len(getiriler), 5)
         self.assertFalse(getiriler.isna().any().any())
 
-    def test_hafta_sonu_bosluğu_sifir_getiri_uretmez(self):
+    def test_hafta_sonu_bosluÄŸu_sifir_getiri_uretmez(self):
         getiriler = ortak_getiriler(self._karisik_gecmis())
         self.assertFalse(
             (getiriler["HISSE.IS"] == 0).any(),
@@ -269,6 +280,50 @@ class BayatFiyatTesti(unittest.TestCase):
         self.assertEqual(fiyatlar.bayat_semboller(), {})
 
 
+class KismaKuraliTesti(unittest.TestCase):
+    """Kisma karari katki VE beta birlikte tavani asinca verilmeli.
+
+    Regresyon: yalnizca ham katkiya bakan kural, parasindan AZ risk tasiyan
+    verimli varliklari (QQQ beta 0.85) sattiriyordu.
+    """
+
+    def _risk(self, katki: float, agirlik: float) -> VarlikRiski:
+        return VarlikRiski(sembol="X", yillik_volatilite=0.3,
+                           max_drawdown=-0.2, risk_katkisi=katki, agirlik=agirlik)
+
+    def test_yuksek_katki_yuksek_beta_kisilir(self):
+        # ASELS ornegi: katki %23.2, agirlik %11.6 -> beta 2.00
+        self.assertTrue(ESIKLER.kisilmali(self._risk(0.232, 0.116)))
+
+    def test_yuksek_katki_dusuk_beta_kisilmaz(self):
+        # QQQ ornegi: katki %20.6 tavanin ustunde AMA beta 0.83 - verimli tasiyici
+        self.assertFalse(ESIKLER.kisilmali(self._risk(0.206, 0.249)))
+
+    def test_altin_gibi_agirlik_kaynakli_katki_kisilmaz(self):
+        # Altin: katki %24.2, agirlik %19.5 -> beta 1.24, cesitlendirici
+        self.assertFalse(ESIKLER.kisilmali(self._risk(0.242, 0.195)))
+
+    def test_dusuk_katki_yuksek_beta_kisilmaz(self):
+        # Beta yuksek ama pozisyon kucuk - portfoyu suruklemiyor
+        self.assertFalse(ESIKLER.kisilmali(self._risk(0.08, 0.04)))
+
+    def test_agirliksiz_varlik_beta_sifir(self):
+        self.assertEqual(self._risk(0.0, 0.0).beta, 0.0)
+
+    def test_gecersiz_beta_esigi_reddedilir(self):
+        varliklar = gecici_yaz(
+            "ayarlar: {kur_sembolu: 'USDTRY=X', gecmis_gun: 365, islem_gunu_yil: 252}\n"
+            "esikler: {rebalancing_sapma: 0.03, risk_katkisi_ust: 0.2, risk_beta_ust: 0.8}\n"
+            "hedef_dagilim: {bist: 1.0}\n"
+            "varliklar:\n  - {sembol: A.IS, ad: A, sinif: bist, kur: TRY}\n",
+            ad="varliklar.yaml")
+        with self.assertRaisesRegex(ValueError, "risk_beta_ust"):
+            yapilandirmayi_oku(
+                varliklar_dosyasi=varliklar,
+                portfoy_dosyasi=gecici_yaz("nakit_try: 0\npozisyonlar: []\n",
+                                           ad="portfoy.yaml"))
+
+
 class RiskTesti(unittest.TestCase):
     def test_max_drawdown_tepeden_dibe_olculur(self):
         seri = pd.Series([100.0, 120.0, 60.0, 80.0])
@@ -291,6 +346,7 @@ class RiskTesti(unittest.TestCase):
         fiyatlar = FiyatVerisi(try_gecmis=gecmis, usdtry=40.0, eksik_semboller=[])
         yapilandirma = Yapilandirma(
             ayarlar=AYARLAR,
+            esikler=ESIKLER,
             hedef_dagilim={"bist": 0.9, "nakit": 0.1},
             varliklar={
                 "A.IS": Varlik("A.IS", "A", "bist", "TRY"),
@@ -398,6 +454,7 @@ class BildirimTesti(unittest.TestCase):
     def test_ozet_mesaji_esik_asilmadiginda_sakin(self):
         yapilandirma = Yapilandirma(
             ayarlar=AYARLAR,
+            esikler=ESIKLER,
             hedef_dagilim={"bist": 0.5, "nakit": 0.5},
             varliklar={"A.IS": Varlik("A.IS", "A", "bist", "TRY")},
             nakit_try=500.0,
@@ -460,3 +517,5 @@ class SablonKorumasiTesti(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+

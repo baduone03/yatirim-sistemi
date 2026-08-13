@@ -22,7 +22,8 @@ test etmek.
 | ABD hisse/ETF, kripto, gram maden | kesirli serbest |
 | Kaldirac / acik pozisyon | yok |
 | Ek para girisi | yok - sadece baslangic sermayesi |
-| Rebalancing esigi | hedeften 5 puan sapma |
+| Rebalancing esigi | hedeften **3 puan** sapma (agresif) |
+| Kisma kurali | risk katkisi > **%20** VE beta > **1,50** |
 
 Defter `islemler.yaml` append-only. Gecmis islem silinmez; hata varsa
 ters islemle kapatilir.
@@ -150,11 +151,52 @@ Pazar botunun 427 sinyalinin %88'i TP/SL'e degmeden sondu.
 
 Kurali sikisinca esnetmek, kurali hic koymamakla ayni sey.
 
+### 2026-08-13 (4) — Esikler agresiflestirildi + ASELS kisildi
+
+Simulasyon oldugu icin esikler siki tutuldu: rebalancing 5 -> **3 puan**,
+risk katkisi tavani %25 -> **%20**. Esikler artik kodda sabit degil,
+`varliklar.yaml` icindeki `esikler` blogunda.
+
+**Yeni esikle uc varlik tetikledi ama ikisi YANLIS alarmdi:**
+
+| Varlik | Katki | Agirlik | Beta | Karar |
+|---|---:|---:|---:|---|
+| ASELS | %23,2 | %11,6 | **2,00** | **kisildi** |
+| Altin | %23,2 | %19,5 | 1,19 | dokunulmadi |
+| QQQ | %20,6 | %24,9 | **0,83** | dokunulmadi |
+
+QQQ tavani asiyordu ama parasindan **az** risk tasiyor - portfoydeki en verimli
+tasiyici. Altinin katkisi agirligindan geliyor, betasindan degil; ustelik tek
+cesitlendirici (herkese 0,15-0,26 korele), kismak volatiliteyi **artirirdi**.
+
+**Kural duzeltildi.** Ham katki tek basina yanlis olcut: 6 pozisyonda ortalama
+katki %16,7'dir, birilerinin %20'yi asmasi matematiksel zorunluluk. Ayrica
+pozisyonu kucultmek katkiyi dusurur ama **betayi degistirmez** - beta varligin
+ozelligidir. Yeni kural iki kosulu birden ister: `katki > %20` **ve** `beta > 1,50`.
+
+**Islem:** ASELS 1 lot satildi (392,50 TL), geliriyle TUPRS 1 lot alindi (346,75 TL).
+Komisyon 1,11 TL. Nakde park edilmedi - risk 2,00 betadan 0,79 betaya kaydirildi,
+BIST agirligi korundu.
+
+**Sonuc:**
+
+| Olcut | Once | Sonra |
+|---|---:|---:|
+| ASELS risk katkisi | %23,2 | **%18,5** |
+| Portfoy volatilitesi | %14,6 | **%14,3** |
+| Tetikleyen pozisyon | 3 | **0** |
+
+Not: ASELS bugun +%10,2 yaptigi icin agirligi buyudu. Kazanandan satmak
+his olarak yanlis gelir - [[rebalancing]] tam olarak bunu anlatiyor.
+
 ---
 
 ## Sonraki karar icin tetikleyiciler
 
-- Bir varlik sinifi hedeften 5 puan saparsa -> rebalancing degerlendir
-- Tek varligin risk katkisi %25'i asarsa -> pozisyonu kis
+- Bir varlik sinifi hedeften **3 puan** saparsa -> rebalancing degerlendir
+- Bir varligin katkisi **%20**'yi VE betasi **1,50**'yi birlikte asarsa -> kis
 - Portfoy max drawdown -%20'yi asarsa -> dagilimi bastan gozden gecir
 - Aksi halde islem yok. **Islem yapmamak da bir karardir.**
+
+Esikler `varliklar.yaml` -> `esikler` blogunda. Gercek parayla calisirken
+komisyon maliyeti nedeniyle gevsetilmeli (5 puan / %25).

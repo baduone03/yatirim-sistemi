@@ -13,7 +13,24 @@
 ayarlar:
   kur_sembolu: USDTRY=X
   gecmis_gun: 365          # risk metrikleri bu pencereden hesaplanir
-  islem_gunu_yil: 252
+  islem_gunu_yil: 252      # yalnizca fallback; carpan normalde veriden turetilir
+
+# Karar esikleri. Simulasyon modunda AGRESIF ayarlandi.
+# Gercek parayla calisirken komisyon maliyeti nedeniyle gevsetilmeli.
+esikler:
+  # Bir varlik sinifi hedefinden bu kadar SAPARSA rebalancing uyarisi cikar.
+  # 0.05 (muhafazakar) -> 0.03 (agresif): daha sik duzeltme, daha cok komisyon.
+  rebalancing_sapma: 0.03
+
+  # Kisma karari IKI kosulun BIRDEN saglanmasini ister:
+  #   1) risk katkisi tavani asmali
+  #   2) beta (katki/agirlik) tavani asmali
+  #
+  # Tek basina katki yetmez: 6 pozisyonda ortalama katki %16.7'dir, birilerinin
+  # %20'yi asmasi matematiksel zorunluluk. Ham katkiyi kovalamak, parasindan
+  # AZ risk tasiyan verimli varliklari (ornegin QQQ, beta 0.85) sattirir.
+  risk_katkisi_ust: 0.20
+  risk_beta_ust: 1.50
 
 hedef_dagilim:
   bist: 0.30

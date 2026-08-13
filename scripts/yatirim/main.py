@@ -99,7 +99,8 @@ def main() -> int:
     if argumanlar.telegram:
         baslik = f"{'Simulasyon' if durum else 'Portfoy'} {rapor_adi}"
         try:
-            mesaj_gonder(ozet_mesaji(portfoy, sapmalar, risk, durum, baslik, fiyatlar))
+            mesaj_gonder(ozet_mesaji(portfoy, sapmalar, risk, durum, baslik,
+                                     fiyatlar, yapilandirma.esikler))
             print("Telegram ozeti gonderildi.")
         except TelegramHatasi as hata:
             # Rapor zaten diske yazildi; bildirim hatasi ciktiyi cope atmamali.

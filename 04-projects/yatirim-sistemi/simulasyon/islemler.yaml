@@ -68,3 +68,18 @@ islemler:
     adet: 5
     fiyat_try: 336.50
     gerekce: "Mevcut BIST hisselerine ort. korelasyon 0.17 (en dusuk). Bacak volatilitesi %29.2 -> %26.9."
+
+  # === 2026-08-13: Risk katkisi tavani asildi (agresif esik %20) ===
+  - tarih: 2026-08-13
+    yon: SAT
+    sembol: ASELS.IS
+    adet: 1
+    fiyat_try: 392.50
+    gerekce: "Risk katkisi %23.2, agirligi %11.6 - parasinin 2 kati risk tasiyor. Tavan %20."
+
+  - tarih: 2026-08-13
+    yon: AL
+    sembol: TUPRS.IS
+    adet: 1
+    fiyat_try: 346.75
+    gerekce: "ASELS geliri nakde park edilmedi; risk 2.00 betadan 0.79 betaya kaydirildi."

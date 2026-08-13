@@ -25,6 +25,20 @@ class VarlikRiski:
     yillik_volatilite: float
     max_drawdown: float
     risk_katkisi: float          # portfoy volatilitesinin bu varliktan gelen orani
+    agirlik: float = 0.0         # portfoy icindeki sermaye agirligi
+
+    @property
+    def beta(self) -> float:
+        """Risk katkisi / agirlik = varligin portfoye betasi.
+
+        1'in ustu: parasindan fazla risk tasiyor.
+        1'in alti: parasindan az risk tasiyor (verimli tasiyici).
+
+        Pozisyonu kucultmek katkiyi dusurur ama betayi degistirmez -
+        beta varligin ozelligidir. Bu yuzden "kis" karari icin dogru
+        olcut ham katki degil, katki VE beta birlikte.
+        """
+        return self.risk_katkisi / self.agirlik if self.agirlik > 0 else 0.0
 
 
 @dataclass(frozen=True)
@@ -130,6 +144,7 @@ def riski_hesapla(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
             yillik_volatilite=float(volatiliteler[sembol]),
             max_drawdown=_max_drawdown(fiyatlar.try_gecmis[sembol]),
             risk_katkisi=float(katkilar[sembol] / portfoy_vol) if portfoy_vol > 0 else 0.0,
+            agirlik=float(agirliklar[sembol]),
         )
         for sembol in getiriler.columns
     ]

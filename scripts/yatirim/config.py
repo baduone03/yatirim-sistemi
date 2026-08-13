@@ -39,8 +39,23 @@ class Ayarlar:
 
 
 @dataclass(frozen=True)
+class Esikler:
+    """Karar esikleri - kodda sabit degil, varliklar.yaml'dan gelir."""
+
+    rebalancing_sapma: float
+    risk_katkisi_ust: float
+    risk_beta_ust: float = 1.50
+
+    def kisilmali(self, varlik_riski) -> bool:
+        """Kisma karari: katki VE beta birlikte tavani asmali."""
+        return (varlik_riski.risk_katkisi > self.risk_katkisi_ust
+                and varlik_riski.beta > self.risk_beta_ust)
+
+
+@dataclass(frozen=True)
 class Yapilandirma:
     ayarlar: Ayarlar
+    esikler: Esikler
     hedef_dagilim: dict[str, float]
     varliklar: dict[str, Varlik]
     nakit_try: float
@@ -112,12 +127,29 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
     _dogrula(varliklar, pozisyonlar, hedef_dagilim)
 
     ayar_ham = varlik_ham["ayarlar"]
+    esik_ham = varlik_ham.get("esikler") or {}
+    esikler = Esikler(
+        rebalancing_sapma=float(esik_ham.get("rebalancing_sapma", 0.05)),
+        risk_katkisi_ust=float(esik_ham.get("risk_katkisi_ust", 0.25)),
+        risk_beta_ust=float(esik_ham.get("risk_beta_ust", 1.50)),
+    )
+    for ad, deger in (("rebalancing_sapma", esikler.rebalancing_sapma),
+                      ("risk_katkisi_ust", esikler.risk_katkisi_ust)):
+        if not 0 < deger < 1:
+            raise ValueError(f"esikler.{ad} 0 ile 1 arasinda olmali, {deger} geldi")
+    if esikler.risk_beta_ust <= 1:
+        raise ValueError(
+            f"esikler.risk_beta_ust 1'den buyuk olmali, {esikler.risk_beta_ust} geldi "
+            "(beta 1 = varlik parasi kadar risk tasiyor)"
+        )
+
     return Yapilandirma(
         ayarlar=Ayarlar(
             kur_sembolu=ayar_ham["kur_sembolu"],
             gecmis_gun=int(ayar_ham["gecmis_gun"]),
             islem_gunu_yil=int(ayar_ham["islem_gunu_yil"]),
         ),
+        esikler=esikler,
         hedef_dagilim=hedef_dagilim,
         varliklar=varliklar,
         nakit_try=float(portfoy_ham.get("nakit_try", 0.0)),

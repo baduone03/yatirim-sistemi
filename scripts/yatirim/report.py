@@ -11,7 +11,6 @@ from fetch import FiyatVerisi
 from portfolio import Portfoy, SinifSapmasi
 from risk import RiskRaporu
 
-REBALANCING_ESIGI = 0.05          # hedeften 5 puan sapma -> uyari
 OZET_BASLANGIC = "<!-- OZET:BASLANGIC -->"
 OZET_BITIS = "<!-- OZET:BITIS -->"
 
@@ -80,7 +79,8 @@ def _pozisyon_bolumu(portfoy: Portfoy) -> list[str]:
     return satirlar
 
 
-def _dagilim_bolumu(sapmalar: list[SinifSapmasi], toplam_deger: float) -> list[str]:
+def _dagilim_bolumu(sapmalar: list[SinifSapmasi], toplam_deger: float,
+                    esik: float) -> list[str]:
     satirlar = [
         "## Varlik dagilimi ve rebalancing",
         "",
@@ -90,7 +90,7 @@ def _dagilim_bolumu(sapmalar: list[SinifSapmasi], toplam_deger: float) -> list[s
     uyarilar = []
     for sapma in sapmalar:
         tutar = abs(sapma.sapma) * toplam_deger
-        if abs(sapma.sapma) < REBALANCING_ESIGI:
+        if abs(sapma.sapma) < esik:
             eylem = "dengede"
         elif sapma.sapma > 0:
             eylem = f"{_tl(tutar)} azalt"
@@ -105,31 +105,55 @@ def _dagilim_bolumu(sapmalar: list[SinifSapmasi], toplam_deger: float) -> list[s
 
     satirlar.append("")
     if uyarilar:
-        satirlar.append(f"> Rebalancing uyarisi (esik {_oran(REBALANCING_ESIGI, 0)}):")
+        satirlar.append(f"> Rebalancing uyarisi (esik {_oran(esik, 0)}):")
         satirlar.extend(f"> - {u}" for u in uyarilar)
         satirlar.append("")
     return satirlar
 
 
-def _risk_bolumu(risk: RiskRaporu, varlik_adlari: dict[str, str]) -> list[str]:
+def _risk_bolumu(risk: RiskRaporu, varlik_adlari: dict[str, str],
+                 esikler) -> list[str]:
     satirlar = [
         "## Risk metrikleri",
         "",
         f"Pencere: son {risk.gozlem_sayisi} islem gunu, TL bazli gunluk getiriler. "
         f"Yillicklastirma carpani {risk.yillik_periyot:.0f} (veriden turetildi).",
         "",
-        "| Varlik | Yillik volatilite | Max drawdown | Risk katkisi |",
-        "|---|---:|---:|---:|",
+        "| Varlik | Yillik volatilite | Max drawdown | Agirlik | Risk katkisi | Beta |",
+        "|---|---:|---:|---:|---:|---:|",
     ]
+    kisilacaklar = []
     for varlik_riski in risk.varlik_riskleri:
+        kis = esikler.kisilmali(varlik_riski)
+        if kis:
+            kisilacaklar.append(varlik_riski)
         satirlar.append(
             f"| {varlik_adlari.get(varlik_riski.sembol, varlik_riski.sembol)} | "
             f"{_oran(varlik_riski.yillik_volatilite)} | "
             f"{_oran(varlik_riski.max_drawdown)} | "
-            f"{_oran(varlik_riski.risk_katkisi)} |"
+            f"{_oran(varlik_riski.agirlik)} | "
+            f"{_oran(varlik_riski.risk_katkisi)} | "
+            f"{varlik_riski.beta:.2f}{' **>**' if kis else ''} |"
         )
-    satirlar += ["", "Risk katkisi = varligin portfoy volatilitesindeki payi. "
-                 "Agirligindan buyukse portfoyu tek basina o varlik suruyor.", ""]
+    satirlar += [
+        "",
+        "**Beta = risk katkisi / agirlik.** 1'in ustu parasindan fazla risk "
+        "tasiyor demek; 1'in alti verimli tasiyici.",
+        "",
+        f"Kisma karari IKI kosul birden ister: katki > {_oran(esikler.risk_katkisi_ust, 0)} "
+        f"**ve** beta > {esikler.risk_beta_ust:.2f}. Tek basina katki yetmez - "
+        "6 pozisyonda ortalama katki %16.7'dir, birilerinin tavani asmasi zorunludur.",
+        "",
+    ]
+
+    if kisilacaklar:
+        satirlar.append("> **Kisilmali:**")
+        for varlik_riski in kisilacaklar:
+            satirlar.append(
+                f"> - `{varlik_riski.sembol}` katki "
+                f"{_oran(varlik_riski.risk_katkisi)}, beta {varlik_riski.beta:.2f}"
+            )
+        satirlar.append("")
     return satirlar
 
 
@@ -237,8 +261,9 @@ def rapor_olustur(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
         satirlar += _sim_bolumu(durum, portfoy)
     satirlar += _ozet_bolumu(portfoy, risk, fiyatlar)
     satirlar += _pozisyon_bolumu(portfoy)
-    satirlar += _dagilim_bolumu(sapmalar, portfoy.toplam_deger_try)
-    satirlar += _risk_bolumu(risk, varlik_adlari)
+    satirlar += _dagilim_bolumu(sapmalar, portfoy.toplam_deger_try,
+                                yapilandirma.esikler.rebalancing_sapma)
+    satirlar += _risk_bolumu(risk, varlik_adlari, yapilandirma.esikler)
     satirlar += _korelasyon_bolumu(risk.korelasyon)
     if durum:
         satirlar += _islem_gecmisi_bolumu(durum)
