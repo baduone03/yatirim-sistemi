@@ -1,0 +1,158 @@
+"""Telegram bildirimi.
+
+Telegram Bot API'ye dogrudan HTTPS POST atar - python-telegram-bot'a gerek yok:
+tek mesaj gonderiyoruz, async dongu ve MarkdownV2 kacis derdi gereksiz.
+HTML parse modu kullanilir, kacilacak yalnizca 3 karakter var.
+
+Kimlik bilgileri vault kokundeki .env dosyasindan okunur.
+Token asla koda veya rapora yazilmaz.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+import requests
+
+from config import PROJE_DIZINI
+from portfolio import Portfoy, SinifSapmasi
+from report import REBALANCING_ESIGI
+
+ENV_DOSYASI = PROJE_DIZINI.parents[1] / ".env"
+API_KOKU = "https://api.telegram.org"
+ZAMAN_ASIMI = 15
+
+
+class TelegramHatasi(RuntimeError):
+    pass
+
+
+def _kacis(metin: str) -> str:
+    """Telegram HTML parse modu icin: yalnizca bu uc karakter kacirilir."""
+    return metin.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+ORTAM_ANAHTARLARI = ("TELEGRAM_BOT_TOKEN", "TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID")
+
+
+def env_oku(dosya: Path = ENV_DOSYASI) -> dict[str, str]:
+    """Kimlik bilgilerini okur: once .env dosyasi, sonra ortam degiskenleri.
+
+    Ortam degiskeni dosyayi EZER. Sebep: GitHub Actions'ta .env dosyasi yok,
+    degerler repository secrets'tan ortama enjekte edilir. Lokalde ise .env
+    kullanilir. Ayni kod iki ortamda da calisir.
+
+    python-dotenv bagimliligi eklemeye degmez - format zaten bu kadar basit.
+    """
+    degerler: dict[str, str] = {}
+
+    if dosya.exists():
+        for satir in dosya.read_text(encoding="utf-8").splitlines():
+            satir = satir.strip()
+            if not satir or satir.startswith("#") or "=" not in satir:
+                continue
+            anahtar, deger = satir.split("=", 1)
+            degerler[anahtar.strip()] = deger.strip().strip('"').strip("'")
+
+    for anahtar in ORTAM_ANAHTARLARI:
+        ortam_degeri = os.environ.get(anahtar)
+        if ortam_degeri:
+            degerler[anahtar] = ortam_degeri.strip()
+
+    return degerler
+
+
+def mesaj_gonder(metin: str, env: dict[str, str] | None = None) -> None:
+    """Telegram'a mesaj gonderir. Basarisizlikta TelegramHatasi firlatir."""
+    env = env if env is not None else env_oku()
+    token = env.get("TELEGRAM_BOT_TOKEN") or env.get("TELEGRAM_TOKEN")
+    chat_id = env.get("TELEGRAM_CHAT_ID")
+
+    if not token or not chat_id:
+        if not ENV_DOSYASI.exists():
+            raise TelegramHatasi(
+                f"{ENV_DOSYASI} yok ve TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID "
+                "ortam degiskeni de tanimli degil.\n"
+                "Lokal: .env.example dosyasini .env olarak kopyala.\n"
+                "GitHub Actions: repository secrets tanimli mi kontrol et."
+            )
+        if not env:
+            # En sik hata: degerler '#' ile baslayan yorum satirina yazilmis.
+            raise TelegramHatasi(
+                f"{ENV_DOSYASI} okundu ama hicbir ANAHTAR=deger satiri bulunamadi. "
+                "Degerler '#' ile baslayan yorum satirina yazilmis olabilir."
+            )
+        eksik = [ad for ad, deger in
+                 (("TELEGRAM_BOT_TOKEN", token), ("TELEGRAM_CHAT_ID", chat_id))
+                 if not deger]
+        raise TelegramHatasi(f"{ENV_DOSYASI} icinde eksik/bos: {', '.join(eksik)}")
+
+    yanit = requests.post(
+        f"{API_KOKU}/bot{token}/sendMessage",
+        json={"chat_id": chat_id, "text": metin, "parse_mode": "HTML",
+              "disable_web_page_preview": True},
+        timeout=ZAMAN_ASIMI,
+    )
+    if not yanit.ok:
+        # Token'i sizdirmamak icin yalnizca API'nin aciklamasi yazilir.
+        aciklama = yanit.json().get("description", "bilinmeyen hata")
+        raise TelegramHatasi(f"Telegram reddetti (HTTP {yanit.status_code}): {aciklama}")
+
+
+def _tl(deger: float) -> str:
+    return f"{deger:,.0f} TL".replace(",", ".")
+
+
+def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
+                durum=None, baslik: str = "Yatirim", fiyatlar=None) -> str:
+    """Rapordan kisa Telegram ozeti uretir - detay markdown raporda kalir."""
+    if durum:
+        taban = durum.baslangic_nakit_try
+        net = portfoy.toplam_deger_try - taban
+    else:
+        taban = portfoy.toplam_maliyet_try
+        net = portfoy.toplam_deger_try - taban
+    getiri = net / taban if taban else 0.0
+    isaret = "🟢" if net >= 0 else "🔴"
+
+    satirlar = [
+        f"<b>{_kacis(baslik)}</b>",
+        f"{isaret} {_tl(portfoy.toplam_deger_try)}  ({getiri * 100:+.1f}%)",
+        f"Net: {_tl(net)} | Nakit: {_tl(portfoy.nakit_try)}",
+        "",
+        f"Volatilite {risk.portfoy_volatilitesi * 100:.1f}%"
+        f" | Drawdown {risk.portfoy_max_drawdown * 100:.1f}%",
+    ]
+
+    sapanlar = [s for s in sapmalar if abs(s.sapma) >= REBALANCING_ESIGI]
+    if sapanlar:
+        satirlar += ["", "<b>Rebalancing uyarisi</b>"]
+        for sapma in sapanlar:
+            yon = "fazla" if sapma.sapma > 0 else "eksik"
+            satirlar.append(
+                f"• {_kacis(sapma.sinif)}: {sapma.guncel_agirlik * 100:.1f}%"
+                f" (hedef {sapma.hedef_agirlik * 100:.0f}%) — "
+                f"{abs(sapma.sapma) * 100:.1f} puan {yon}"
+            )
+
+    yogun = [r for r in risk.varlik_riskleri if r.risk_katkisi >= 0.25]
+    if yogun:
+        satirlar += ["", "<b>Risk yogunlasmasi</b>"]
+        for varlik_riski in yogun:
+            satirlar.append(
+                f"• {_kacis(varlik_riski.sembol)}: risk katkisi "
+                f"{varlik_riski.risk_katkisi * 100:.1f}%"
+            )
+
+    if not sapanlar and not yogun:
+        satirlar += ["", "Esik asilmadi — islem gerekmiyor."]
+
+    # Veri sorunu sessiz kalmamali: bayat fiyat yanlis degerleme demek.
+    bayatlar = fiyatlar.bayat_semboller() if fiyatlar is not None else {}
+    if bayatlar:
+        satirlar += ["", "<b>⚠️ Bayat fiyat verisi</b>"]
+        for sembol, gecikme in sorted(bayatlar.items()):
+            satirlar.append(f"• {_kacis(sembol)}: {gecikme} gundur guncellenmedi")
+
+    return "\n".join(satirlar)

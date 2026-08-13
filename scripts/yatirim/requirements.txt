@@ -1,0 +1,4 @@
+yfinance==1.5.2
+PyYAML==6.0.3
+# yfinance zaten getiriyor ama notify.py dogrudan kullaniyor - acikca bildir.
+requests==2.32.3

@@ -1,0 +1,83 @@
+# Izlenen varliklar ve hedef dagilim.
+# Sembol degistirmek/eklemek icin sadece bu dosyayi duzenle, kod dokunma.
+#
+# Alanlar:
+#   sembol  : Yahoo Finance sembolu (BIST icin .IS soneki)
+#   ad      : okunabilir isim
+#   sinif    : hedef_dagilim icindeki anahtarlardan biri
+#   kur      : TRY veya USD (USD olanlar usdtry ile TL'ye cevrilir)
+#   carpan   : ham fiyati istenen birime cevirir (varsayilan 1.0)
+#              ornek: ons -> gram icin 1/31.1035 = 0.0321507
+#   izleme   : true ise sadece takip edilir, portfoy agirligina girmez
+
+ayarlar:
+  kur_sembolu: USDTRY=X
+  gecmis_gun: 365          # risk metrikleri bu pencereden hesaplanir
+  islem_gunu_yil: 252
+
+hedef_dagilim:
+  bist: 0.30
+  nasdaq: 0.25
+  kripto: 0.10
+  maden: 0.20
+  nakit: 0.15
+
+varliklar:
+  # --- BIST ---
+  - sembol: XU100.IS
+    ad: BIST 100 Endeksi
+    sinif: bist
+    kur: TRY
+    izleme: true
+  - sembol: THYAO.IS
+    ad: Turk Hava Yollari
+    sinif: bist
+    kur: TRY
+  - sembol: ASELS.IS
+    ad: Aselsan
+    sinif: bist
+    kur: TRY
+  - sembol: GARAN.IS
+    ad: Garanti BBVA
+    sinif: bist
+    kur: TRY
+  - sembol: TUPRS.IS
+    ad: Tupras
+    sinif: bist
+    kur: TRY
+
+  # --- Nasdaq ---
+  - sembol: QQQ
+    ad: Invesco QQQ (Nasdaq 100 ETF)
+    sinif: nasdaq
+    kur: USD
+  - sembol: AAPL
+    ad: Apple
+    sinif: nasdaq
+    kur: USD
+  - sembol: NVDA
+    ad: NVIDIA
+    sinif: nasdaq
+    kur: USD
+
+  # --- Kripto ---
+  - sembol: BTC-USD
+    ad: Bitcoin
+    sinif: kripto
+    kur: USD
+  - sembol: ETH-USD
+    ad: Ethereum
+    sinif: kripto
+    kur: USD
+
+  # --- Maden (ons fiyatindan grama cevrilir) ---
+  - sembol: GC=F
+    ad: Altin (gram)
+    sinif: maden
+    kur: USD
+    carpan: 0.0321507
+  - sembol: SI=F
+    ad: Gumus (gram)
+    sinif: maden
+    kur: USD
+    carpan: 0.0321507

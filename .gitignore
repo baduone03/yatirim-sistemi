@@ -1,0 +1,38 @@
+# BEYAZ LISTE MANTIGI
+#
+# Once her sey yok sayilir, sonra yalnizca acikca izin verilenler eklenir.
+# Sebep: bu bir kisisel bilgi tabani. Kara liste kullanilsaydi yeni acilan
+# her not klasoru yanlislikla GitHub'a gidebilirdi. Beyaz listede yeni
+# klasorler varsayilan olarak DISARIDA kalir.
+#
+# GitHub'a giden: yatirim sistemi kodu + yapilandirmasi + raporlari.
+# GitHub'a GITMEYEN: 01-inbox, 02-sources, 03-wiki, 05-daily, 06-archive,
+#                    memory.md, .obsidian, .env
+
+/*
+
+!/.gitignore
+!/.env.example
+!/.github/
+!/CLAUDE.md
+!/README.md
+!/scripts/
+
+# 04-projects icinden yalnizca yatirim-sistemi izlenir
+!/04-projects/
+/04-projects/*
+!/04-projects/yatirim-sistemi/
+
+# --- izin verilen dizinlerin icinden cikarilanlar ---
+
+# Gercek credential - asla commit edilmez
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Yerel calisma loglari (Actions'ta uretilmez)
+/scripts/yatirim/loglar/

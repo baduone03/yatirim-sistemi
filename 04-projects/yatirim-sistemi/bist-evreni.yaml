@@ -1,0 +1,75 @@
+# BIST Yildiz Pazar aday havuzu (64 hisse).
+# Kaynak: eski Yildiz Pazar bot projesinin watchlist tablosu (2026-06).
+#
+# Bu liste ana rapora GIRMEZ - yalnizca tarama icin kullanilir:
+#     python scripts/yatirim/tarama.py
+# Amaci BIST bacagini korelasyon ve volatiliteye gore secmek,
+# 3 hisselik tahminden cikmak.
+#
+# Universe zamanla degisir (Yildiz Pazar'a giris/cikis olur).
+# Guncelleme kaynagi: Is Yatirim XYLDZ bilesen listesi.
+
+tickerlar:
+  - AEFES
+  - AGHOL
+  - AKBNK
+  - AKENR
+  - AKGRT
+  - AKSEN
+  - ALARK
+  - ALKIM
+  - ARCLK
+  - ASELS
+  - BIMAS
+  - BRYAT
+  - BUCIM
+  - CCOLA
+  - CEMTS
+  - CIMSA
+  - CLEBI
+  - CRFSA
+  - CWENE
+  - DOAS
+  - DOHOL
+  - EKGYO
+  - ENKAI
+  - EREGL
+  - FROTO
+  - GARAN
+  - HALKB
+  - ISCTR
+  - KARSN
+  - KCHOL
+  - KLNMA
+  - KONYA
+  - KORDS
+  - LOGO
+  - MAVI
+  - MGROS
+  - NETAS
+  - NTHOL
+  - ODAS
+  - OTKAR
+  - OYAKC
+  - PETKM
+  - PGSUS
+  - SAHOL
+  - SISE
+  - SMRTG
+  - SOKM
+  - TAVHL
+  - TCELL
+  - THYAO
+  - TOASO
+  - TSKB
+  - TTKOM
+  - TUPRS
+  - ULKER
+  - VAKBN
+  - VESTL
+  - YKBNK
+  - ZOREN
+
+# Cikarilan tickerlar (Yahoo'da veri yok / delist):
+#   Eski botun isaretledigi : ISATR, KOZAL, SODA
+#   2026-08-13 taramasinda   : KOZAA, SELGD

@@ -1,0 +1,80 @@
+name: Gunluk Yatirim Raporu
+
+on:
+  schedule:
+    # 16:00 UTC = 19:00 TR, hafta ici. Turkiye kalici UTC+3, yaz saati yok.
+    - cron: '0 16 * * 1-5'
+  workflow_dispatch:          # Actions sekmesinden elle tetiklenebilir
+
+permissions:
+  contents: write             # uretilen raporu repoya geri commit etmek icin
+
+concurrency:
+  group: gunluk-rapor
+  cancel-in-progress: false   # ust uste calisip ayni dosyaya yazmasin
+
+jobs:
+  rapor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/yatirim/requirements.txt
+
+      - name: Bagimliliklar
+        run: pip install -r scripts/yatirim/requirements.txt
+
+      - name: Testler
+        # Cevrimdisi testler. Kirikken rapor uretip Telegram'a yollamayalim.
+        run: python -m unittest discover -s scripts/yatirim -p "test_*.py" -v
+
+      - name: Rapor uret ve Telegram'a gonder
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/yatirim/main.py --sim --telegram
+
+      - name: Raporu repoya commit et
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add 04-projects/yatirim-sistemi/
+          if git diff --staged --quiet; then
+            echo "Degisiklik yok, commit atlanti."
+          else
+            git commit -m "chore: gunluk simulasyon raporu $(date -u +%Y-%m-%d)"
+            git push
+          fi
+
+      - name: Hata bildirimi
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+
+          sys.path.insert(0, "scripts/yatirim")
+          from notify import TelegramHatasi, mesaj_gonder
+
+          calisma = (
+              f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
+              f"/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          )
+          try:
+              mesaj_gonder(
+                  "<b>Yatirim raporu BASARISIZ</b>\n"
+                  "Gunluk calisma hata verdi, rapor uretilmedi.\n"
+                  f"Detay: {calisma}"
+              )
+          except TelegramHatasi as hata:
+              print(f"Hata bildirimi de gonderilemedi: {hata}", file=sys.stderr)
+          PY

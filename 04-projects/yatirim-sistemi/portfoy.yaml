@@ -1,0 +1,22 @@
+# GERCEK PORTFOY - su an SABLON, doldurulmadi.
+#
+# 'sablon: true' oldugu surece gercek portfoy raporu URETILMEZ.
+# Bunun sebebi: bos/ornek veriyle uretilen rapor gercek gibi gorunur ve
+# Telegram'a gercek gibi duser. Sessizce yanlis sayi uretmektense durur.
+#
+# Aktif calisan sey SIMULASYON:  python scripts/yatirim/main.py --sim
+# Simulasyon pozisyonlari simulasyon/islemler.yaml icinde tutulur.
+#
+# Gercek parayla yatirima baslarsan:
+#   1. Asagiya kendi pozisyonlarini yaz
+#   2. 'sablon: true' satirini SIL
+#   3. python scripts/yatirim/main.py
+#
+# maliyet = birim alis fiyati, varligin kendi para biriminde
+#           (BIST -> TL, USD varliklar -> USD, gram altin -> USD/gram)
+
+sablon: true
+
+nakit_try: 0
+
+pozisyonlar: []
