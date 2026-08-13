@@ -127,6 +127,29 @@ riski tasir. Ayrica rafineri = regulasyon ve petrol fiyati maruziyeti.
 tetiklemeden islem yok" diyor. Bu islemi tetikleyen piyasa degil, acilista
 eksik olan bilginin tamamlanmasiydi. Bu istisna tekrarlanmamali.
 
+### 2026-08-13 (3) — Gun sonu: ISLEM YOK
+
+Portfoy **20.317 TL** (+%1,6). Hicbir tetikleyici calismadi:
+
+| Sinif | Sapma | Esik |
+|---|---:|---:|
+| bist | +0,7 puan | 5 |
+| maden | -0,5 puan | 5 |
+| nasdaq | -0,1 puan | 5 |
+| kripto | -0,1 puan | 5 |
+| nakit | +0,0 puan | 5 |
+
+**Izlemede:** ASELS risk katkisi %23,2, agirligi %11,6 — paranin sekizde biri,
+riskin dortte biri. Bugun +%10 yaptigi icin agirligi buyudu. Kisma esigi %25;
+henuz asilmadi, dokunulmadi.
+
+**Neden gunluk islem yapmiyorum:** komisyon %0,15, gidis-donus %0,30.
+20.000 TL'de her tur ~60 TL. Gunde bir tur = ayda ~1.200 TL = sermayenin %6'si.
+Bu maliyeti asacak gunluk kenar iddiasi icin kanit yok; aksine eski Yildiz
+Pazar botunun 427 sinyalinin %88'i TP/SL'e degmeden sondu.
+
+Kurali sikisinca esnetmek, kurali hic koymamakla ayni sey.
+
 ---
 
 ## Sonraki karar icin tetikleyiciler

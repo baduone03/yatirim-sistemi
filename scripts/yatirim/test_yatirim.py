@@ -15,6 +15,7 @@ import sys
 import tempfile
 import unittest
 import unittest.mock
+from datetime import date
 from pathlib import Path
 
 import numpy as np
@@ -25,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import Ayarlar, Varlik, Yapilandirma, sablonu_reddet, yapilandirmayi_oku
 from fetch import FiyatVerisi
 from ledger import durumu_hesapla, islemleri_oku
-from notify import _kacis, env_oku, ozet_mesaji
+from notify import _islem_satirlari, _kacis, env_oku, ozet_mesaji
 from portfolio import portfoyu_hesapla, portfoyu_ledgerdan_hesapla, sinif_sapmalari
 from risk import (
     _max_drawdown,
@@ -365,6 +366,34 @@ class BildirimTesti(unittest.TestCase):
         dosya = gecici_yaz("TELEGRAM_CHAT_ID=dosyadan\n", ad=".env")
         with unittest.mock.patch.dict(os.environ, {"TELEGRAM_CHAT_ID": ""}):
             self.assertEqual(env_oku(dosya)["TELEGRAM_CHAT_ID"], "dosyadan")
+
+    def test_bugunku_islemler_mesaja_girer(self):
+        bugun = date.today().isoformat()
+        durum = defter_durumu(
+            f"  - {{tarih: {bugun}, yon: AL, sembol: X, adet: 3, "
+            f"fiyat_try: 100, gerekce: 'test gerekcesi'}}\n"
+            "  - {tarih: 2020-01-01, yon: AL, sembol: Y, adet: 1, fiyat_try: 50}\n"
+        )
+        satirlar = "\n".join(_islem_satirlari(durum, bugun))
+        self.assertIn("ALDIM", satirlar)
+        self.assertIn("X", satirlar)
+        self.assertIn("test gerekcesi", satirlar)
+        self.assertNotIn("Y", satirlar)   # eski islem girmemeli
+
+    def test_islem_yoksa_bolum_hic_cikmaz(self):
+        durum = defter_durumu(
+            "  - {tarih: 2020-01-01, yon: AL, sembol: X, adet: 1, fiyat_try: 50}\n")
+        self.assertEqual(_islem_satirlari(durum, date.today().isoformat()), [])
+
+    def test_satis_islemi_isaretlenir(self):
+        bugun = date.today().isoformat()
+        durum = defter_durumu(
+            f"  - {{tarih: 2020-01-01, yon: AL,  sembol: X, adet: 5, fiyat_try: 100}}\n"
+            f"  - {{tarih: {bugun}, yon: SAT, sembol: X, adet: 5, fiyat_try: 120}}\n"
+        )
+        satirlar = "\n".join(_islem_satirlari(durum, bugun))
+        self.assertIn("SATTIM", satirlar)
+        self.assertNotIn("ALDIM", satirlar)
 
     def test_ozet_mesaji_esik_asilmadiginda_sakin(self):
         yapilandirma = Yapilandirma(

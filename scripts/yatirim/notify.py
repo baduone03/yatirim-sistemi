@@ -11,6 +11,7 @@ Token asla koda veya rapora yazilmaz.
 from __future__ import annotations
 
 import os
+from datetime import date
 from pathlib import Path
 
 import requests
@@ -104,6 +105,30 @@ def _tl(deger: float) -> str:
     return f"{deger:,.0f} TL".replace(",", ".")
 
 
+def _islem_satirlari(durum, tarih: str) -> list[str]:
+    """O gun yapilan alim/satimlari mesaja ekler.
+
+    Islem yoksa bos doner - "bugun islem yok" demek gurultu, esik
+    asilmadigini zaten ozet satiri soyluyor.
+    """
+    bugunku = [i for i in durum.islemler if i.tarih == tarih]
+    if not bugunku:
+        return []
+
+    satirlar = ["", "<b>Bugunku islemler</b>"]
+    for islem in bugunku:
+        simge = "🟩 ALDIM" if islem.yon == "AL" else "🟥 SATTIM"
+        satirlar.append(
+            f"{simge}  <b>{_kacis(islem.sembol)}</b>  {islem.adet:g} adet"
+        )
+        satirlar.append(
+            f"     {_tl(islem.fiyat_try)} x {islem.adet:g} = {_tl(islem.tutar_try)}"
+        )
+        if islem.gerekce:
+            satirlar.append(f"     <i>{_kacis(islem.gerekce)}</i>")
+    return satirlar
+
+
 def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
                 durum=None, baslik: str = "Yatirim", fiyatlar=None) -> str:
     """Rapordan kisa Telegram ozeti uretir - detay markdown raporda kalir."""
@@ -124,6 +149,9 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
         f"Volatilite {risk.portfoy_volatilitesi * 100:.1f}%"
         f" | Drawdown {risk.portfoy_max_drawdown * 100:.1f}%",
     ]
+
+    if durum:
+        satirlar += _islem_satirlari(durum, date.today().isoformat())
 
     sapanlar = [s for s in sapmalar if abs(s.sapma) >= REBALANCING_ESIGI]
     if sapanlar:
