@@ -31,10 +31,26 @@ ters islemle kapatilir.
 ## Calistirma
 
 ```
-python scripts/yatirim/main.py --sim
+python scripts/yatirim/main.py --sim          # gunluk rapor
+python scripts/yatirim/karar_takip.py         # karar sonuclarini olc
 ```
 
 Cikti: `simulasyon/raporlar/YYYY-AA-GG.md`
+
+## Karar sonuc takibi
+
+Gerekce yazmak yetmez; gerekcenin **tutup tutmadigini olcmek** gerek.
+Her karar `kararlar.yaml` icine olculebilir bir **beklenti** ile yazilir ve
+**5/10/15/20/25/30.** gunlerde olculur.
+
+Kural: **esik tetiklensin veya tetiklenmesin fiyat kaydedilir.** Eski Yildiz
+Pazar botu vadesi dolan 377 sinyalin `outcome_price` alanini NULL biraktigi
+icin verisinin %88'i olcum icin kullanilamaz hale gelmisti.
+
+Sonuclar: [[00-karar-sonuclari]] · Ham olcum: `kararlar-olcum.yaml`
+
+Olcum gecmis fiyat serisinden yapilir, "bugun" fiyatindan degil - sistem
+birkac gun kapali kalsa bile kacan kontrol gunleri geriye donuk dolar.
 
 ---
 

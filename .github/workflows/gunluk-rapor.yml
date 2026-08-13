@@ -40,6 +40,18 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python scripts/yatirim/main.py --sim --telegram
 
+      - name: Karar sonuclarini olc
+        # Vadesi gelen 5/10/15/20/25/30. gun kontrollerini doldurur.
+        # Kacan gunler gecmis fiyat serisinden geriye donuk tamamlanir.
+        run: python scripts/yatirim/karar_takip.py
+
+      # NOT: vault gozden gecirme burada CALISTIRILMAZ.
+      # CI checkout'u .gitignore beyaz listesi yuzunden eksik vault icerir:
+      # 03-wiki, 02-sources, 05-daily repoda yok. Denetci burada calissaydi
+      # 00-sistem.md'deki 13 wikilink'in hepsini "kirik" raporlardi.
+      # Vault denetimi TAM vault gerektirir -> yerel haftalik gorevle calisir
+      # (IkinciBeyin-VaultDenetim). Bkz. scripts/vault/gozden_gecir.py
+
       - name: Raporu repoya commit et
         run: |
           git config user.name  "github-actions[bot]"

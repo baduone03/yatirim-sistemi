@@ -1,0 +1,58 @@
+# KARAR DEFTERI - her karar icin "ne bekliyordum" burada yazili.
+#
+# Amac: gerekce yazmak yetmez, gerekcenin TUTUP TUTMADIGINI olcmek gerek.
+# Her karar 5/10/15/20/25/30. gunlerde olculur ve sonuc kaydedilir.
+#
+# Eski Yildiz Pazar botunun dersi: o sistem sinyalleri TEK ve sabit 7 gunluk
+# pencerede degerlendiriyordu; sinyallerin %88'i TP/SL'e degmeden "EXPIRED"
+# oldu ve vadesi dolanlarin outcome_price alani NULL birakildi. Yani 377
+# gozlemin gercek getirisi HIC kaydedilmedi - verinin %88'i olcum icin
+# kullanilamaz hale geldi.
+#
+# Bu yuzden buradaki kural: ESIK TETIKLENSIN VEYA TETIKLENMESIN, her kontrol
+# gununde fiyat ve portfoy degeri kaydedilir. Yorum sonra yapilir, veri once.
+#
+# Alanlar:
+#   id       : benzersiz, tarih-konu formatinda
+#   tarih    : karar gunu (YYYY-AA-GG)
+#   tip      : ACILIS | TAKAS | KISMA | REBALANCING | ISLEM_YOK
+#   ozet     : bir cumle, ne yapildi
+#   beklenti : OLCULEBILIR bekleyis. "iyi gidecek" degil, "X, Y'yi gececek".
+#   satilan  : (opsiyonel) satilan semboller
+#   alinan   : (opsiyonel) alinan semboller
+#
+# satilan/alinan doluysa takas basarisi = alinanin getirisi - satilanin getirisi.
+# Bos ise yalnizca portfoy duzeyinde olculur.
+
+kararlar:
+  - id: 2026-08-13-acilis
+    tarih: 2026-08-13
+    tip: ACILIS
+    ozet: "20.000 TL acilis tahsisi: BIST %29,5 / Nasdaq %25 / maden %20 / kripto %10 / nakit %15,5"
+    beklenti: >-
+      Portfoy volatilitesi (%15,6) en dusuk volatiliteli tekil varligin
+      (QQQ) altinda kalacak - cesitlendirme calisiyorsa boyle olmali.
+
+  - id: 2026-08-13-garan-tuprs
+    tarih: 2026-08-13
+    tip: TAKAS
+    ozet: "GARAN 13 lot satildi, TUPRS 5 lot alindi"
+    beklenti: >-
+      TUPRS'un BIST bacagina ortalama korelasyonu 0,17 (GARAN 0,61 idi).
+      Amac getiri degil risk: BIST bacak volatilitesi %29,2'den %26,9'a inmeli
+      ve orada kalmali. TUPRS'un GARAN'i getiri olarak GECMESI beklenmiyor -
+      geride kalirsa bile karar dogru olabilir, olcut volatilite.
+    satilan: [GARAN.IS]
+    alinan: [TUPRS.IS]
+
+  - id: 2026-08-13-asels-kisma
+    tarih: 2026-08-13
+    tip: KISMA
+    ozet: "ASELS 1 lot satildi (risk katkisi %23,2, beta 2,00), TUPRS 1 lot alindi"
+    beklenti: >-
+      ASELS'in risk katkisi %20 tavaninin altina inip orada kalacak.
+      ASELS +%10,2 yaptigi gun satildi; kazanandan satmak his olarak yanlis
+      gelir. Eger ASELS bundan sonra da yukselirse bu karar GETIRI olarak
+      kaybettirir ama RISK olarak dogru kalir. Ikisini ayri olc.
+    satilan: [ASELS.IS]
+    alinan: [TUPRS.IS]
