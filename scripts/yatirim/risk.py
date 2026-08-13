@@ -52,7 +52,8 @@ class RiskRaporu:
     yillik_periyot: float = 252.0     # yillicklastirmada kullanilan gercek carpan
 
 
-def ortak_getiriler(gecmis: pd.DataFrame) -> pd.DataFrame:
+def ortak_getiriler(gecmis: pd.DataFrame,
+                    min_gozlem: int = MIN_GOZLEM) -> tuple[pd.DataFrame, list[str]]:
     """Karisik takvimli varliklar icin dogru gunluk getiri matrisi.
 
     Sorun: BIST hafta sonu kapali, kripto acik, ABD'nin tatilleri farkli.
@@ -65,17 +66,32 @@ def ortak_getiriler(gecmis: pd.DataFrame) -> pd.DataFrame:
     hizala, sonra getiri al. Boylece her varligin getirisi ayni zaman
     araligini kapsar (Cuma->Pazartesi herkeste 3 gun), kriptonun hafta
     sonu hareketi de Pazartesi getirisine dogru sekilde katilir.
+
+    Yetersiz gecmisli semboller kesisimden ONCE elenir. Aksi halde yeni
+    listelenmis tek bir hisse tum portfoyun penceresini kendi gecmisine
+    kirpar (365 gun beklerken 40 gunden hesap yapilir) veya hic veri
+    yoksa kesisimi bosaltip tum raporu cokertir.
+
+    Doner: (getiri matrisi, elenen semboller)
     """
+    yeterli = [s for s in gecmis.columns if gecmis[s].count() >= min_gozlem]
+    yetersiz = sorted(set(gecmis.columns) - set(yeterli))
+    if not yeterli:
+        raise RuntimeError(
+            f"Hicbir varlikta yeterli gecmis yok (min {min_gozlem} gozlem)"
+        )
+
     takvim = None
-    for sutun in gecmis.columns:
+    for sutun in yeterli:
         gunler = gecmis[sutun].dropna().index
         takvim = gunler if takvim is None else takvim.intersection(gunler)
     if takvim is None or len(takvim) < 2:
         raise RuntimeError("Varliklarin ortak islem gunu yok - risk hesaplanamaz")
-    return gecmis.reindex(takvim).pct_change().dropna(how="all")
+
+    return gecmis[yeterli].reindex(takvim).pct_change().dropna(how="all"), yetersiz
 
 
-def _gunluk_getiriler(fiyatlar: FiyatVerisi) -> pd.DataFrame:
+def _gunluk_getiriler(fiyatlar: FiyatVerisi) -> tuple[pd.DataFrame, list[str]]:
     return ortak_getiriler(fiyatlar.try_gecmis)
 
 
@@ -117,11 +133,7 @@ def _risk_katkilari(kovaryans: pd.DataFrame, agirliklar: pd.Series) -> tuple[flo
 
 def riski_hesapla(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
                   portfoy: Portfoy) -> RiskRaporu:
-    getiriler = _gunluk_getiriler(fiyatlar)
-    yeterli = [s for s in getiriler.columns if getiriler[s].count() >= MIN_GOZLEM]
-    yetersiz = sorted(set(getiriler.columns) - set(yeterli))
-    getiriler = getiriler[yeterli].dropna()
-
+    getiriler, yetersiz = _gunluk_getiriler(fiyatlar)
     if getiriler.empty:
         raise RuntimeError(f"Risk hesabi icin yeterli veri yok (min {MIN_GOZLEM} gozlem)")
 
@@ -142,7 +154,12 @@ def riski_hesapla(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
         VarlikRiski(
             sembol=sembol,
             yillik_volatilite=float(volatiliteler[sembol]),
-            max_drawdown=_max_drawdown(fiyatlar.try_gecmis[sembol]),
+            # Portfoy drawdown'i ile AYNI pencereden olculur (ortak takvim).
+            # Ham 365 gunluk seriden olcmek ayni tablonun iki sutununu
+            # farkli zaman araliklarina dayandiriyordu.
+            max_drawdown=_max_drawdown(
+                (1.0 + getiriler[sembol]).cumprod()
+            ),
             risk_katkisi=float(katkilar[sembol] / portfoy_vol) if portfoy_vol > 0 else 0.0,
             agirlik=float(agirliklar[sembol]),
         )

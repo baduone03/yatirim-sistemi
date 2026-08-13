@@ -54,16 +54,41 @@ class Portfoy:
         return self.pozisyon_degeri_try + self.nakit_try
 
     @property
+    def pozisyon_maliyet_try(self) -> float:
+        return sum(p.maliyet_try for p in self.pozisyonlar)
+
+    @property
+    def gerceklesmemis_kar_try(self) -> float:
+        """Aciktaki pozisyonlarin kar/zarari.
+
+        Dogrudan olculur (deger - maliyet). Net sonuctan gerceklesen kari
+        cikararak turetmek komisyon muhasebesi yuzunden hataliydi: kayitli
+        gerceklesen kar satis komisyonu dusulmus (yari-net), toplam komisyon
+        ise ayrica ekleniyordu; sonuc satis komisyonu kadar sisiyordu.
+        """
+        return self.pozisyon_degeri_try - self.pozisyon_maliyet_try
+
+    @property
     def toplam_maliyet_try(self) -> float:
-        return sum(p.maliyet_try for p in self.pozisyonlar) + self.nakit_try
+        return self.pozisyon_maliyet_try + self.nakit_try
 
     @property
     def agirliklar(self) -> dict[str, float]:
-        """Sembol -> toplam portfoy icindeki agirlik (nakit haric)."""
+        """Sembol -> portfoy icindeki agirlik. Payda nakiti ICERIR.
+
+        Ayni sembolden birden fazla lot varsa TOPLANIR. Dict comprehension
+        kullanilsaydi son lot oncekileri ezer, agirlik ve tum risk metrikleri
+        sessizce yanlis cikardi.
+        """
         toplam = self.toplam_deger_try
         if toplam == 0:
             return {}
-        return {p.sembol: p.deger_try / toplam for p in self.pozisyonlar}
+        birikim: dict[str, float] = {}
+        for pozisyon in self.pozisyonlar:
+            birikim[pozisyon.sembol] = (
+                birikim.get(pozisyon.sembol, 0.0) + pozisyon.deger_try / toplam
+            )
+        return birikim
 
 
 def _maliyeti_tl_yap(maliyet: float, adet: float, kur: str, usdtry: float) -> float:
@@ -117,6 +142,13 @@ def portfoyu_ledgerdan_hesapla(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi
     son = fiyatlar.son_fiyatlar
     degerler: list[PozisyonDegeri] = []
     fiyatlanamayan: list[str] = []
+
+    bilinmeyen = sorted(set(durum.pozisyonlar) - set(yapilandirma.varliklar))
+    if bilinmeyen:
+        raise ValueError(
+            f"islemler.yaml'da varliklar.yaml'da tanimsiz sembol var: {bilinmeyen}. "
+            "Once varliklar.yaml'a ekle (sinif ve kur bilgisi gerekli)."
+        )
 
     for sembol, ledger_pozisyonu in durum.pozisyonlar.items():
         varlik = yapilandirma.varliklar[sembol]

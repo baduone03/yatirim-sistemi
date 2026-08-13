@@ -90,15 +90,27 @@ def mesaj_gonder(metin: str, env: dict[str, str] | None = None) -> None:
                  if not deger]
         raise TelegramHatasi(f"{ENV_DOSYASI} icinde eksik/bos: {', '.join(eksik)}")
 
-    yanit = requests.post(
-        f"{API_KOKU}/bot{token}/sendMessage",
-        json={"chat_id": chat_id, "text": metin, "parse_mode": "HTML",
-              "disable_web_page_preview": True},
-        timeout=ZAMAN_ASIMI,
-    )
+    try:
+        yanit = requests.post(
+            f"{API_KOKU}/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": metin, "parse_mode": "HTML",
+                  "disable_web_page_preview": True},
+            timeout=ZAMAN_ASIMI,
+        )
+    except requests.RequestException as hata:
+        # KRITIK: token URL yolunda. urllib3'un ConnectionError mesaji istek
+        # URL'sini icerir; ham hatayi yukari birakmak token'i loga sizdirir.
+        # Hata TURUNU aktar, metnini ASLA.
+        raise TelegramHatasi(
+            f"Telegram'a ulasilamadi ({type(hata).__name__})"
+        ) from None
+
     if not yanit.ok:
-        # Token'i sizdirmamak icin yalnizca API'nin aciklamasi yazilir.
-        aciklama = yanit.json().get("description", "bilinmeyen hata")
+        try:
+            aciklama = yanit.json().get("description", "bilinmeyen hata")
+        except ValueError:
+            # Proxy/gateway HTML donebilir - JSON bekleyip patlamayalim.
+            aciklama = "yanit JSON degil"
         raise TelegramHatasi(f"Telegram reddetti (HTTP {yanit.status_code}): {aciklama}")
 
 
@@ -154,6 +166,16 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
 
     if durum:
         satirlar += _islem_satirlari(durum, date.today().isoformat())
+
+    # Fiyatlanamayan pozisyon varsa sapma hesabi eksik veri uzerinden yapilmis
+    # demektir; tavsiyeyi guvenilir gibi gondermek yanlis islem yaptirir.
+    if portfoy.fiyatlanamayan:
+        satirlar += [
+            "",
+            "<b>⚠️ Eksik veri</b>",
+            f"Fiyatlanamayan pozisyon: {_kacis(', '.join(portfoy.fiyatlanamayan))}",
+            "Rebalancing tavsiyesi bu yuzden guvenilmez.",
+        ]
 
     sapanlar = [s for s in sapmalar if abs(s.sapma) >= esikler.rebalancing_sapma]
     if sapanlar:

@@ -79,10 +79,15 @@ def _tl_bazina_cevir(kapanis: pd.DataFrame, yapilandirma: Yapilandirma) -> pd.Da
     kur_serisi = kapanis[yapilandirma.ayarlar.kur_sembolu].ffill()
     sutunlar = {}
     for sembol, varlik in yapilandirma.varliklar.items():
-        if sembol not in kapanis:
+        # Hepsi NaN olan sembol tamamen DISARIDA birakilir. Sutun olarak
+        # kalirsa ortak takvim kesisimini bosaltip tum risk hesabini cokertir;
+        # zaten eksik_semboller icinde raporlaniyor.
+        if sembol not in kapanis or kapanis[sembol].isna().all():
             continue
         seri = kapanis[sembol] * varlik.carpan
         sutunlar[sembol] = seri * kur_serisi if varlik.kur == "USD" else seri
+    if not sutunlar:
+        raise RuntimeError("Hicbir varlik icin fiyat verisi alinamadi")
     return pd.DataFrame(sutunlar).dropna(how="all")
 
 

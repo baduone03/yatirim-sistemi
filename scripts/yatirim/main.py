@@ -39,11 +39,21 @@ SIM_RAPOR_DIZINI = SIM_DIZINI / "raporlar"
 
 
 def _sistem_ozetini_guncelle(ozet: str) -> None:
+    """00-sistem.md icindeki ozet blogunu gunceller.
+
+    Sessizce basarisiz OLMAZ: isaretci silinmisse bayat ozet aktif ozet gibi
+    gorunmeye devam eder, bu da yanlis rakama bakmak demektir.
+    """
     if not SISTEM_DOSYASI.exists():
+        print(f"UYARI - {SISTEM_DOSYASI} yok, ozet guncellenmedi.")
         return
     icerik = SISTEM_DOSYASI.read_text(encoding="utf-8")
     desen = re.compile(f"{re.escape(OZET_BASLANGIC)}.*?{re.escape(OZET_BITIS)}", re.DOTALL)
     if not desen.search(icerik):
+        print(
+            f"UYARI - {SISTEM_DOSYASI} icinde {OZET_BASLANGIC} / {OZET_BITIS} "
+            "isaretcileri bulunamadi. Ozet guncellenmedi; dosyadaki rakamlar BAYAT."
+        )
         return
     SISTEM_DOSYASI.write_text(desen.sub(lambda _: ozet, icerik), encoding="utf-8")
 
@@ -103,8 +113,12 @@ def main() -> int:
                                      fiyatlar, yapilandirma.esikler))
             print("Telegram ozeti gonderildi.")
         except TelegramHatasi as hata:
-            # Rapor zaten diske yazildi; bildirim hatasi ciktiyi cope atmamali.
+            # Rapor diske yazildi ve GECERLI - kaybolmadi.
+            # Yine de exit 1 doneriyoruz: bu sistemin cikti kanali Telegram,
+            # mesaj gitmediyse kimse rapordan haberdar olmaz. CI'in kosuyu
+            # basarisiz isaretlemesi ve uyarmasi DOGRU davranis.
             print(f"UYARI - Telegram gonderilemedi: {hata}")
+            print("Rapor diske yazildi, kaybolmadi.")
             return 1
 
     return 0

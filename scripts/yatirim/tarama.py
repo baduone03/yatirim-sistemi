@@ -70,7 +70,7 @@ def _max_drawdown(seri: pd.Series) -> float:
 
 def _portfoy_getirisi(fiyatlar, portfoy) -> pd.Series:
     """Mevcut portfoyun agirlikli gunluk TL getiri serisi."""
-    getiriler = ortak_getiriler(fiyatlar.try_gecmis)
+    getiriler, _ = ortak_getiriler(fiyatlar.try_gecmis)
     agirliklar = portfoy.agirliklar
     ortak = [s for s in getiriler.columns if agirliklar.get(s, 0.0) > 0]
     if not ortak:

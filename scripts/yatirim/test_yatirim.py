@@ -34,7 +34,13 @@ from config import (
 from fetch import FiyatVerisi
 from ledger import durumu_hesapla, islemleri_oku
 from notify import _islem_satirlari, _kacis, env_oku, ozet_mesaji
-from portfolio import portfoyu_hesapla, portfoyu_ledgerdan_hesapla, sinif_sapmalari
+from portfolio import (
+    Portfoy,
+    PozisyonDegeri,
+    portfoyu_hesapla,
+    portfoyu_ledgerdan_hesapla,
+    sinif_sapmalari,
+)
 from risk import (
     VarlikRiski,
     _max_drawdown,
@@ -194,20 +200,20 @@ class TakvimHizalamaTesti(unittest.TestCase):
         return pd.DataFrame({"HISSE.IS": hisse, "KRIPTO": kripto})
 
     def test_yalnizca_ortak_islem_gunleri_kalir(self):
-        getiriler = ortak_getiriler(self._karisik_gecmis())
+        getiriler, _ = ortak_getiriler(self._karisik_gecmis(), min_gozlem=2)
         # Hissenin gercekten islem gordugu 6 gun var -> 5 getiri.
         self.assertEqual(len(getiriler), 5)
         self.assertFalse(getiriler.isna().any().any())
 
     def test_hafta_sonu_bosluÄŸu_sifir_getiri_uretmez(self):
-        getiriler = ortak_getiriler(self._karisik_gecmis())
+        getiriler, _ = ortak_getiriler(self._karisik_gecmis(), min_gozlem=2)
         self.assertFalse(
             (getiriler["HISSE.IS"] == 0).any(),
             "Kapali gun sifir getiri olarak sizmis - volatilite dusuk cikar",
         )
 
     def test_bosluk_sonrasi_getiri_tam_araligi_kapsar(self):
-        getiriler = ortak_getiriler(self._karisik_gecmis())
+        getiriler, _ = ortak_getiriler(self._karisik_gecmis(), min_gozlem=2)
         # 102 -> 103 (bosluktan sonra) tek getiri olarak gorunmeli.
         self.assertTrue(np.isclose(getiriler["HISSE.IS"], 103 / 102 - 1).any())
         # Kripto ayni satirda 204 -> 210 yapmali (hafta sonu hareketi dahil).
@@ -220,7 +226,21 @@ class TakvimHizalamaTesti(unittest.TestCase):
             "B": pd.Series([np.nan, np.nan, 3.0, 4.0], index=gunler),
         })
         with self.assertRaisesRegex(RuntimeError, "ortak islem gunu"):
-            ortak_getiriler(kesisimsiz)
+            ortak_getiriler(kesisimsiz, min_gozlem=2)
+
+    def test_yetersiz_gecmisli_sembol_kesisimden_once_elenir(self):
+        """Regresyon: yeni listelenmis tek hisse tum portfoyun penceresini kirpiyordu."""
+        gunler = pd.date_range("2026-01-01", periods=100, freq="D")
+        uzun = pd.Series(np.linspace(100, 200, 100), index=gunler)
+        kisa = pd.Series(np.nan, index=gunler)
+        kisa.iloc[-10:] = np.linspace(50, 55, 10)   # yalnizca 10 gozlem
+        gecmis = pd.DataFrame({"UZUN.IS": uzun, "YENI.IS": kisa})
+
+        getiriler, elenen = ortak_getiriler(gecmis, min_gozlem=30)
+        self.assertEqual(elenen, ["YENI.IS"])
+        self.assertNotIn("YENI.IS", getiriler.columns)
+        # Kisa sembol elenmeseydi pencere 10 gune inerdi.
+        self.assertGreater(len(getiriler), 90)
 
 
 class YillicklastirmaTesti(unittest.TestCase):
@@ -278,6 +298,78 @@ class BayatFiyatTesti(unittest.TestCase):
         gecmis = pd.DataFrame({"A.IS": np.linspace(10, 20, 10)}, index=gunler)
         fiyatlar = FiyatVerisi(try_gecmis=gecmis, usdtry=40.0, eksik_semboller=[])
         self.assertEqual(fiyatlar.bayat_semboller(), {})
+
+
+class DenetimRegresyonTesti(unittest.TestCase):
+    """2026-08-14 kod denetiminde bulunan hatalarin regresyon testleri."""
+
+    def _yapilandirma(self, semboller: dict) -> Yapilandirma:
+        return Yapilandirma(
+            ayarlar=AYARLAR, esikler=ESIKLER,
+            hedef_dagilim={"bist": 0.5, "nakit": 0.5},
+            varliklar=semboller, nakit_try=0.0, pozisyonlar=[],
+        )
+
+    # --- A1: mukerrer sembol agirliklari eziyordu ---
+    def test_mukerrer_sembol_agirliklari_toplanir(self):
+        pozisyonlar = [
+            PozisyonDegeri("A.IS", "A", "bist", 10, 1000.0, 1000.0),
+            PozisyonDegeri("A.IS", "A", "bist", 5, 500.0, 500.0),
+        ]
+        portfoy = Portfoy(pozisyonlar=pozisyonlar, nakit_try=0.0, fiyatlanamayan=[])
+        # Dict comprehension olsaydi son lot ezer, agirlik 1/3 cikardi.
+        self.assertAlmostEqual(portfoy.agirliklar["A.IS"], 1.0)
+
+    def test_portfoy_yamlde_mukerrer_sembol_reddedilir(self):
+        varliklar = gecici_yaz(
+            "ayarlar: {kur_sembolu: 'USDTRY=X', gecmis_gun: 365, islem_gunu_yil: 252}\n"
+            "hedef_dagilim: {bist: 1.0}\n"
+            "varliklar:\n  - {sembol: A.IS, ad: A, sinif: bist, kur: TRY}\n",
+            ad="varliklar.yaml")
+        portfoy = gecici_yaz(
+            "nakit_try: 0\npozisyonlar:\n"
+            "  - {sembol: A.IS, adet: 10, maliyet: 100}\n"
+            "  - {sembol: A.IS, adet: 5, maliyet: 120}\n", ad="portfoy.yaml")
+        with self.assertRaisesRegex(ValueError, "birden fazla satirda"):
+            yapilandirmayi_oku(varliklar_dosyasi=varliklar, portfoy_dosyasi=portfoy)
+
+    # --- A3: gerceklesmemis kar satis komisyonu kadar sisiyordu ---
+    def test_gerceklesmemis_kar_dogrudan_olculur(self):
+        pozisyonlar = [PozisyonDegeri("A.IS", "A", "bist", 10, 1000.0, 1250.0)]
+        portfoy = Portfoy(pozisyonlar=pozisyonlar, nakit_try=500.0, fiyatlanamayan=[])
+        self.assertAlmostEqual(portfoy.gerceklesmemis_kar_try, 250.0)
+        self.assertAlmostEqual(portfoy.pozisyon_maliyet_try, 1000.0)
+
+    def test_sim_ozdesligi_tutar(self):
+        """net = gerceklesmemis + gerceklesen + alis_komisyonu(negatif)."""
+        durum = defter_durumu(
+            "  - {tarih: 2026-01-01, yon: AL,  sembol: X, adet: 10, fiyat_try: 100}\n"
+            "  - {tarih: 2026-01-02, yon: SAT, sembol: X, adet: 4,  fiyat_try: 150}\n",
+            nakit=5000.0, komisyon=0.001)
+        gecmis = pd.DataFrame({"X": [100.0, 200.0]},
+                              index=pd.to_datetime(["2026-01-01", "2026-01-02"]))
+        fiyatlar = FiyatVerisi(try_gecmis=gecmis, usdtry=40.0, eksik_semboller=[])
+        yapilandirma = self._yapilandirma({"X": Varlik("X", "X", "bist", "TRY")})
+        portfoy = portfoyu_ledgerdan_hesapla(yapilandirma, fiyatlar, durum)
+
+        net = portfoy.toplam_deger_try - durum.baslangic_nakit_try
+        alis_komisyonu = 10 * 100 * 0.001
+        self.assertAlmostEqual(
+            net,
+            portfoy.gerceklesmemis_kar_try + durum.gerceklesen_kar_try - alis_komisyonu,
+            places=6,
+        )
+
+    # --- C2: tanimsiz sembol ciplak KeyError firlatiyordu ---
+    def test_ledgerda_tanimsiz_sembol_anlamli_hata_verir(self):
+        durum = defter_durumu(
+            "  - {tarih: 2026-01-01, yon: AL, sembol: YOKBOYLE, adet: 1, fiyat_try: 10}\n")
+        gecmis = pd.DataFrame({"X": [1.0, 2.0]},
+                              index=pd.to_datetime(["2026-01-01", "2026-01-02"]))
+        fiyatlar = FiyatVerisi(try_gecmis=gecmis, usdtry=40.0, eksik_semboller=[])
+        yapilandirma = self._yapilandirma({"X": Varlik("X", "X", "bist", "TRY")})
+        with self.assertRaisesRegex(ValueError, "tanimsiz sembol"):
+            portfoyu_ledgerdan_hesapla(yapilandirma, fiyatlar, durum)
 
 
 class KismaKuraliTesti(unittest.TestCase):
@@ -375,7 +467,7 @@ class RiskTesti(unittest.TestCase):
              "B.IS": 100 * np.exp(np.cumsum(-dalga))},
             index=gunler,
         )
-        getiriler = ortak_getiriler(gecmis)
+        getiriler, _ = ortak_getiriler(gecmis)
         self.assertLess(getiriler.corr().iloc[0, 1], -0.9)
 
         yil = AYARLAR.islem_gunu_yil
@@ -517,5 +609,6 @@ class SablonKorumasiTesti(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 

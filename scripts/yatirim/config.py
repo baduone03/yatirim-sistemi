@@ -98,6 +98,16 @@ def _dogrula(varliklar: dict[str, Varlik], pozisyonlar: list[Pozisyon],
             f"portfoy.yaml'da varliklar.yaml'da tanimsiz sembol var: {sorted(bilinmeyen)}"
         )
 
+    sayim: dict[str, int] = {}
+    for pozisyon in pozisyonlar:
+        sayim[pozisyon.sembol] = sayim.get(pozisyon.sembol, 0) + 1
+    mukerrer = sorted(s for s, n in sayim.items() if n > 1)
+    if mukerrer:
+        raise ValueError(
+            f"portfoy.yaml'da ayni sembol birden fazla satirda: {mukerrer}. "
+            "Lotlari tek satirda birlestir (adet topla, maliyeti agirlikli ortala)."
+        )
+
     siniflar = {v.sinif for v in varliklar.values() if not v.izleme}
     eksik = siniflar - set(hedef_dagilim)
     if eksik:

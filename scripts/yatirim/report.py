@@ -41,21 +41,32 @@ def _frontmatter(bugun: str, fiyat_tarihi: str, baslik: str = "Yatirim Raporu") 
     ]
 
 
-def _ozet_bolumu(portfoy: Portfoy, risk: RiskRaporu, fiyatlar: FiyatVerisi) -> list[str]:
-    kar_zarar = portfoy.toplam_deger_try - portfoy.toplam_maliyet_try
-    getiri = kar_zarar / portfoy.toplam_maliyet_try if portfoy.toplam_maliyet_try else 0.0
+def _ozet_bolumu(portfoy: Portfoy, risk: RiskRaporu, fiyatlar: FiyatVerisi,
+                 sim: bool = False) -> list[str]:
+    """Portfoy ozeti.
+
+    Sim modunda 'toplam maliyet' satiri YAZILMAZ: nakit zaten satis hasilatini
+    ve odenen komisyonlari icerdigi icin deger-maliyet farki ekonomik anlam
+    tasimaz ve 'Simulasyon performansi' bolumundeki net sonucla celisirdi.
+    Sim modunda gecerli tek K/Z olcutu aciktaki pozisyonlarin karidir.
+    """
+    maliyet = portfoy.pozisyon_maliyet_try if sim else portfoy.toplam_maliyet_try
+    kar_zarar = portfoy.gerceklesmemis_kar_try if sim else (
+        portfoy.toplam_deger_try - portfoy.toplam_maliyet_try)
+    getiri = kar_zarar / maliyet if maliyet else 0.0
+    etiket = "Gerceklesmemis K/Z (aciktaki)" if sim else "Kar/zarar"
     return [
         "## Ozet",
         "",
         "| Olcut | Deger |",
         "|---|---|",
         f"| Toplam deger | {_tl(portfoy.toplam_deger_try)} |",
-        f"| Toplam maliyet | {_tl(portfoy.toplam_maliyet_try)} |",
-        f"| Kar/zarar | {_tl(kar_zarar)} ({_yuzde(getiri)}) |",
+        f"| {'Pozisyon maliyeti' if sim else 'Toplam maliyet'} | {_tl(maliyet)} |",
+        f"| {etiket} | {_tl(kar_zarar)} ({_yuzde(getiri)}) |",
         f"| Nakit | {_tl(portfoy.nakit_try)} |",
         f"| USD/TRY | {fiyatlar.usdtry:,.2f} |",
         f"| Yillik volatilite | {_oran(risk.portfoy_volatilitesi)} |",
-        f"| Max drawdown (1y) | {_oran(risk.portfoy_max_drawdown)} |",
+        f"| Max drawdown (hipotetik) | {_oran(risk.portfoy_max_drawdown)} |",
         "",
     ]
 
@@ -80,10 +91,22 @@ def _pozisyon_bolumu(portfoy: Portfoy) -> list[str]:
 
 
 def _dagilim_bolumu(sapmalar: list[SinifSapmasi], toplam_deger: float,
-                    esik: float) -> list[str]:
-    satirlar = [
-        "## Varlik dagilimi ve rebalancing",
-        "",
+                    esik: float, eksik_pozisyon: list[str]) -> list[str]:
+    satirlar = ["## Varlik dagilimi ve rebalancing", ""]
+
+    if eksik_pozisyon:
+        # Fiyatlanamayan pozisyon toplam degere girmiyor -> o sinifin agirligi
+        # dusuk cikar -> "artir" tavsiyesi uretilir. Tavsiye guvenilmez.
+        satirlar += [
+            f"> ⚠️ **Bu tablo eksik veri uzerinden hesaplandi.** "
+            f"Fiyatlanamayan pozisyon: {', '.join(eksik_pozisyon)}. "
+            "Bu pozisyonlar toplam degere girmedigi icin ait olduklari sinifin "
+            "agirligi oldugundan DUSUK gorunur; asagidaki rebalancing tavsiyesine "
+            "veri duzelene kadar guvenme.",
+            "",
+        ]
+
+    satirlar += [
         "| Sinif | Guncel | Hedef | Sapma | Eylem |",
         "|---|---:|---:|---:|---|",
     ]
@@ -118,6 +141,11 @@ def _risk_bolumu(risk: RiskRaporu, varlik_adlari: dict[str, str],
         "",
         f"Pencere: son {risk.gozlem_sayisi} islem gunu, TL bazli gunluk getiriler. "
         f"Yillicklastirma carpani {risk.yillik_periyot:.0f} (veriden turetildi).",
+        "",
+        "> **Max drawdown hipotetiktir.** Gecmiste yasadigin kayip degil, "
+        "*bugunku agirliklarini bir yil boyunca gunluk sabit tutsaydin* ne "
+        "yasardin sorusunun cevabi. Portfoy dun kurulmus olsa bile bir yillik "
+        "rakam yazar.",
         "",
         "| Varlik | Yillik volatilite | Max drawdown | Agirlik | Risk katkisi | Beta |",
         "|---|---:|---:|---:|---:|---:|",
@@ -200,7 +228,11 @@ def _sim_bolumu(durum, portfoy: Portfoy) -> list[str]:
     baslangic = durum.baslangic_nakit_try
     net = portfoy.toplam_deger_try - baslangic
     getiri = net / baslangic if baslangic else 0.0
-    gerceklesmemis = net - durum.gerceklesen_kar_try + durum.toplam_komisyon_try
+    gerceklesmemis = portfoy.gerceklesmemis_kar_try
+
+    # Ozdeslik: net = gerceklesmemis + gerceklesen - alis_komisyonu.
+    # Kalan farki gizlemek yerine yazdiriyoruz; tutmuyorsa muhasebe bozuk demektir.
+    fark = net - gerceklesmemis - durum.gerceklesen_kar_try
 
     satirlar = [
         "## Simulasyon performansi",
@@ -209,10 +241,11 @@ def _sim_bolumu(durum, portfoy: Portfoy) -> list[str]:
         "|---|---|",
         f"| Baslangic sermayesi | {_tl(baslangic)} |",
         f"| Guncel deger | {_tl(portfoy.toplam_deger_try)} |",
-        f"| Net sonuc | {_tl(net)} ({_yuzde(getiri)}) |",
+        f"| **Net sonuc** | **{_tl(net)} ({_yuzde(getiri)})** |",
         f"| Gerceklesen kar (satislardan) | {_tl(durum.gerceklesen_kar_try)} |",
         f"| Gerceklesmemis kar (aciktaki) | {_tl(gerceklesmemis)} |",
-        f"| Odenen komisyon | {_tl(durum.toplam_komisyon_try)} "
+        f"| Alis komisyonu (maliyete girmez) | {_tl(-fark)} |",
+        f"| Odenen komisyon (toplam) | {_tl(durum.toplam_komisyon_try)} "
         f"(oran {_oran(durum.komisyon_orani, 2)}) |",
         f"| Islem sayisi | {len(durum.islemler)} |",
         "",
@@ -259,10 +292,11 @@ def rapor_olustur(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
     satirlar += [f"# {baslik} {bugun}", ""]
     if durum:
         satirlar += _sim_bolumu(durum, portfoy)
-    satirlar += _ozet_bolumu(portfoy, risk, fiyatlar)
+    satirlar += _ozet_bolumu(portfoy, risk, fiyatlar, sim=bool(durum))
     satirlar += _pozisyon_bolumu(portfoy)
     satirlar += _dagilim_bolumu(sapmalar, portfoy.toplam_deger_try,
-                                yapilandirma.esikler.rebalancing_sapma)
+                                yapilandirma.esikler.rebalancing_sapma,
+                                portfoy.fiyatlanamayan)
     satirlar += _risk_bolumu(risk, varlik_adlari, yapilandirma.esikler)
     satirlar += _korelasyon_bolumu(risk.korelasyon)
     if durum:
