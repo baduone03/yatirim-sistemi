@@ -1,37 +1,150 @@
 ﻿# Ikinci Beyin Kurallari
 
-## Kim Icin
-Bu vault, Dodo'nun kisisel bilgi tabanidir.
-Ilgi alanlari: Dijital girisimler, sistem kurma, otomasyon
-Profesyonel baglam: Vibecoder
+## Vault Sahibi
+- Ad: Dodo
+- Ilgi alanlari: Dijital girisimler, sistem kurma, otomasyon, kripto, blockchain, yapay zeka, dijital gelir modelleri
+- Baglam: Teknoloji ve AI ile dijitalden para kazanmaya calisan genc girisimci. Vibecoder.
+- Dil: Turkce yaz. Terim adlari (blockchain, DeFi, API, prompt, smart contract vb.) Ingilizce kalabilir ama teknik kavramlari ve surecleri Turkce acikla. "Liquidity pool'a stake et" degil, "Likidite havuzuna tokenlarini kilitleyerek faiz kazanirsin (buna staking deniyor)" yaz. Ilk gectigi yerde her terimi bir cumleyle acikla, sonraki kullanimlarda aciklama gerekmez.
 
 ## Vault Yapisi
 - 01-inbox/: Ham, islenmemis girdiler. Her zaman buradan basla.
 - 02-sources/: Islenmis kaynak materyaller.
 - 03-wiki/: Sentetik bilgi - kavramlar, kisiler, konular.
+  - concepts/: Kavram sayfalari (or: smart-contract.md, defi.md)
+  - people/: Kisi sayfalari (or: vitalik-buterin.md)
+  - topics/: Konu sayfalari (or: pasif-gelir-modelleri.md)
 - 04-projects/: Aktif projeler.
 - 05-daily/: Gunluk notlar.
 - 06-archive/: Tamamlanmis materyaller.
 
+## YAML Frontmatter Sablonu
+Her notun basinda bu olmali:
+```yaml
+---
+title: "Not Basligi"
+date_created: YYYY-MM-DD
+date_modified: YYYY-MM-DD
+tags: []
+status: inbox | processed | evergreen | needs-review
+related: []
+source: ""
+money_angle: ""
+---
+```
+
 ## Not Yazma Kurallari
-1. Her not atomik olmali - tek bir fikir, tek bir dosya.
-2. Her notun YAML frontmatter'i olmali (title, date_created, tags, status, related).
-3. [[Wiki baglantilari]] ile notlar arasi iliskiler kur.
-4. Baglantilari YALNIZCA gercek iliski varsa kur.
-5. Turkce yaz, teknik terimler Ingilizce kalabilir.
+1. Atomik not: Bir dosya = bir fikir. "Blockchain ve Yapay Zeka" diye tek not yazma, ikisini ayir.
+2. Baslik = icerigin ozeti. "Notlar" veya "Arastirma" gibi belirsiz isimler yasak.
+3. Ilk paragraf = notun ana iddiasi. Okuyucu ilk 2 cumlede ne hakkinda oldugunu anlamali.
+4. Somut ol. "Ilginc bir proje" degil, "Kullanicilarin AI ile otomatik NFT uretmesini saglayan proje, aylik 50K kullanici, ucretsiz katmani var" yaz.
+5. Kaynak varsa mutlaka URL ekle.
 
 ## Baglanti Kurallari
-- Bir kavram en az 2 farkli kaynakta gecmedikce wiki sayfasi olusturma.
-- Zayif baglantilardan kacin.
-- Guclu baglanti: somut mekanizma, neden-sonuc, karsitlik.
+- [[Wiki baglantisi]] yalnizca gercek iliski varsa kur.
+- Zayif baglanti YASAK: "ikisi de teknoloji" yeterli degil.
+- Guclu baglanti ornekleri:
+  - Neden-sonuc: "[[DeFi]] protokolleri [[akilli sozlesme]] uzerine insa edilir"
+  - Karsitlik: "[[CEX]] merkeziyetci, [[DEX]] merkeziyetsiz"
+  - Bagimlilik: "[[yield-farming]] yapmak icin [[likidite havuzu]] anlamak sart"
+- Bir kavram 2+ farkli kaynakta gecmedikce bagimsiz wiki sayfasi olusturma.
 
-## Isleme Hatti
-1. 01-inbox/ dosyalarini oku.
-2. Icerigi analiz et, anahtar kavramlari cikar.
-3. 02-sources/ altina ozet olustur.
-4. 03-wiki/ altinda sayfalari guncelle veya olustur.
-5. [[baglantilar]] ile mevcut notlara bagla.
-6. status'u processed olarak guncelle.
+## Isleme Hatti (Ingest)
+01-inbox/ icindeki status: inbox dosyalarini su sirayla isle:
+1. Dosyayi oku, ana fikri tek cumlede belirle.
+2. Anahtar kavramlari cikar (maksimum 5).
+3. 02-sources/ altina yapilandirilmis ozet yaz:
+   - Baslik
+   - Tek cumle ozet
+   - Ana noktalar (en fazla 5 madde)
+   - Kaynak URL
+   - money_angle degerlendirmesi
+4. Ilgili wiki sayfalarini kontrol et:
+   - Sayfa varsa: yeni bilgiyi ekle, celiski varsa belirt.
+   - Sayfa yoksa ve kavram 2+ kaynakta geciyorsa: yeni sayfa olustur.
+5. [[Baglantilar]] kur.
+6. Orijinal dosyanin status'unu "processed" yap.
+7. memory.md'ye tek satir ozet ekle.
+
+## Para Acisi (Money Angle)
+Her kaynagi islerken su kategorileri tara:
+
+### Dogrudan Gelir
+- Bu bilgiyle bir dijital urun satilabilir mi? (E-kitap, sablon, kurs, preset, prompt paketi)
+- SaaS veya mikro-servis kurulabilir mi? (API, bot, otomasyon araci)
+- Freelance hizmet olarak sunulabilir mi? (Danismanlik, kurulum, yonetim)
+
+### Otomasyon Firsati
+- Manuel yapilan bir isi otomatiklestirebilir miyiz? (AI ile, script ile, no-code ile)
+- Baskalarinin bu otomasyona ihtiyaci var mi?
+- Ucretsiz araclarla (n8n, Make, Zapier free tier) kurulabilir mi?
+
+### Arbitraj
+- Bir yerde ucretsiz/ucuz olan bilgi veya hizmet, baska bir yerde degerli mi?
+- Dil arbitraji: Ingilizce icerigi Turkce pazara tasimak mumkun mu?
+- Platform arbitraji: Bir platformdaki icerik/hizmet baska platformda eksik mi?
+
+### Kripto ve DeFi
+- Airdrop firsati var mi? (Yeni proje, testnet, erken kullanici avantaji)
+- Yield/getiri firsati var mi? (Staking, likidite saglama, lending)
+- Yeni bir protokol veya zincir mi? Erken girmenin avantaji ne?
+
+### Icerik ve Topluluk
+- Bu konuda icerik uretilebilir mi? (YouTube, blog, Twitter thread, newsletter)
+- Affiliate/referans programi var mi?
+- Topluluk kurulabilir mi? (Discord, Telegram grubu)
+
+### Degerlendirme Kurallari
+- Cevap varsa money_angle alanina kategori + tek cumle yaz. Ornek: "Otomasyon: Bu API'yi kullanarak otomatik fiyat karsilastirma botu kurulabilir, ucretsiz tier yeterli."
+- Zorla firsat uydurma. Her notta para acisi olmak zorunda degil.
+- Gercekci ol. "Milyonluk firsat" degil, "ayda 500TL getirebilecek yan gelir" gibi somut tahminler yap.
+
+## Bilgi Guncelleme
+- Yeni kaynak mevcut wiki sayfasiyla celisiyorsa:
+  1. Celiskiyi acikca belirt.
+  2. Tarih ve guvenilirlik karsilastir.
+  3. Sayfayi guncelle, eski bilgiyi "Tarihsel not:" altinda koru.
+- 6 aydan eski guncellenmeyen notlara needs-review etiketi ekle.
+
+## Davranis Kurallari
+- Proaktif ol: Bir firsat, kisayol veya ucretsiz alternatif gordugunde beklemeden soyle.
+- "Burada soyle bir sey var" formatiyla tuyo ver.
+- Teoriyi 2-3 cumleyle gec, uygulamayi detaylandir.
+- Maliyet-sifir cozumleri her zaman once oner.
+- Karsilastirmali sun: "X var ama Y de var, farki su" formatinda.
+- Belirsiz sifatlar kullanma: "ilginc", "guzel", "faydali" yasak. Neyin ilginc oldugunu somutla.
+- Gereksiz tekrar yapma. Ama Dodo'nun soylediginde yanlislik, risk veya eksiklik varsa duzeltmeye devam et — "bunu zaten soyledim" deyip susma, dogruyu kabul edene kadar acikla.
+
+## Token Optimizasyonu
+Bu vault'ta her token para. Ciktilari su kurallara gore uret:
+
+### Yapma
+- Ayni seyi farkli kelimelerle tekrar soyleme.
+- "Simdi sunu yapacagim", "Ilk olarak", "Son olarak" gibi adim anlatma cumleleri yazma — direkt yap.
+- Yaptigin isi ozetleme. Sadece beklenmedik bir sey olduysa soyle.
+- Giris ve kapanis cumleleri ekleme. "Tabii ki!", "Iste sonuc:", "Umarim faydali olmustur" yasak.
+- Bos satir, dekoratif ayrac (---), gereksiz baslik hiyerarsisi kullanma.
+- Bir dosyayi okuduktan sonra icerigini bana geri anlatma — ben zaten vault'un sahibiyim.
+
+### Yap
+- Tek cumleyle cevaplanacak soruya tek cumle yaz.
+- Not olustururken: baslik + 1 paragraf ozet + maddeler. Uzun nesir yazma.
+- Wiki sayfasi guncellerken: yalnizca yeni bilgiyi ekle, mevcut icerigi tekrar yazma.
+- Birden fazla dosya islerken: her dosya icin ayri ayri rapor verme, toplu ozet ver.
+- Hata yoksa "basarili" deme, sessizce devam et.
+- Maksimum cikti uzunlugu: Tek not ozeti <= 150 kelime. Wiki sayfasi <= 300 kelime. Gunluk brifing <= 200 kelime. Reflect analizi <= 400 kelime.
+
+### Toplu Islem Kurali
+5+ dosya islerken:
+1. Once tum dosyalari sessizce oku.
+2. Sonra toplu isle.
+3. En sonda tek bir ozet ver: "X dosya islendi. Y yeni wiki sayfasi olusturuldu. Z baglanti kuruldu."
+
+## Ton
+- Kisa, oz, somut.
+- Turkce, teknik terimler Ingilizce.
+- Gereksiz kibar cumleler yok. Direkt ise gir.
+
+---
 
 ## Gotchas
 - **yatirim carpani**: `carpan` (ons->gram) YALNIZCA `fetch.py:_tl_bazina_cevir` icinde uygulanir. `portfolio.py` fiyatlari zaten cevrilmis alir - orada tekrar carparsan deger 31 kat kucuk cikar.
@@ -56,7 +169,7 @@ Profesyonel baglam: Vibecoder
 - **karisik takvim / volatilite tuzagi (ONEMLI)**: BIST hafta sonu kapali, kripto acik. `ffill().pct_change()` kapali gunleri sifir getiri yapar -> volatilite %20-25 DUSUK cikar. `ffill` olmadan `pct_change()` ise NaN'den sonraki gunu de siler -> her Pazartesi BIST getirisi kaybolur, veri %30 azalir. Dogru yol `risk.ortak_getiriler()`: once tum varliklarin islem gordugu ortak takvime `reindex`, sonra `pct_change`. Yeni getiri hesabi yazarken bu fonksiyonu kullan.
 - **yillicklastirma carpani sabit degil**: `risk.yillik_periyot_sayisi()` carpani gozlem yogunlugundan turetir (~241), `islem_gunu_yil: 252` yalnizca fallback. Ortak takvim kesisim oldugu icin 252 varsaymak volatiliteyi ~%3 sisirir.
 - **bayat fiyat**: `son_fiyatlar` ffill yapar, delist/veri kesintisi sessizce eski fiyatla degerleme yapardi. `FiyatVerisi.bayat_semboller()` 7 gunden eski veriyi raporda ve Telegram'da isaretler. Degerlemeyi bozmaz, yalnizca gorunur kilar.
-- **sqlite3 cursor tuzagi**: dis dongude `cur.execute(...)` uzerinde iterasyon yaparken ic ic ayni cursor'a `execute` cagirmak dis iterasyonu sessizce keser. Ayri cursor kullan veya once `.fetchall()`.
+- **sqlite3 cursor tuzagi**: dis dongude `cur.execute(...)` uzerinde iterasyon yaparken ic ice ayni cursor'a `execute` cagirmak dis iterasyonu sessizce keser. Ayri cursor kullan veya once `.fetchall()`.
 
 ## memory.md Kullanimi
 - Oturumlar arasi bilgileri memory.md'ye yaz.

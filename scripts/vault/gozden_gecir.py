@@ -5,6 +5,7 @@ Elle bakilmadigi surece sessizce bozulan seyleri bulur:
   - yetim notlar (hicbir yerden baglanti almayan)
   - islenmemis girdiler (status: inbox)
   - frontmatter'i eksik notlar
+  - money_angle alani hic yazilmamis kaynak notlari
   - uzun suredir dokunulmamis aktif projeler
   - vadesi gelmis karar kontrol gunleri
 
@@ -70,6 +71,12 @@ def _frontmatter_alani(metin: str, alan: str) -> str | None:
     return eslesme.group(1).strip() if eslesme else None
 
 
+def _frontmatter_blok(metin: str) -> str | None:
+    """Notun basindaki --- ... --- blogu. Yoksa None."""
+    eslesme = re.match(r"﻿?\s*---\r?\n(.*?)\r?\n---", metin, re.DOTALL)
+    return eslesme.group(1) if eslesme else None
+
+
 def kirik_baglantilar(notlar: list[Path]) -> Bulgu:
     adlar = {n.stem for n in notlar}
     bulgu = Bulgu("Kirik wikilink", eylem_gerek=True)
@@ -130,6 +137,31 @@ def frontmatter_eksikleri(notlar: list[Path]) -> Bulgu:
             continue
         metin = not_.read_text(encoding="utf-8", errors="ignore")
         if not metin.lstrip().startswith("---"):
+            bulgu.satirlar.append(f"`{not_.stem}` ({not_.parent.name}/)")
+    return bulgu
+
+
+def money_angle_eksikleri(notlar: list[Path]) -> Bulgu:
+    """CLAUDE.md frontmatter sablonunda money_angle var; alani hic olmayan
+    kaynak notlarini isaretler.
+
+    Iki bilincli sinirlama:
+      - Yalnizca 01-inbox ve 02-sources taranir. Para acisi degerlendirmesi
+        isleme hattinin adimi; uretilmis raporlarda ve proje notlarinda
+        anlamsiz olurdu.
+      - Alan BOS ise bulgu degildir. CLAUDE.md "zorla firsat uydurma" diyor,
+        yani bos money_angle gecerli bir cevap. Yalnizca alanin hic
+        yazilmamis olmasi eksiklik sayilir.
+    """
+    kapsam = {"01-inbox", "02-sources"}
+    bulgu = Bulgu("money_angle alani yok (kaynak notu)", eylem_gerek=False)
+    for not_ in sorted(notlar, key=lambda p: p.stem):
+        if not kapsam & set(not_.parts):
+            continue
+        blok = _frontmatter_blok(not_.read_text(encoding="utf-8", errors="ignore"))
+        if blok is None:
+            continue          # frontmatter_eksikleri zaten raporluyor
+        if not re.search(r"^money_angle:", blok, re.MULTILINE):
             bulgu.satirlar.append(f"`{not_.stem}` ({not_.parent.name}/)")
     return bulgu
 
@@ -245,6 +277,7 @@ def main() -> int:
         bekleyen_karar_olcumleri(),
         yetim_notlar(notlar),
         frontmatter_eksikleri(notlar),
+        money_angle_eksikleri(notlar),
         bayat_projeler(notlar),
     ]
 
