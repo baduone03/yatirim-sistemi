@@ -3,11 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 
 import pandas as pd
 import yfinance as yf
 
 from config import BayatlikEsikleri, KurumsalOlayAyarlari, Yapilandirma
+from kaynaklar import (
+    KaynakHatasi,
+    KurKotasyonu,
+    UcgenlemeAyarlari,
+    UcgenlemeSonucu,
+    btcturk_fiyatlari,
+    coingecko_usd,
+    http_json,
+    tcmb_usdtry,
+    ucgenle,
+)
 
 
 BAYAT_ESIGI_GUN = 7
@@ -22,21 +34,32 @@ class FiyatVerisi:
     eksik_semboller: list[str]
     sinif_haritasi: dict[str, str] = field(default_factory=dict)
     kurumsal_olay_supheleri: dict[str, str] = field(default_factory=dict)
+    ucgenleme: UcgenlemeSonucu = field(default_factory=UcgenlemeSonucu)
 
     @property
     def son_fiyatlar(self) -> dict[str, float]:
         """Degerleme fiyatlari. Bosluklar ffill'lenir - son BILINEN fiyat kullanilir.
 
-        Kurumsal olay suphesi olan sembol DISARIDA birakilir: fiyat sicramasi
-        gercek kayip mi yoksa kayitli olmayan bedelsiz/split mi belli degilse
-        deger uretmek, yanlis rakami dogruymus gibi sunmaktir. Disarida kalan
-        sembol portfoy.fiyatlanamayan icinde raporlanir.
+        Uc filtre sirayla uygulanir:
+          1. Kurumsal olay suphesi olan sembol DISARIDA kalir - sicrama gercek
+             kayip mi kayitli olmayan bedelsiz mi belli degil.
+          2. Ucgenlemede DURDUR alan sembol DISARIDA kalir - fiyati var ama
+             uc kaynak birbirini tutmuyor.
+          3. Kalan kriptolar icin BTCTurk TL fiyati Yahoo'yu EZER. TL cifti
+             dogrudan alindigi icin cift cevrim (BTC/USD x USD/TRY) hatasi
+             tasimaz.
         """
         son = self.try_gecmis.ffill().iloc[-1]
-        return {
+        fiyatlar = {
             sembol: float(deger) for sembol, deger in son.items()
             if pd.notna(deger) and sembol not in self.kurumsal_olay_supheleri
         }
+        for durduran in self.ucgenleme.durduranlar:
+            fiyatlar.pop(durduran.sembol, None)
+        for sembol, tl in self.ucgenleme.degerleme_fiyatlari().items():
+            if sembol not in self.kurumsal_olay_supheleri:
+                fiyatlar[sembol] = tl
+        return fiyatlar
 
     @property
     def son_tarih(self) -> str:
@@ -206,8 +229,90 @@ def _tl_bazina_cevir(kapanis: pd.DataFrame, yapilandirma: Yapilandirma) -> pd.Da
     return pd.DataFrame(sutunlar).dropna(how="all")
 
 
+def _kur_kotasyonu(kaynaklar, env, yahoo_usdtry: float, getir,
+                   bugun=None) -> tuple[KurKotasyonu, list[str]]:
+    """USD/TRY: once TCMB, erisilemez veya BAYATSA Yahoo.
+
+    TCMB kuru yalnizca is gunu ~15:30'da yayimlanir. Hafta sonu ve tatilde
+    yeni kur yoktur. Cuma kuruyla Pazar gunu ucgenleme yapmak, "TR primi"
+    adi altinda kurun bayatligini olcmek demektir - kripto 7/24 hareket
+    ederken kur donmus kalir.
+    """
+    bugun = bugun or date.today()
+    uyarilar: list[str] = []
+    yedek = KurKotasyonu(yahoo_usdtry, bugun, "yahoo")
+
+    if not kaynaklar.tcmb_url:
+        return yedek, uyarilar
+    anahtar = (env or {}).get(kaynaklar.tcmb_anahtar_env, "")
+    if not anahtar:
+        uyarilar.append(
+            f"TCMB EVDS anahtari yok ({kaynaklar.tcmb_anahtar_env} tanimsiz) "
+            "- USD/TRY Yahoo'dan alindi.")
+        return yedek, uyarilar
+    try:
+        kur = tcmb_usdtry(kaynaklar.tcmb_url, kaynaklar.tcmb_seri, anahtar,
+                          getir=getir, bugun=bugun)
+    except KaynakHatasi as hata:
+        uyarilar.append(f"TCMB okunamadi ({hata}) - USD/TRY Yahoo'dan alindi.")
+        return yedek, uyarilar
+    if kur.bayat_mi(kaynaklar.tcmb_bayatlik_gun, bugun):
+        uyarilar.append(
+            f"TCMB kuru {kur.tarih} tarihli, bayat - USD/TRY Yahoo'dan alindi. "
+            "TCMB yalnizca is gunu kur yayimlar.")
+        return KurKotasyonu(yahoo_usdtry, bugun, "yahoo (tcmb bayat)"), uyarilar
+    return kur, uyarilar
+
+
+def kripto_ucgenlemesi(yapilandirma: Yapilandirma, yahoo_usdtry: float,
+                       env: dict | None = None, getir=http_json,
+                       simdi=None, bugun=None) -> UcgenlemeSonucu:
+    """BTCTurk + CoinGecko + TCMB capraz kontrolu.
+
+    Kaynaklardan biri dusse bile HATA FIRLATMAZ: eksik kaynak OLCULEMEDI
+    demektir, rapor uretilmeye devam eder. Yalnizca uc kaynak da tazeyken
+    gercek bir kopukluk goruldugunde DURDUR cikar.
+    """
+    kaynaklar = yapilandirma.kaynaklar
+    if not kaynaklar.btcturk_acik:
+        return UcgenlemeSonucu()
+
+    uyarilar: list[str] = []
+    try:
+        tl_fiyatlar = btcturk_fiyatlari(
+            kaynaklar.btcturk_url, kaynaklar.btcturk_ciftleri, getir)
+    except KaynakHatasi as hata:
+        uyarilar.append(f"BTCTurk okunamadi: {hata}")
+        tl_fiyatlar = {}
+
+    usd_fiyatlar: dict[str, float] = {}
+    if kaynaklar.coingecko_url:
+        try:
+            usd_fiyatlar = coingecko_usd(
+                kaynaklar.coingecko_url, kaynaklar.coingecko_kimlikleri, getir)
+        except KaynakHatasi as hata:
+            uyarilar.append(f"CoinGecko okunamadi: {hata}")
+
+    kur, kur_uyarilari = _kur_kotasyonu(kaynaklar, env, yahoo_usdtry, getir, bugun)
+    uyarilar += kur_uyarilari
+
+    ayarlar = UcgenlemeAyarlari(
+        prim_esigi=kaynaklar.prim_esigi,
+        durdurma_esigi=kaynaklar.durdurma_esigi,
+        btcturk_bayatlik_dakika=kaynaklar.btcturk_bayatlik_dakika,
+        tcmb_bayatlik_gun=kaynaklar.tcmb_bayatlik_gun,
+    )
+    sonuclar = {
+        sembol: ucgenle(sembol, tl_fiyatlar.get(sembol), usd_fiyatlar.get(sembol),
+                        kur, ayarlar, simdi)
+        for sembol in sorted(kaynaklar.btcturk_ciftleri)
+    }
+    return UcgenlemeSonucu(sonuclar=sonuclar, uyarilar=uyarilar)
+
+
 def fiyatlari_getir(yapilandirma: Yapilandirma,
-                    bilinen_olaylar: set[tuple[str, str]] | None = None) -> FiyatVerisi:
+                    bilinen_olaylar: set[tuple[str, str]] | None = None,
+                    env: dict | None = None, getir=http_json) -> FiyatVerisi:
     semboller = yapilandirma.fiyat_sembolleri
     kapanis, hacim = kapanislari_indir(semboller, yapilandirma.ayarlar.gecmis_gun)
 
@@ -227,10 +332,12 @@ def fiyatlari_getir(yapilandirma: Yapilandirma,
         kapanis[varlik_sutunlari], hacim, yapilandirma.kurumsal_olay, bilinen_olaylar
     )
 
+    yahoo_usdtry = float(kapanis[kur_sembolu].ffill().iloc[-1])
     return FiyatVerisi(
         try_gecmis=_tl_bazina_cevir(kapanis, yapilandirma),
-        usdtry=float(kapanis[kur_sembolu].ffill().iloc[-1]),
+        usdtry=yahoo_usdtry,
         eksik_semboller=eksik,
         sinif_haritasi=yapilandirma.sinif_haritasi,
         kurumsal_olay_supheleri=supheliler,
+        ucgenleme=kripto_ucgenlemesi(yapilandirma, yahoo_usdtry, env, getir),
     )

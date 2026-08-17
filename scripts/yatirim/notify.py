@@ -142,6 +142,27 @@ def _islem_satirlari(durum, tarih: str) -> list[str]:
     return satirlar
 
 
+def ucgenleme_durdurma_mesaji(durduranlar, baslik: str) -> str:
+    """Rapor URETILMEDIGINDE gonderilen mesaj.
+
+    Rapor yoksa sessiz kalmak en kotu secenek: kimse bir seyin durdugunu
+    bilmez ve bayat raporu guncel sanir.
+    """
+    satirlar = [f"<b>🛑 {_kacis(baslik)} - RAPOR URETILMEDI</b>", ""]
+    for sonuc in sorted(durduranlar, key=lambda u: u.sembol):
+        satirlar.append(f"• {_kacis(sonuc.sembol)}: {_kacis(sonuc.gerekce)}")
+        if sonuc.tl_fiyat is not None and sonuc.beklenen_tl is not None:
+            satirlar.append(
+                f"  BTCTurk {sonuc.tl_fiyat:,.0f} TL / beklenen "
+                f"{sonuc.beklenen_tl:,.0f} TL (kur: {_kacis(sonuc.kur_kaynagi)})")
+    satirlar += [
+        "",
+        "Uc kaynak da taze ama birbirini tutmuyor. Once kaynaklari kontrol et; "
+        "gercek bir kopukluksa esigi degil pozisyonu gozden gecir.",
+    ]
+    return "\n".join(satirlar)
+
+
 def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
                 durum=None, baslik: str = "Yatirim", fiyatlar=None,
                 esikler: Esikler = VARSAYILAN_ESIKLER, bayatlik=None) -> str:
@@ -166,6 +187,18 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
 
     if durum:
         satirlar += _islem_satirlari(durum, date.today().isoformat())
+
+    ucgenleme = fiyatlar.ucgenleme if fiyatlar is not None else None
+    if ucgenleme is not None and ucgenleme.primliler:
+        satirlar += ["", "<b>TR primi</b>"]
+        for sonuc in sorted(ucgenleme.primliler, key=lambda u: u.sembol):
+            satirlar.append(
+                f"• {_kacis(sonuc.sembol)}: {sonuc.tr_primi * 100:+.2f}% "
+                f"(kur: {_kacis(sonuc.kur_kaynagi)})")
+    if ucgenleme is not None and ucgenleme.dogrulanmayanlar:
+        satirlar += ["", "<b>⚠️ Dogrulanmamis kripto fiyati</b>"]
+        for sonuc in sorted(ucgenleme.dogrulanmayanlar, key=lambda u: u.sembol):
+            satirlar.append(f"• {_kacis(sonuc.sembol)}: {_kacis(sonuc.gerekce)}")
 
     # Kurumsal olay suphesi en agir uyari: rakamlar yanlis olabilir ve sebebi
     # veri eksikligi degil, kayitli olmayan bir bedelsiz/split olabilir.

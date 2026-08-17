@@ -195,6 +195,14 @@ Bu vault'ta her token para. Ciktilari su kurallara gore uret:
 - **hacim dogrulanamazsa sembol supheli KALIR**: `_hacim_dogruluyor` hacim verisi yoksa False doner. Bilincli: dogrulanamayan sicramayi "gercek" saymak yanlis degeri dogruymus gibi raporlamaktir.
 - **`kapanislari_indir` artik `(kapanis, hacim)` tuple doner**: hacim kurumsal olay tespiti icin sart. Tek deger bekleyen cagri sessizce DataFrame yerine tuple alir.
 - **yfinance toplu indirmede gecici rate limit**: 13 sembolun HEPSI birden "possibly delisted" derse bu delist degil, rate limit. Kod "ag baglantisini kontrol et" der ama tek sembol ayri denendiginde calisiyorsa sebep budur; birkac dakika bekle. `period='365d'` gecerlidir, sorun o degil.
+- **BTCTurk gecmis VERMEZ**: `/api/v2/ticker` anlik kotasyondur. Bu yuzden yalnizca DEGERLEME fiyatini ezer; volatilite, korelasyon ve beta hala Yahoo'nun 365 gunluk serisinden gelir. Yani kriptonun degeri BTCTurk'ten, getirisi Yahoo'dan. Rapor bunu yaziyor - kaldirma.
+- **BTCTurk `timestamp` MILISANIYE**: saniye sanip cevirirsen tarih 1970 cikar ve her fiyat bayat sayilir, kripto degerlemesi sessizce Yahoo'ya doner.
+- **TL ciftini dogrudan al**: BTCTRY yerine BTC/USD x USD/TRY carpimi kullanmak cift cevrim hatasidir. Ustelik TR primini o carpimla olcersen prim daima 0 cikar - kendi kendini dogrulayan hesap.
+- **CoinGecko degerlemeye ASLA girmez**: rolu yalnizca ucgenleme referansi. Girseydi kripto fiyati bazen BTCTurk bazen CoinGecko olur, portfoy degeri kaynaga gore ziplardi.
+- **TCMB yalnizca IS GUNU kur yayimlar** (~15:30). Hafta sonu/tatilde yeni kur yok. Bayat TCMB kuruyla ucgenleme yapmak "TR primi" adi altinda kurun bayatligini olcer - kripto 7/24 hareket ederken kur donmus kalir. `bayatlik_gun` asilirsa Yahoo'ya duser ve raporda `yahoo (tcmb bayat)` yazar.
+- **OLCULEMEDI != DURDUR**: OLCULEMEDI kaynaklardan biri yok/bayat demek - bizim korlugumuz, rapor URETILIR. DURDUR uc kaynak da tazeyken gercek kopukluk demek - rapor URETILMEZ. Ayrimi kaldirirsan CoinGecko'nun bir dakikalik hikkirigi BIST ve altin dahil tum gunun raporunu sildirir.
+- **`kaynaklar.py` ag katmani enjekte edilir**: her fonksiyon `getir=http_json` parametresi alir. Testler sahte `getir` gecirir, ag'a cikilmaz. Yeni kaynak eklerken bu kalibi bozma - yoksa test paketi ag'a bagimli hale gelir.
+- **EVDS anahtari yoksa sistem CALISIR**: Yahoo'ya duser ve raporda bunu yazar. Anahtar `.env` -> `EVDS_API_ANAHTARI`, header ile gonderilir (URL'ye KOYMA - loglara ve hata mesajlarina sizar).
 - **sqlite3 cursor tuzagi**: dis dongude `cur.execute(...)` uzerinde iterasyon yaparken ic ice ayni cursor'a `execute` cagirmak dis iterasyonu sessizce keser. Ayri cursor kullan veya once `.fetchall()`.
 
 ## memory.md Kullanimi

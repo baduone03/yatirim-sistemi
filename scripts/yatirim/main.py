@@ -24,7 +24,13 @@ from config import (  # noqa: E402
 from fetch import fiyatlari_getir  # noqa: E402
 from kurumsal_olay import bilinen_olay_anahtarlari, olaylari_oku  # noqa: E402
 from ledger import durumu_hesapla, islemleri_oku  # noqa: E402
-from notify import TelegramHatasi, mesaj_gonder, ozet_mesaji  # noqa: E402
+from notify import (  # noqa: E402
+    TelegramHatasi,
+    env_oku,
+    mesaj_gonder,
+    ozet_mesaji,
+    ucgenleme_durdurma_mesaji,
+)
 from portfolio import (  # noqa: E402
     portfoyu_hesapla,
     portfoyu_ledgerdan_hesapla,
@@ -86,7 +92,27 @@ def main() -> int:
     print(f"{len(yapilandirma.fiyat_sembolleri)} sembol icin fiyat cekiliyor...")
     # Deftere yazilmis olaylar otomatik tespiti tetiklemez - yoksa kayitli bir
     # bedelsizden sonra o sembolun degerlemesi sonsuza kadar durur.
-    fiyatlar = fiyatlari_getir(yapilandirma, bilinen_olay_anahtarlari(olaylar))
+    ortam = env_oku()
+    fiyatlar = fiyatlari_getir(yapilandirma, bilinen_olay_anahtarlari(olaylar), ortam)
+
+    rapor_adi = date.today().isoformat()
+    # Ucgenleme durdurdu: uc kaynak da taze ama birbirini tutmuyor. Rapor
+    # URETILMEZ. Kaynaklardan biri eksik/bayat olsaydi durum OLCULEMEDI olur
+    # ve rapor uretilirdi - CoinGecko'nun bir hikkirigi tum gunun raporunu
+    # (BIST, altin, Nasdaq dahil) sildirmesin diye ayrim var.
+    if fiyatlar.ucgenleme.durduranlar:
+        baslik = f"{'Simulasyon' if durum else 'Portfoy'} {rapor_adi}"
+        mesaj = ucgenleme_durdurma_mesaji(fiyatlar.ucgenleme.durduranlar, baslik)
+        print("HATA - ucgenleme durdurdu, rapor uretilmedi:", file=sys.stderr)
+        for sonuc in fiyatlar.ucgenleme.durduranlar:
+            print(f"  {sonuc.sembol}: {sonuc.gerekce}", file=sys.stderr)
+        try:
+            mesaj_gonder(mesaj, ortam)
+            print("Telegram uyarisi gonderildi.")
+        except TelegramHatasi as hata:
+            print(f"UYARI - Telegram uyarisi da gonderilemedi: {hata}",
+                  file=sys.stderr)
+        return 1
 
     portfoy = (
         portfoyu_ledgerdan_hesapla(yapilandirma, fiyatlar, durum)
@@ -96,7 +122,6 @@ def main() -> int:
     sapmalar = sinif_sapmalari(portfoy, yapilandirma.hedef_dagilim)
     risk = riski_hesapla(yapilandirma, fiyatlar, portfoy)
 
-    rapor_adi = date.today().isoformat()
     rapor_dizini = SIM_RAPOR_DIZINI if durum else RAPOR_DIZINI
     rapor_dizini.mkdir(parents=True, exist_ok=True)
     rapor_dosyasi = rapor_dizini / f"{rapor_adi}.md"
@@ -118,7 +143,7 @@ def main() -> int:
         try:
             mesaj_gonder(ozet_mesaji(portfoy, sapmalar, risk, durum, baslik,
                                      fiyatlar, yapilandirma.esikler,
-                                     yapilandirma.bayatlik))
+                                     yapilandirma.bayatlik), ortam)
             print("Telegram ozeti gonderildi.")
         except TelegramHatasi as hata:
             # Rapor diske yazildi ve GECERLI - kaybolmadi.

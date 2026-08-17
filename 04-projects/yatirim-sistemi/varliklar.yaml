@@ -59,6 +59,40 @@ kurumsal_olay:
   hacim_penceresi: 20      # medyan hacim kac gunden hesaplanir
   tarama_gunu: 5           # yalnizca son N gun taranir, tarihi olaylar degil
 
+# Dis veri kaynaklari ve ucgenleme.
+#
+# ROL DAGILIMI - karistirilmamali:
+#   BTCTurk   : kripto DEGERLEME fiyati (TL cifti dogrudan, cift cevrim yok)
+#   CoinGecko : yalnizca DOGRULAMA. Degerlemeye asla girmez.
+#   TCMB      : USD/TRY birincil. Yahoo USDTRY=X yedek.
+#
+# BTCTurk ticker ANLIK fiyattir, gecmis seri VERMEZ. Korelasyon/volatilite
+# hala Yahoo'nun 365 gunluk serisinden gelir. Yani kriptonun degeri
+# BTCTurk'ten, getirisi Yahoo'dan hesaplanir.
+veri_kaynaklari:
+  btcturk:
+    url: "https://api.btcturk.com/api/v2/ticker"
+    ciftler:
+      BTC-USD: BTCTRY
+      ETH-USD: ETHTRY
+  coingecko:
+    url: "https://api.coingecko.com/api/v3/simple/price"
+    kimlikler:
+      BTC-USD: bitcoin
+      ETH-USD: ethereum
+  tcmb:
+    url: "https://evds2.tcmb.gov.tr/service/evds"
+    seri: "TP.DK.USD.A"        # USD doviz alis
+    anahtar_env: "EVDS_API_ANAHTARI"
+    # TCMB yalnizca IS GUNU ~15:30'da kur yayimlar. Hafta sonu yeni kur yok.
+    # 1 gunden eski kur bayat sayilir ve Yahoo'ya dusulur - yoksa Pazar gunu
+    # olculen sey "TR primi" degil, kurun bayatligi olur.
+    bayatlik_gun: 1
+  ucgenleme:
+    btcturk_bayatlik_dakika: 15
+    prim_esigi: 0.03           # ustunde TR primi olarak kaydedilir + uyari
+    durdurma_esigi: 0.08       # ustunde rapor URETILMEZ (uc kaynak da tazeyse)
+
 hedef_dagilim:
   bist: 0.30
   nasdaq: 0.25

@@ -200,9 +200,54 @@ def _korelasyon_bolumu(korelasyon: pd.DataFrame) -> list[str]:
     return satirlar
 
 
+def _ucgenleme_bolumu(fiyatlar: FiyatVerisi) -> list[str]:
+    """TR primi: BTCTurk TL fiyati ile CoinGecko x USD/TRY arasindaki fark.
+
+    Ayri metrik olarak gosterilir cunku kar/zarar degildir - Turkiye
+    piyasasinin dunya fiyatina gore tasidigi primdir. Pozitif deger TL
+    tarafinin pahali oldugunu soyler.
+    """
+    ucgenleme = fiyatlar.ucgenleme
+    if not ucgenleme.sonuclar:
+        return []
+    satirlar = [
+        "## TR primi (ucgenleme)",
+        "",
+        "| Sembol | BTCTurk TL | Beklenen TL | TR primi | Durum |",
+        "|---|---:|---:|---:|---|",
+    ]
+    for sembol in sorted(ucgenleme.sonuclar):
+        sonuc = ucgenleme.sonuclar[sembol]
+        tl = f"{sonuc.tl_fiyat:,.0f}" if sonuc.tl_fiyat is not None else "—"
+        beklenen = f"{sonuc.beklenen_tl:,.0f}" if sonuc.beklenen_tl is not None else "—"
+        prim = f"{sonuc.tr_primi * 100:+.2f}%" if sonuc.tr_primi is not None else "—"
+        satirlar.append(f"| {sembol} | {tl} | {beklenen} | {prim} | {sonuc.durum} |")
+    kur_kaynaklari = {s.kur_kaynagi for s in ucgenleme.sonuclar.values() if s.kur_kaynagi}
+    satirlar += [
+        "",
+        f"USD/TRY kaynagi: {', '.join(sorted(kur_kaynaklari)) or 'yok'}.",
+        "Degerleme BTCTurk TL cifti uzerinden - cift cevrim yok. **Risk "
+        "metrikleri (volatilite, korelasyon, beta) hala Yahoo'nun gunluk "
+        "serisinden hesaplanir**; BTCTurk ticker gecmis vermez.",
+        "",
+    ]
+    return satirlar
+
+
 def _uyari_bolumu(portfoy: Portfoy, fiyatlar: FiyatVerisi, risk: RiskRaporu,
                   bayatlik=None) -> list[str]:
     sorunlar = []
+    for sonuc in fiyatlar.ucgenleme.durduranlar:
+        sorunlar.append(
+            f"**UCGENLEME DURDURDU - {sonuc.sembol}**: {sonuc.gerekce}. "
+            "Uc kaynak da taze ama birbirini tutmuyor.")
+    for sonuc in fiyatlar.ucgenleme.primliler:
+        sorunlar.append(f"TR primi esigi asildi - {sonuc.sembol}: {sonuc.gerekce}")
+    for sonuc in fiyatlar.ucgenleme.dogrulanmayanlar:
+        sorunlar.append(
+            f"Ucgenleme yapilamadi - {sonuc.sembol}: {sonuc.gerekce}. "
+            "Degerleme yapildi ama dogrulanmadi.")
+    sorunlar += fiyatlar.ucgenleme.uyarilar
     for sembol, gerekce in sorted(fiyatlar.kurumsal_olay_supheleri.items()):
         sorunlar.append(
             f"**Olasi kurumsal olay - {sembol}**: {gerekce}. Degerleme DURDURULDU. "
@@ -310,6 +355,7 @@ def rapor_olustur(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
     satirlar += _korelasyon_bolumu(risk.korelasyon)
     if durum:
         satirlar += _islem_gecmisi_bolumu(durum)
+    satirlar += _ucgenleme_bolumu(fiyatlar)
     satirlar += _uyari_bolumu(portfoy, fiyatlar, risk, yapilandirma.bayatlik)
     satirlar += _limitler()
     return "\n".join(satirlar)

@@ -78,6 +78,31 @@ class KurumsalOlayAyarlari:
 
 
 @dataclass(frozen=True)
+class VeriKaynaklari:
+    """Dis kaynak uc noktalari ve ucgenleme esikleri.
+
+    Bos birakilirsa (URL yok) o kaynak devre disidir ve sistem tamamen
+    Yahoo uzerinden calisir - FAZ 2 oncesi davranis.
+    """
+
+    btcturk_url: str = ""
+    btcturk_ciftleri: dict[str, str] = field(default_factory=dict)
+    coingecko_url: str = ""
+    coingecko_kimlikleri: dict[str, str] = field(default_factory=dict)
+    tcmb_url: str = ""
+    tcmb_seri: str = "TP.DK.USD.A"
+    tcmb_anahtar_env: str = "EVDS_API_ANAHTARI"
+    tcmb_bayatlik_gun: int = 1
+    btcturk_bayatlik_dakika: float = 15.0
+    prim_esigi: float = 0.03
+    durdurma_esigi: float = 0.08
+
+    @property
+    def btcturk_acik(self) -> bool:
+        return bool(self.btcturk_url and self.btcturk_ciftleri)
+
+
+@dataclass(frozen=True)
 class Yapilandirma:
     ayarlar: Ayarlar
     esikler: Esikler
@@ -88,6 +113,7 @@ class Yapilandirma:
     sablon: bool = False          # portfoy.yaml doldurulmamis ornek veri mi
     bayatlik: BayatlikEsikleri = field(default_factory=BayatlikEsikleri)
     kurumsal_olay: KurumsalOlayAyarlari = field(default_factory=KurumsalOlayAyarlari)
+    kaynaklar: VeriKaynaklari = field(default_factory=VeriKaynaklari)
 
     @property
     def fiyat_sembolleri(self) -> list[str]:
@@ -219,6 +245,38 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
             "(1 = medyan hacim, altini 'artis' saymak anlamsiz)"
         )
 
+    kaynak_ham = varlik_ham.get("veri_kaynaklari") or {}
+    ucgen_ham = kaynak_ham.get("ucgenleme") or {}
+    kaynaklar = VeriKaynaklari(
+        btcturk_url=str((kaynak_ham.get("btcturk") or {}).get("url", "")),
+        btcturk_ciftleri=dict((kaynak_ham.get("btcturk") or {}).get("ciftler") or {}),
+        coingecko_url=str((kaynak_ham.get("coingecko") or {}).get("url", "")),
+        coingecko_kimlikleri=dict(
+            (kaynak_ham.get("coingecko") or {}).get("kimlikler") or {}),
+        tcmb_url=str((kaynak_ham.get("tcmb") or {}).get("url", "")),
+        tcmb_seri=str((kaynak_ham.get("tcmb") or {}).get("seri", "TP.DK.USD.A")),
+        tcmb_anahtar_env=str(
+            (kaynak_ham.get("tcmb") or {}).get("anahtar_env", "EVDS_API_ANAHTARI")),
+        tcmb_bayatlik_gun=int((kaynak_ham.get("tcmb") or {}).get("bayatlik_gun", 1)),
+        btcturk_bayatlik_dakika=float(
+            ucgen_ham.get("btcturk_bayatlik_dakika", 15.0)),
+        prim_esigi=float(ucgen_ham.get("prim_esigi", 0.03)),
+        durdurma_esigi=float(ucgen_ham.get("durdurma_esigi", 0.08)),
+    )
+    if not 0 < kaynaklar.prim_esigi < kaynaklar.durdurma_esigi < 1:
+        raise ValueError(
+            "ucgenleme esikleri 0 < prim_esigi < durdurma_esigi < 1 olmali; "
+            f"prim={kaynaklar.prim_esigi}, durdurma={kaynaklar.durdurma_esigi}"
+        )
+    # Sembol yazim hatasi sessizce kaynagi devre disi birakmasin.
+    for ad, harita in (("btcturk.ciftler", kaynaklar.btcturk_ciftleri),
+                       ("coingecko.kimlikler", kaynaklar.coingecko_kimlikleri)):
+        tanimsiz = sorted(set(harita) - set(varliklar))
+        if tanimsiz:
+            raise ValueError(
+                f"veri_kaynaklari.{ad} icinde varliklar.yaml'da olmayan "
+                f"sembol var: {tanimsiz}")
+
     return Yapilandirma(
         ayarlar=Ayarlar(
             kur_sembolu=ayar_ham["kur_sembolu"],
@@ -233,6 +291,7 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
         sablon=bool(portfoy_ham.get("sablon", False)),
         bayatlik=bayatlik,
         kurumsal_olay=kurumsal_olay,
+        kaynaklar=kaynaklar,
     )
 
 

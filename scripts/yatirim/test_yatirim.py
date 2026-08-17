@@ -15,7 +15,7 @@ import sys
 import tempfile
 import unittest
 import unittest.mock
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -29,11 +29,25 @@ from config import (
     Esikler,
     KurumsalOlayAyarlari,
     Varlik,
+    VeriKaynaklari,
     Yapilandirma,
     sablonu_reddet,
     yapilandirmayi_oku,
 )
-from fetch import FiyatVerisi, kurumsal_olay_supheleri
+from fetch import FiyatVerisi, kripto_ucgenlemesi, kurumsal_olay_supheleri
+from kaynaklar import (
+    DURDUR,
+    OLCULEMEDI,
+    PRIM,
+    TAMAM,
+    AnlikFiyat,
+    KurKotasyonu,
+    Ucgenleme,
+    UcgenlemeAyarlari,
+    UcgenlemeSonucu,
+    btcturk_fiyatlari,
+    ucgenle,
+)
 from kurumsal_olay import KurumsalOlay, olaylari_oku
 from ledger import durumu_hesapla, islemleri_oku
 from notify import _islem_satirlari, _kacis, env_oku, ozet_mesaji
@@ -792,6 +806,251 @@ class SinifBazliBayatlikTesti(unittest.TestCase):
         gecmis.loc[gecmis.index[0], "BILINMEYEN"] = 10.0
         bayatlar = self._fiyatlar(gecmis).bayat_semboller(self.ESIKLER)
         self.assertIn("BILINMEYEN", bayatlar)       # 13 gun > varsayilan 7
+
+
+class UcgenlemeTesti(unittest.TestCase):
+    """BTCTurk + CoinGecko + TCMB capraz kontrolu. Tamami cevrimdisi."""
+
+    SIMDI = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
+    AYAR = UcgenlemeAyarlari(prim_esigi=0.03, durdurma_esigi=0.08,
+                             btcturk_bayatlik_dakika=15)
+
+    def _tl(self, deger: float, dakika_once: float = 0.0) -> AnlikFiyat:
+        return AnlikFiyat("BTC-USD", deger,
+                          self.SIMDI - timedelta(minutes=dakika_once), "btcturk")
+
+    def _kur(self, deger: float = 40.0, gun_once: int = 0) -> KurKotasyonu:
+        return KurKotasyonu(deger, date(2026, 8, 17) - timedelta(days=gun_once),
+                            "tcmb")
+
+    # --- 2.1 / 2.4 adim 1: BTCTurk bayatlik ---
+
+    def test_btcturk_timestamp_bayatlik(self):
+        """15 dk'dan eski kotasyon reddedilir - degerleme dogrulanmamis sayilir."""
+        taze = ucgenle("BTC-USD", self._tl(2_500_000, 5), 62_500.0, self._kur(),
+                       self.AYAR, self.SIMDI)
+        self.assertEqual(taze.durum, TAMAM)
+
+        bayat = ucgenle("BTC-USD", self._tl(2_500_000, 20), 62_500.0, self._kur(),
+                        self.AYAR, self.SIMDI)
+        self.assertEqual(bayat.durum, OLCULEMEDI)
+        self.assertIn("bayat", bayat.gerekce)
+        self.assertIsNone(bayat.tr_primi)
+
+    def test_btcturk_timestamp_milisaniye_okunur(self):
+        """timestamp ms cinsinden; saniye sanilirsa tarih 1970 olur."""
+        ms = int(self.SIMDI.timestamp() * 1000)
+        fiyatlar = btcturk_fiyatlari(
+            "http://sahte",
+            {"BTC-USD": "BTCTRY"},
+            lambda url, **k: {"data": [{"pair": "BTCTRY", "last": "2500000",
+                                        "timestamp": ms}]},
+        )
+        self.assertAlmostEqual(
+            fiyatlar["BTC-USD"].gecikme_dakika(self.SIMDI), 0.0, places=3)
+
+    # --- 2.4: esikler ---
+
+    def test_ucgenleme_sapma_esikleri(self):
+        """%3 alti tamam, %3-%8 arasi prim, %8 ustu durdur."""
+        beklenen = 62_500.0 * 40.0        # 2.500.000 TL
+        senaryolar = [
+            (beklenen * 1.01, TAMAM),      # %1
+            (beklenen * 1.05, PRIM),       # %5
+            (beklenen * 1.10, DURDUR),     # %10
+            (beklenen * 0.90, DURDUR),     # -%10, isaret fark etmez
+            (beklenen * 0.95, PRIM),       # -%5
+        ]
+        for tl_deger, beklenen_durum in senaryolar:
+            with self.subTest(tl=tl_deger):
+                sonuc = ucgenle("BTC-USD", self._tl(tl_deger), 62_500.0,
+                                self._kur(), self.AYAR, self.SIMDI)
+                self.assertEqual(sonuc.durum, beklenen_durum)
+
+    def test_esik_tam_sinirda_asilmis_sayilmaz(self):
+        """Karsilastirma kesin buyuk (>): tam %3 prim esigini ASMAZ."""
+        beklenen = 62_500.0 * 40.0
+        sonuc = ucgenle("BTC-USD", self._tl(beklenen * 1.03), 62_500.0,
+                        self._kur(), self.AYAR, self.SIMDI)
+        self.assertEqual(sonuc.durum, TAMAM)
+
+    # --- 2.4: TR primi ---
+
+    def test_tr_primi_hesabi(self):
+        """prim = (BTCTRY - BTC_USD x USD_TRY) / beklenen, ISARETLI."""
+        sonuc = ucgenle("BTC-USD", self._tl(2_625_000.0), 62_500.0,
+                        self._kur(40.0), self.AYAR, self.SIMDI)
+        self.assertAlmostEqual(sonuc.beklenen_tl, 2_500_000.0)
+        self.assertAlmostEqual(sonuc.tr_primi, 0.05)       # +%5
+        self.assertAlmostEqual(sonuc.sapma, 0.05)
+
+    def test_tr_primi_negatif_olabilir(self):
+        """TL tarafi ucuzsa prim negatiftir - mutlak deger alinmaz."""
+        sonuc = ucgenle("BTC-USD", self._tl(2_375_000.0), 62_500.0,
+                        self._kur(40.0), self.AYAR, self.SIMDI)
+        self.assertAlmostEqual(sonuc.tr_primi, -0.05)
+        self.assertAlmostEqual(sonuc.sapma, 0.05)
+
+    # --- 2.4: eksik kaynak DURDUR degildir ---
+
+    def test_eksik_kaynak_durdurmaz_olculemedi_olur(self):
+        """CoinGecko dusmesi tum gunun raporunu sildirmemeli."""
+        for usd, kur in ((None, self._kur()), (62_500.0, None)):
+            with self.subTest(usd=usd, kur=kur):
+                sonuc = ucgenle("BTC-USD", self._tl(2_500_000), usd, kur,
+                                self.AYAR, self.SIMDI)
+                self.assertEqual(sonuc.durum, OLCULEMEDI)
+
+
+class CiftCevrimTesti(unittest.TestCase):
+    """Kripto degerlemesi BTCTurk TL cifti uzerinden - carpim degil."""
+
+    SIMDI = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
+
+    BTCTURK_TL = 2_600_000.0          # BTCTurk'un gercek kotasyonu
+    COINGECKO_USD = 62_500.0
+    KUR = 40.0                        # carpim -> 2.500.000, TL cifti -> 2.600.000
+
+    def _yapilandirma(self) -> Yapilandirma:
+        return Yapilandirma(
+            ayarlar=AYARLAR,
+            esikler=ESIKLER,
+            hedef_dagilim={"kripto": 1.0},
+            varliklar={"BTC-USD": Varlik("BTC-USD", "Bitcoin", "kripto", "USD")},
+            nakit_try=0.0,
+            kaynaklar=VeriKaynaklari(
+                btcturk_url="http://sahte/ticker",
+                btcturk_ciftleri={"BTC-USD": "BTCTRY"},
+                coingecko_url="http://sahte/gecko",
+                coingecko_kimlikleri={"BTC-USD": "bitcoin"},
+                tcmb_url="",                     # anahtar yok -> Yahoo kuru
+                prim_esigi=0.03,
+                durdurma_esigi=0.08,
+            ),
+        )
+
+    def _getir(self, url, params=None, headers=None):
+        if "ticker" in url:
+            return {"data": [{"pair": "BTCTRY", "last": str(self.BTCTURK_TL),
+                              "timestamp": int(self.SIMDI.timestamp() * 1000)}]}
+        return {"bitcoin": {"usd": self.COINGECKO_USD}}
+
+    def test_cift_cevrim_yapilmiyor(self):
+        """Degerleme BTCTRY'yi DOGRUDAN kullanir, BTC_USD x USD_TRY'yi degil.
+
+        Ikisi %4 farkli; carpim kullanilsaydi portfoy degeri TR primi kadar
+        yanlis cikardi ve ustelik prim hep 0 olcuurdu - kendi kendini
+        dogrulayan bir hesap.
+        """
+        sonuc = kripto_ucgenlemesi(
+            self._yapilandirma(), yahoo_usdtry=self.KUR, env={},
+            getir=self._getir, simdi=self.SIMDI, bugun=date(2026, 8, 17))
+
+        gunler = pd.date_range("2026-08-10", periods=8, freq="D")
+        # Yahoo serisi kasten YANLIS bir TL fiyat tasiyor; ezilmeli.
+        gecmis = pd.DataFrame({"BTC-USD": 9_999_999.0}, index=gunler)
+        fiyatlar = FiyatVerisi(try_gecmis=gecmis, usdtry=self.KUR,
+                               eksik_semboller=[], ucgenleme=sonuc)
+
+        self.assertAlmostEqual(fiyatlar.son_fiyatlar["BTC-USD"], self.BTCTURK_TL)
+        self.assertNotAlmostEqual(
+            fiyatlar.son_fiyatlar["BTC-USD"], self.COINGECKO_USD * self.KUR)
+        # Prim gercekten olculmus: 2.600.000 / 2.500.000 - 1 = %4
+        self.assertAlmostEqual(sonuc.sonuclar["BTC-USD"].tr_primi, 0.04)
+        self.assertEqual(sonuc.sonuclar["BTC-USD"].durum, PRIM)
+
+    def test_coingecko_degerlemeye_girmez(self):
+        """CoinGecko yalnizca dogrulama - fiyati portfoye asla girmez."""
+        sonuc = kripto_ucgenlemesi(
+            self._yapilandirma(), yahoo_usdtry=self.KUR, env={},
+            getir=self._getir, simdi=self.SIMDI, bugun=date(2026, 8, 17))
+        self.assertEqual(set(sonuc.degerleme_fiyatlari()), {"BTC-USD"})
+        self.assertAlmostEqual(
+            sonuc.degerleme_fiyatlari()["BTC-USD"], self.BTCTURK_TL)
+
+    def test_durdurma_durumunda_sembol_degerlemeden_cikar(self):
+        gunler = pd.date_range("2026-08-10", periods=8, freq="D")
+        gecmis = pd.DataFrame({"BTC-USD": 100.0, "AAPL": 200.0}, index=gunler)
+        durduran = Ucgenleme("BTC-USD", DURDUR, "test", tl_fiyat=2_600_000.0)
+        fiyatlar = FiyatVerisi(
+            try_gecmis=gecmis, usdtry=40.0, eksik_semboller=[],
+            ucgenleme=UcgenlemeSonucu(sonuclar={"BTC-USD": durduran}))
+        self.assertNotIn("BTC-USD", fiyatlar.son_fiyatlar)
+        self.assertIn("AAPL", fiyatlar.son_fiyatlar)
+
+    def test_kaynak_kapaliysa_yahoo_davranisi_korunur(self):
+        """veri_kaynaklari bos -> FAZ 2 oncesi davranis, hicbir sey degismez."""
+        yapilandirma = self._yapilandirma()
+        kapali = Yapilandirma(
+            ayarlar=yapilandirma.ayarlar, esikler=yapilandirma.esikler,
+            hedef_dagilim=yapilandirma.hedef_dagilim,
+            varliklar=yapilandirma.varliklar, nakit_try=0.0)
+        sonuc = kripto_ucgenlemesi(kapali, yahoo_usdtry=40.0, env={})
+        self.assertEqual(sonuc.sonuclar, {})
+        self.assertEqual(sonuc.degerleme_fiyatlari(), {})
+
+
+class TcmbKurTesti(unittest.TestCase):
+    """TCMB birincil, Yahoo yedek. Bayat TCMB kuru kabul edilmez."""
+
+    BUGUN = date(2026, 8, 17)          # Pazartesi
+
+    def _yapilandirma(self, **kaynak) -> Yapilandirma:
+        varsayilan = dict(
+            btcturk_url="http://sahte/ticker",
+            btcturk_ciftleri={"BTC-USD": "BTCTRY"},
+            coingecko_url="http://sahte/gecko",
+            coingecko_kimlikleri={"BTC-USD": "bitcoin"},
+            tcmb_url="http://sahte/evds",
+            tcmb_anahtar_env="EVDS_API_ANAHTARI", tcmb_bayatlik_gun=1,
+        )
+        varsayilan.update(kaynak)
+        return Yapilandirma(
+            ayarlar=AYARLAR, esikler=ESIKLER, hedef_dagilim={"kripto": 1.0},
+            varliklar={"BTC-USD": Varlik("BTC-USD", "Bitcoin", "kripto", "USD")},
+            nakit_try=0.0, kaynaklar=VeriKaynaklari(**varsayilan))
+
+    def _getir_fabrikasi(self, kur_tarihi: str):
+        def getir(url, params=None, headers=None):
+            if "ticker" in url:
+                return {"data": [{"pair": "BTCTRY", "last": "2500000",
+                                  "timestamp": int(
+                                      datetime(2026, 8, 17, 12, tzinfo=timezone.utc)
+                                      .timestamp() * 1000)}]}
+            if "gecko" in url:
+                return {"bitcoin": {"usd": 62_500.0}}
+            return {"items": [{"Tarih": kur_tarihi, "TP_DK_USD_A": "41.5"}]}
+        return getir
+
+    def _kur_kaynagi(self, sonuc) -> str:
+        return sonuc.sonuclar["BTC-USD"].kur_kaynagi
+
+    def test_anahtar_yoksa_yahooya_duser(self):
+        sonuc = kripto_ucgenlemesi(
+            self._yapilandirma(), yahoo_usdtry=40.0, env={},
+            getir=self._getir_fabrikasi("17-08-2026"),
+            simdi=datetime(2026, 8, 17, 12, tzinfo=timezone.utc), bugun=self.BUGUN)
+        self.assertEqual(self._kur_kaynagi(sonuc), "yahoo")
+        self.assertTrue(any("anahtari yok" in u for u in sonuc.uyarilar))
+
+    def test_taze_tcmb_kuru_kullanilir(self):
+        sonuc = kripto_ucgenlemesi(
+            self._yapilandirma(), yahoo_usdtry=40.0,
+            env={"EVDS_API_ANAHTARI": "sahte"},
+            getir=self._getir_fabrikasi("17-08-2026"),
+            simdi=datetime(2026, 8, 17, 12, tzinfo=timezone.utc), bugun=self.BUGUN)
+        self.assertEqual(self._kur_kaynagi(sonuc), "tcmb")
+
+    def test_bayat_tcmb_kuru_reddedilir(self):
+        """TCMB hafta sonu kur yayimlamaz. Cuma kuruyla Pazar ucgenlemesi,
+        TR primi diye kurun bayatligini olcer."""
+        sonuc = kripto_ucgenlemesi(
+            self._yapilandirma(), yahoo_usdtry=40.0,
+            env={"EVDS_API_ANAHTARI": "sahte"},
+            getir=self._getir_fabrikasi("14-08-2026"),          # Cuma
+            simdi=datetime(2026, 8, 17, 12, tzinfo=timezone.utc), bugun=self.BUGUN)
+        self.assertEqual(self._kur_kaynagi(sonuc), "yahoo (tcmb bayat)")
+        self.assertTrue(any("bayat" in u for u in sonuc.uyarilar))
 
 
 if __name__ == "__main__":
