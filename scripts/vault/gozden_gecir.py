@@ -3,9 +3,10 @@
 Elle bakilmadigi surece sessizce bozulan seyleri bulur:
   - kirik [[wikilink]]'ler
   - yetim notlar (hicbir yerden baglanti almayan)
-  - islenmemis girdiler (status: inbox)
+  - islenmemis girdiler (status: inbox veya girdi klasorunde status'suz)
   - frontmatter'i eksik notlar
   - money_angle alani hic yazilmamis kaynak notlari
+  - kaynak zinciri beyan edilmemis wiki sayfalari
   - uzun suredir dokunulmamis aktif projeler
   - vadesi gelmis karar kontrol gunleri
 
@@ -31,6 +32,10 @@ sys.path.insert(0, str(VAULT / "scripts" / "yatirim"))
 
 GUNLUK_DIZINI = VAULT / "05-daily"
 INBOX_DIZINI = VAULT / "01-inbox"
+
+# Disaridan not dusen klasorler. `Clippings` Obsidian Web Clipper'in varsayilan
+# hedefi - kupurler vault sablonunu kullanmaz, `status` alani hic yazilmaz.
+GIRDI_DIZINLERI = {"01-inbox", "Clippings"}
 
 # Tarama disi: kod, ayar, surum kontrolu, uretilmis ciktilar
 ATLANAN = {".git", ".obsidian", ".claude", "__pycache__", "loglar",
@@ -66,15 +71,24 @@ def notlari_topla() -> list[Path]:
     ]
 
 
-def _frontmatter_alani(metin: str, alan: str) -> str | None:
-    eslesme = re.search(rf"^{alan}:\s*(.+)$", metin, re.MULTILINE)
-    return eslesme.group(1).strip() if eslesme else None
-
-
 def _frontmatter_blok(metin: str) -> str | None:
     """Notun basindaki --- ... --- blogu. Yoksa None."""
     eslesme = re.match(r"﻿?\s*---\r?\n(.*?)\r?\n---", metin, re.DOTALL)
     return eslesme.group(1) if eslesme else None
+
+
+def _frontmatter_alani(metin: str, alan: str) -> str | None:
+    """Alani YALNIZCA frontmatter blogunda arar.
+
+    Tum metinde aramak yanlis pozitif uretir: boru hattini anlatan bir not
+    govdesinde ornek olarak `status: inbox` yazabilir ve islenmemis girdi
+    sayilir.
+    """
+    blok = _frontmatter_blok(metin)
+    if blok is None:
+        return None
+    eslesme = re.search(rf"^{alan}:\s*(.+)$", blok, re.MULTILINE)
+    return eslesme.group(1).strip() if eslesme else None
 
 
 def kirik_baglantilar(notlar: list[Path]) -> Bulgu:
@@ -120,12 +134,23 @@ def yetim_notlar(notlar: list[Path]) -> Bulgu:
 
 
 def islenmemis_girdiler(notlar: list[Path]) -> Bulgu:
-    bulgu = Bulgu("Islenmemis girdi (status: inbox)", eylem_gerek=True)
+    """Bekleyen girdiler: `status: inbox` olanlar + girdi klasorunde durumu
+    hic yazilmamis olanlar.
+
+    Ikinci kosul olmadan boru hattinin ana giris kanali gorunmezdi: Web
+    Clipper kendi sablonunu yazar, `status` alani koymaz. Yalnizca
+    `status: inbox` arayan bir kontrol her kupuru "islenmis" sayardi.
+    """
+    bulgu = Bulgu("Islenmemis girdi", eylem_gerek=True)
     for not_ in sorted(notlar, key=lambda p: p.stem):
         metin = not_.read_text(encoding="utf-8", errors="ignore")
-        if _frontmatter_alani(metin, "status") == "inbox":
+        durum = _frontmatter_alani(metin, "status")
+        if durum == "inbox":
             gun = _frontmatter_alani(metin, "date_created") or "?"
             bulgu.satirlar.append(f"`{not_.stem}` (olusturulma: {gun})")
+        elif durum is None and GIRDI_DIZINLERI & set(not_.parts):
+            bulgu.satirlar.append(
+                f"`{not_.stem}` ({not_.parent.name}/ - status alani yok)")
     return bulgu
 
 
@@ -136,7 +161,11 @@ def frontmatter_eksikleri(notlar: list[Path]) -> Bulgu:
         if not_.stem in MUAF_NOTLAR:
             continue
         metin = not_.read_text(encoding="utf-8", errors="ignore")
-        if not metin.lstrip().startswith("---"):
+        # `lstrip().startswith("---")` yetmez: BOM bosluk sayilmadigi icin
+        # UTF-8-BOM ile yazilmis her not yanlislikla eksik gorunur (PowerShell
+        # `Set-Content -Encoding utf8` boyle yazar). Ayrica kapanis satiri
+        # olmayan yarim blok da eksik sayilmalidir.
+        if _frontmatter_blok(metin) is None:
             bulgu.satirlar.append(f"`{not_.stem}` ({not_.parent.name}/)")
     return bulgu
 
@@ -162,6 +191,29 @@ def money_angle_eksikleri(notlar: list[Path]) -> Bulgu:
         if blok is None:
             continue          # frontmatter_eksikleri zaten raporluyor
         if not re.search(r"^money_angle:", blok, re.MULTILINE):
+            bulgu.satirlar.append(f"`{not_.stem}` ({not_.parent.name}/)")
+    return bulgu
+
+
+def kaynaksiz_wiki_sayfalari(notlar: list[Path]) -> Bulgu:
+    """03-wiki sayfalari kaynagini beyan etmeli.
+
+    `vault-olceklenme-halusinasyon-onleme` kurali: wiki cikti klasorudur,
+    kanit kaynagi degil. Kaynagi yazilmamis bir sayfa zamanla "vault boyle
+    diyor" diye kendine atif yapilan bir iddiaya doner. Model bilgisiyle
+    yazilmis sayfa da gecerlidir - yeter ki
+    `kaynak_zinciri: ["model-bilgisi"]` diye acikca soylensin. Amac sayfayi
+    engellemek degil, kaynagi gorunur kilmak.
+    """
+    bulgu = Bulgu("Kaynak zinciri beyan edilmemis wiki sayfasi",
+                  eylem_gerek=False)
+    for not_ in sorted(notlar, key=lambda p: p.stem):
+        if "03-wiki" not in not_.parts:
+            continue
+        blok = _frontmatter_blok(not_.read_text(encoding="utf-8", errors="ignore"))
+        if blok is None:
+            continue          # frontmatter_eksikleri zaten raporluyor
+        if not re.search(r"^kaynak_zinciri:", blok, re.MULTILINE):
             bulgu.satirlar.append(f"`{not_.stem}` ({not_.parent.name}/)")
     return bulgu
 
@@ -278,6 +330,7 @@ def main() -> int:
         yetim_notlar(notlar),
         frontmatter_eksikleri(notlar),
         money_angle_eksikleri(notlar),
+        kaynaksiz_wiki_sayfalari(notlar),
         bayat_projeler(notlar),
     ]
 

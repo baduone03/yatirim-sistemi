@@ -40,13 +40,17 @@ money_angle: ""
 5. Kaynak varsa mutlaka URL ekle.
 
 ## Baglanti Kurallari
-- [[Wiki baglantisi]] yalnizca gercek iliski varsa kur.
+- Wiki baglantisini yalnizca gercek iliski varsa kur.
 - Zayif baglanti YASAK: "ikisi de teknoloji" yeterli degil.
 - Guclu baglanti ornekleri:
-  - Neden-sonuc: "[[DeFi]] protokolleri [[akilli sozlesme]] uzerine insa edilir"
-  - Karsitlik: "[[CEX]] merkeziyetci, [[DEX]] merkeziyetsiz"
-  - Bagimlilik: "[[yield-farming]] yapmak icin [[likidite havuzu]] anlamak sart"
-- Bir kavram 2+ farkli kaynakta gecmedikce bagimsiz wiki sayfasi olusturma.
+  - Neden-sonuc: `[[DeFi]] protokolleri [[akilli sozlesme]] uzerine insa edilir`
+  - Karsitlik: `[[CEX]] merkeziyetci, [[DEX]] merkeziyetsiz`
+  - Bagimlilik: `[[yield-farming]] yapmak icin [[likidite havuzu]] anlamak sart`
+- Bir kavram 2+ farkli DIS kaynakta gecmedikce bagimsiz wiki sayfasi olusturma.
+  Ayni kaynagin iki yerde tekrarlanmasi iki kaynak sayilmaz.
+- Bu dosyadaki ornek baglantilar backtick icinde yazilir. Ciplak yazilirsa
+  Obsidian'da tiklanabilir olur ve tiklanan her ornek kok dizine bos bir not
+  yaratir (`DEX.md` boyle olustu).
 
 ## Isleme Hatti (Ingest)
 01-inbox/ icindeki status: inbox dosyalarini su sirayla isle:
@@ -61,9 +65,17 @@ money_angle: ""
 4. Ilgili wiki sayfalarini kontrol et:
    - Sayfa varsa: yeni bilgiyi ekle, celiski varsa belirt.
    - Sayfa yoksa ve kavram 2+ kaynakta geciyorsa: yeni sayfa olustur.
-5. [[Baglantilar]] kur.
-6. Orijinal dosyanin status'unu "processed" yap.
+5. Baglantilari kur.
+6. Orijinal dosyanin status'unu "processed" yap ve dosyayi 06-archive/ altina
+   tasi. 01-inbox/ yalnizca bekleyen isi gosterir; islenmis girdi orada
+   kalirsa klasor anlamini yitirir. Wikilink'ler dosya adiyla cozuldugu icin
+   tasima baglantilari bozmaz.
 7. memory.md'ye tek satir ozet ekle.
+
+Kaynak olmayan girdi 02-sources/ altina KONMAZ. Kendi tasarim notun, sartname
+veya retrospektif ise yeri 04-projects/. Sebep: 02-sources dis kanit
+klasorudur; kendi ciktini oraya koyup sonra ona atif yapmak yanki odasi
+yaratir.
 
 ## Para Acisi (Money Angle)
 Her kaynagi islerken su kategorileri tara:
@@ -159,7 +171,13 @@ Bu vault'ta her token para. Ciktilari su kurallara gore uret:
 - **BIST evreni ana rapora girmez**: 59 hisse `izleme: true` yapilirsa korelasyon matrisi 59x59 olur, rapor okunmaz. `bist-evreni.yaml` yalnizca `tarama.py` icindir.
 - **Yahoo'da delist BIST tickerlari**: ISATR, KOZAL, SODA, KOZAA, SELGD - evrenden cikarildi. Yeni delist cikarsa tarama uyari basar, calismaya devam eder.
 - **SIMULASYONDAYIZ**: gercek para yok. `portfoy.yaml` `sablon: true` -> gercek portfoy raporu uretilmez, script durur. Aktif olan tek sey `simulasyon/islemler.yaml` uzerinden calisan 20.000 TL kagit portfoy. Rapor/Telegram ciktisini gercek portfoy gibi sunma.
-- **testler**: `python -m unittest discover -s scripts/yatirim -p "test_*.py"` (23 test, pytest YOK, stdlib unittest). Tamami cevrimdisi/sentetik - Yahoo'ya gitmez, piyasa saatinden bagimsiz. Kod degisikligi sonrasi calistir.
+- **testler, iki ayri paket**: `python -m unittest discover -s scripts/yatirim -p "test_*.py"` ve `python -m unittest discover -s scripts/vault -p "test_*.py"`. pytest YOK, stdlib unittest. Tamami cevrimdisi/sentetik - Yahoo'ya gitmez, piyasa saatinden bagimsiz. `discover` yalnizca verilen dizine bakar; yatirim testlerini calistirmak vault testlerini calistirmaz. Test sayisi buraya yazilmaz - bayatliyor.
+- **Web Clipper `status` alani yazmaz**: kupurler vault sablonunu degil clipper'in kendi sablonunu kullanir. Hedef klasor uzanti ayarindadir, `status` alanini ise hicbir ayar yazdirmaz. Iki savunma var: `girdileri_topla.py` kupuru `01-inbox`'a tasir ve `status: inbox` damgalar; `gozden_gecir.py` girdi klasorlerinde (`01-inbox`, `Clippings`) `status` alani HIC olmayan notu bekleyen sayar. Klasor ayari duzelse bile damgalama gerekli kalir.
+- **haftalik.ps1 sirasi**: once `girdileri_topla.py`, sonra `gozden_gecir.py --telegram`. Ters cevirme - denetim Telegram'a ozet gonderiyor, once normalize edilmezse zaten kendiliginden duzelecek bir durumu bildirir.
+- **mevcut `status` degeri asla ezilmez**: `girdileri_topla.py` alani yalnizca HIC yoksa ekler. Aksi halde her calisma islenmis notlari yeniden inbox'a acar.
+- **BOM bosluk sayilmaz**: `metin.lstrip().startswith("---")` UTF-8-BOM ile yazilmis dosyada FALSE doner (PowerShell `Set-Content -Encoding utf8` BOM yazar). Frontmatter kontrolu icin daima `_frontmatter_blok()` kullan, elle string kontrolu yazma.
+- **`03-wiki` ciktidir, kaynak degil**: her wiki sayfasi `kaynak_zinciri` beyan etmeli. Kaynagi model bilgisiyse `kaynak_zinciri: ["model-bilgisi"]` yaz - sayfa yasak degil, beyansiz olmasi yasak. Beyansiz sayfa zamanla "vault boyle diyor" diye kendine atif yapilan iddiaya doner.
+- **frontmatter alani govdede aranmaz**: `_frontmatter_alani` yalnizca `--- ... ---` blogunu tarar. Tum metni tarasaydi boru hattini anlatan bir not govdesindeki ornek `status: inbox` satiri o notu islenmemis girdi yapardi.
 - **calistirma GitHub Actions'ta**: repo `baduone03/yatirim-sistemi` (private), workflow hafta ici 16:00 UTC = 19:00 TR. Yerel Task Scheduler gorevi KALDIRILDI - ikisi ayni anda calisirsa Telegram'a gunde iki mesaj duser. `gunluk.ps1` yerel yedek olarak duruyor ama zamanlanmis degil.
 - **`gh secret set` PowerShell pipe ile BOZULUR**: `$deger | gh secret set AD` satir sonu ekleyip token'i gecersiz kilar (Telegram HTTP 404 verir). Daima `--body $deger` kullan.
 - **vault = git repo, beyaz liste**: `.gitignore` once `/*` ile her seyi dislar, sonra yalnizca `scripts/`, `04-projects/yatirim-sistemi/`, `CLAUDE.md`, `README.md`, `.github/` eklenir. Yeni not klasoru varsayilan olarak GitHub'a GITMEZ. Kara listeye cevirme.
