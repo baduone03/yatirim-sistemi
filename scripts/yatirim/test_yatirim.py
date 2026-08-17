@@ -1362,7 +1362,16 @@ class SinyalBastirmaTesti(unittest.TestCase):
         self.assertNotIn("Kisilmali", kapali)
         self.assertNotIn("Rebalancing", kapali)
         self.assertIn("Eksik maliyet kalemi", kapali)
-        self.assertIn("QQQ.temettu_verimi", kapali)
+        self.assertIn("temettu_verimi", kapali)
+
+    def test_telegram_ozeti_kalem_bazli_gruplar(self):
+        """Gunluk mesaj her gun 11 ayni satir basmamali - okunmayan uyari
+        yok hukmundedir. Sembol oneki tasima kaleminden dusulur, profil
+        oneki islem kaleminde KALIR (hangi profil duzeltilecek bilgisi)."""
+        ozet = self.model.eksik_kalem_ozeti
+        self.assertEqual(ozet["temettu_verimi"], ["QQQ"])
+        self.assertEqual(ozet["abd.kur_spread_tek_yon"], ["QQQ"])
+        self.assertNotIn("QQQ.temettu_verimi", ozet)
 
 
 class TcmbOranTesti(unittest.TestCase):

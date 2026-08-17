@@ -263,9 +263,15 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
     # Dodo mesaja bakip islem yapar ve tum kural bosa duser.
     engellenenler = maliyet.engellenenler if maliyet is not None else {}
     if engellenenler:
-        satirlar += ["", "<b>🛑 Eksik maliyet kalemi - sinyal yok</b>"]
-        for sembol, kalemler in engellenenler.items():
-            satirlar.append(f"• {_kacis(sembol)}: {_kacis(', '.join(kalemler))}")
+        satirlar += [
+            "",
+            f"<b>🛑 Eksik maliyet kalemi — {len(engellenenler)} varlikta "
+            "sinyal yok</b>",
+        ]
+        for kalem, semboller in maliyet.eksik_kalem_ozeti.items():
+            satirlar.append(
+                f"• <code>{_kacis(kalem)}</code> — {len(semboller)} varlik")
+        satirlar.append("Degerler: varliklar.yaml -> maliyet")
 
     sapanlar = [s for s in sapmalar
                 if abs(s.sapma) >= esikler.rebalancing_sapma

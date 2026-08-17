@@ -193,6 +193,22 @@ class MaliyetModeli:
         return {s: v.eksik_kalemler for s, v in sorted(self.varliklar.items())
                 if not v.sinyal_acik}
 
+    @property
+    def eksik_kalem_ozeti(self) -> dict[str, list[str]]:
+        """Kalem -> etkilenen semboller. Telegram ozeti icin.
+
+        Varlik bazli liste her gun 11 ayni satir basar ve okunmaz hale gelir;
+        okunmayan uyari yok hukmundedir. Kalem bazli grup "su 4 sayiyi gir"
+        diye somut is cikarir. Tasima kalemleri sembol onekinden arindirilir
+        (`THYAO.IS.temettu_verimi` -> `temettu_verimi`), islem kalemleri
+        profil onekini KORUR - hangi profilin duzeltilecegi bilgi tasir.
+        """
+        ozet: dict[str, list[str]] = {}
+        for sembol, kalemler in self.engellenenler.items():
+            for kalem in kalemler:
+                ozet.setdefault(_kalem_adi(sembol, kalem), []).append(sembol)
+        return dict(sorted(ozet.items(), key=lambda k: (-len(k[1]), k[0])))
+
     def sinif_sinyali_acik(self, sinif: str) -> bool:
         """Sinif duzeyinde rebalancing tavsiyesi verilebilir mi?
 
@@ -273,6 +289,11 @@ def modeli_kur(ham: dict, sinif_haritasi: dict[str, str]) -> MaliyetModeli:
 
 def _sayi(deger) -> float | None:
     return None if deger is None else float(deger)
+
+
+def _kalem_adi(sembol: str, kalem: str) -> str:
+    onek = f"{sembol}."
+    return kalem[len(onek):] if kalem.startswith(onek) else kalem
 
 
 # --------------------------------------------------------------------------
