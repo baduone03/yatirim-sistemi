@@ -7,10 +7,12 @@ uzerinden kaydedilir (yani kur farki maliyete dahildir).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
+
+from kurumsal_olay import KurumsalOlay
 
 ALIS = "AL"
 SATIS = "SAT"
@@ -46,6 +48,7 @@ class LedgerDurumu:
     toplam_komisyon_try: float
     islemler: list[Islem]
     komisyon_orani: float
+    uygulanan_olaylar: list[KurumsalOlay] = field(default_factory=list)
 
 
 def islemleri_oku(dosya: Path) -> tuple[list[Islem], float, float]:
@@ -105,14 +108,64 @@ def _satis_uygula(mevcut: LedgerPozisyonu | None, islem: Islem) -> tuple[LedgerP
     return kalan, islem.tutar_try - cikan_maliyet
 
 
+def _olayi_uygula(mevcut: LedgerPozisyonu | None,
+                  olay: KurumsalOlay) -> LedgerPozisyonu | None:
+    """Bedelsiz/split uygular: adet oranla carpilir, TOPLAM MALIYET DEGISMEZ.
+
+    Toplam maliyeti orana bolmek yaygin ve pahali bir hatadir. 1000 TL'ye
+    alinan 10 lot, 2.0 oranli bedelsizden sonra 20 lottur ama maliyeti yine
+    1000 TL'dir - cebinden para cikmadi. Maliyeti 500'e dusurmek, olmayan
+    %100 kar uydurur. Birim maliyet zaten toplam/adet olarak turetilir ve
+    dogru sekilde yariya iner.
+
+    Elde pozisyon yoksa olay bu portfoyu ilgilendirmez (olay defteri tum
+    piyasa icin tutulabilir).
+    """
+    if mevcut is None:
+        return None
+    return LedgerPozisyonu(
+        sembol=mevcut.sembol,
+        adet=mevcut.adet * olay.oran,
+        maliyet_try=mevcut.maliyet_try,
+    )
+
+
+def _zaman_cizgisi(islemler: list[Islem],
+                   olaylar: list[KurumsalOlay]) -> list[tuple[str, int, object]]:
+    """Islem ve olaylari tarih sirasina dizer.
+
+    Ayni tarihte olay islemden ONCE gelir (sira 0 vs 1): olayin tarihi
+    ex-tarihtir, o gun piyasa zaten duzeltilmis fiyatla acilir, dolayisiyla
+    ayni gun yapilan alim zaten yeni adet duzeninde yapilmistir.
+
+    Sira onemli: olaylari sonradan topluca uygulamak, olaydan SONRA alinan
+    lotlari da carpar. 4:1 split'ten sonra alinan 10 lot 40 lot gorunur.
+    """
+    return sorted(
+        [(o.tarih, 0, o) for o in olaylar] + [(i.tarih, 1, i) for i in islemler],
+        key=lambda k: (k[0], k[1]),
+    )
+
+
 def durumu_hesapla(islemler: list[Islem], baslangic_nakit: float,
-                   komisyon_orani: float) -> LedgerDurumu:
+                   komisyon_orani: float,
+                   olaylar: list[KurumsalOlay] | None = None) -> LedgerDurumu:
     pozisyonlar: dict[str, LedgerPozisyonu] = {}
     nakit = baslangic_nakit
     gerceklesen = 0.0
     komisyon_toplami = 0.0
+    uygulananlar: list[KurumsalOlay] = []
 
-    for islem in islemler:
+    for _, tur, kayit in _zaman_cizgisi(islemler, olaylar or []):
+        if tur == 0:
+            olay: KurumsalOlay = kayit
+            yeni = _olayi_uygula(pozisyonlar.get(olay.sembol), olay)
+            if yeni is not None:
+                pozisyonlar[olay.sembol] = yeni
+                uygulananlar.append(olay)
+            continue
+
+        islem: Islem = kayit
         komisyon = islem.tutar_try * komisyon_orani
         komisyon_toplami += komisyon
         mevcut = pozisyonlar.get(islem.sembol)
@@ -139,4 +192,5 @@ def durumu_hesapla(islemler: list[Islem], baslangic_nakit: float,
         toplam_komisyon_try=komisyon_toplami,
         islemler=islemler,
         komisyon_orani=komisyon_orani,
+        uygulanan_olaylar=uygulananlar,
     )

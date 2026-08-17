@@ -32,6 +32,33 @@ esikler:
   risk_katkisi_ust: 0.20
   risk_beta_ust: 1.50
 
+# Bayatlik esikleri - varlik sinifi bazinda.
+#
+# BIRIM: kacirilan ISLEM GUNU. Takvim gunu DEGIL. Bir sembolun bayatligi,
+# kendi sinifindaki diger sembollerin islem gordugu ama onun gormedigi gun
+# sayisiyla olculur. Takvim gunu sayilsaydi her Pazartesi tum BIST hisseleri
+# "3 gundur bayat" cikardi (Cuma -> Pazartesi = 3 takvim gunu, 1 islem gunu).
+#
+# NEDEN DAKIKA/SAAT YOK: fiyat verisi GUNLUK bar (interval="1d"). Gun altinda
+# cozunurluk yok. Sartnamedeki "kripto 15 dakika" ve "doviz 1 saat" esikleri
+# gunluk barda tek bir seye karsilik gelir: "en son barda veri OLMALI" = 0.
+# Intraday veriye gecilirse bu alanlar kesirli gune cevrilir (15dk = 0.0104).
+bayatlik_esikleri:
+  varsayilan: 7            # sinifi tanimsiz sembol icin guvenlik agi
+  kripto: 0                # 7/24 acik, bar atlamasi = veri kesintisi
+  bist: 1                  # 1 islem gunu
+  nasdaq: 1                # sartnamedeki "abd"
+  maden: 1                 # sartnamedeki "emtia"
+
+# Kurumsal olay suphesi otomatik tespiti.
+# Kayitli olmayan bedelsiz/split, fiyati bir gunde sicratir ve sistem bunu
+# gercek kayip sanip yanlis deger uretir. Supheli sembolun degerlemesi DURUR.
+kurumsal_olay:
+  getiri_esigi: 0.25       # |gunluk getiri| bunu asarsa suphe
+  hacim_carpani: 1.5       # hacim medyanin bu kati ustundeyse GERCEK hareket
+  hacim_penceresi: 20      # medyan hacim kac gunden hesaplanir
+  tarama_gunu: 5           # yalnizca son N gun taranir, tarihi olaylar degil
+
 hedef_dagilim:
   bist: 0.30
   nasdaq: 0.25

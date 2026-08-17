@@ -25,13 +25,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from config import (
     Ayarlar,
+    BayatlikEsikleri,
     Esikler,
+    KurumsalOlayAyarlari,
     Varlik,
     Yapilandirma,
     sablonu_reddet,
     yapilandirmayi_oku,
 )
-from fetch import FiyatVerisi
+from fetch import FiyatVerisi, kurumsal_olay_supheleri
+from kurumsal_olay import KurumsalOlay, olaylari_oku
 from ledger import durumu_hesapla, islemleri_oku
 from notify import _islem_satirlari, _kacis, env_oku, ozet_mesaji
 from portfolio import (
@@ -282,7 +285,7 @@ class BayatFiyatTesti(unittest.TestCase):
     def test_bayat_sembol_tespit_edilir(self):
         fiyatlar = FiyatVerisi(try_gecmis=self._gecmis(), usdtry=40.0,
                                eksik_semboller=[])
-        bayatlar = fiyatlar.bayat_semboller(esik_gun=7)
+        bayatlar = fiyatlar.bayat_semboller(BayatlikEsikleri(varsayilan=7))
         self.assertIn("BAYAT.IS", bayatlar)
         self.assertNotIn("TAZE.IS", bayatlar)
         self.assertGreaterEqual(bayatlar["BAYAT.IS"], 19)
@@ -605,6 +608,190 @@ class SablonKorumasiTesti(unittest.TestCase):
             "  - {sembol: A.IS, adet: 1, maliyet: 10}\n")
         self.assertFalse(yapilandirma.sablon)
         sablonu_reddet(yapilandirma)   # hata vermemeli
+
+
+class KurumsalOlayDefteriTesti(unittest.TestCase):
+    """Bedelsiz/split: adet artar, TOPLAM maliyet degismez."""
+
+    def _durum(self, islemler: str, olaylar: list[KurumsalOlay]):
+        icerik = f"baslangic_nakit_try: 10000\nkomisyon_orani: 0\nislemler:\n{islemler}"
+        kayitlar, nakit, komisyon = islemleri_oku(gecici_yaz(icerik))
+        return durumu_hesapla(kayitlar, nakit, komisyon, olaylar)
+
+    def test_bedelsiz_efektif_adet(self):
+        """%100 bedelsiz: 10 lot -> 20 lot, maliyet 1000 TL'de KALIR."""
+        durum = self._durum(
+            "  - {tarih: 2026-01-01, yon: AL, sembol: X, adet: 10, fiyat_try: 100}\n",
+            [KurumsalOlay("2026-02-01", "X", "bedelsiz", 2.0)],
+        )
+        pozisyon = durum.pozisyonlar["X"]
+        self.assertAlmostEqual(pozisyon.adet, 20.0)
+        self.assertAlmostEqual(pozisyon.maliyet_try, 1000.0)
+        # Birim maliyet turetilir ve yariya iner - kar/zarar uydurulmaz.
+        self.assertAlmostEqual(pozisyon.maliyet_try / pozisyon.adet, 50.0)
+
+    def test_olaydan_sonraki_alim_carpilmaz(self):
+        """Zaman cizgisi tuzagi: olay yalnizca o an ELDEKI lota uygulanir."""
+        durum = self._durum(
+            "  - {tarih: 2026-01-01, yon: AL, sembol: X, adet: 10, fiyat_try: 100}\n"
+            "  - {tarih: 2026-03-01, yon: AL, sembol: X, adet: 10, fiyat_try: 50}\n",
+            [KurumsalOlay("2026-02-01", "X", "split", 2.0)],
+        )
+        # 10 -> 20 (split) + 10 (yeni alim) = 30. Toplu carpimda 40 cikardi.
+        self.assertAlmostEqual(durum.pozisyonlar["X"].adet, 30.0)
+        self.assertAlmostEqual(durum.pozisyonlar["X"].maliyet_try, 1500.0)
+
+    def test_olaydan_sonraki_satis_yeni_adetle_dogrulanir(self):
+        """Split sonrasi 15 lot satilabilir - split oncesi 10 lot vardi."""
+        durum = self._durum(
+            "  - {tarih: 2026-01-01, yon: AL,  sembol: X, adet: 10, fiyat_try: 100}\n"
+            "  - {tarih: 2026-03-01, yon: SAT, sembol: X, adet: 15, fiyat_try: 60}\n",
+            [KurumsalOlay("2026-02-01", "X", "split", 2.0)],
+        )
+        self.assertAlmostEqual(durum.pozisyonlar["X"].adet, 5.0)
+
+    def test_ters_split_adedi_azaltir(self):
+        durum = self._durum(
+            "  - {tarih: 2026-01-01, yon: AL, sembol: X, adet: 100, fiyat_try: 10}\n",
+            [KurumsalOlay("2026-02-01", "X", "ters_split", 0.1)],
+        )
+        self.assertAlmostEqual(durum.pozisyonlar["X"].adet, 10.0)
+        self.assertAlmostEqual(durum.pozisyonlar["X"].maliyet_try, 1000.0)
+
+    def test_elde_olmayan_sembolun_olayi_yok_sayilir(self):
+        durum = self._durum(
+            "  - {tarih: 2026-01-01, yon: AL, sembol: X, adet: 10, fiyat_try: 100}\n",
+            [KurumsalOlay("2026-02-01", "Y", "bedelsiz", 2.0)],
+        )
+        self.assertNotIn("Y", durum.pozisyonlar)
+        self.assertAlmostEqual(durum.pozisyonlar["X"].adet, 10.0)
+
+    def test_yon_hatasi_reddedilir(self):
+        """split'e 0.5 yazmak adedi 4 kat yanlis yapar - okurken yakalanmali."""
+        dosya = gecici_yaz(
+            "olaylar:\n"
+            "  - {tarih: 2026-02-01, sembol: X, tip: split, oran: 0.5}\n")
+        with self.assertRaises(ValueError) as baglam:
+            olaylari_oku(dosya)
+        self.assertIn("ters_split", str(baglam.exception))
+
+    def test_defter_yoksa_sessizce_gecilmez(self):
+        with self.assertRaises(FileNotFoundError):
+            olaylari_oku(Path(tempfile.mkdtemp()) / "yok.yaml")
+
+
+class KurumsalOlayTespitiTesti(unittest.TestCase):
+    """Kayitli olmayan bedelsiz/split suphesi - hacimle ayirt edilir."""
+
+    AYAR = KurumsalOlayAyarlari(getiri_esigi=0.25, hacim_carpani=1.5,
+                                hacim_penceresi=20, tarama_gunu=5)
+
+    def _veri(self, sok_orani: float, sok_hacim_carpani: float):
+        """30 gunluk duz seri; son gun fiyat sok_orani kadar siciyor."""
+        gunler = pd.date_range("2026-07-01", periods=30, freq="D")
+        fiyat = pd.Series(100.0, index=gunler)
+        fiyat.iloc[-1] = 100.0 * (1 + sok_orani)
+        hacim = pd.Series(1_000_000.0, index=gunler)
+        hacim.iloc[-1] = 1_000_000.0 * sok_hacim_carpani
+        return pd.DataFrame({"X.IS": fiyat}), pd.DataFrame({"X.IS": hacim})
+
+    def test_kurumsal_olay_otomatik_tespit(self):
+        """%50 dusus + hacimde artis YOK -> supheli."""
+        kapanis, hacim = self._veri(sok_orani=-0.50, sok_hacim_carpani=1.0)
+        supheliler = kurumsal_olay_supheleri(kapanis, hacim, self.AYAR)
+        self.assertIn("X.IS", supheliler)
+        self.assertIn("-50.0", supheliler["X.IS"])
+
+    def test_hacimli_cokus_supheli_sayilmaz(self):
+        """Ayni dusus ama hacim 5 kat -> gercek satis dalgasi, olay degil."""
+        kapanis, hacim = self._veri(sok_orani=-0.50, sok_hacim_carpani=5.0)
+        self.assertEqual(kurumsal_olay_supheleri(kapanis, hacim, self.AYAR), {})
+
+    def test_esik_altindaki_hareket_isaretlenmez(self):
+        kapanis, hacim = self._veri(sok_orani=-0.10, sok_hacim_carpani=1.0)
+        self.assertEqual(kurumsal_olay_supheleri(kapanis, hacim, self.AYAR), {})
+
+    def test_deftere_yazilmis_olay_tekrar_uyarmaz(self):
+        """Olay kaydedildikten sonra fiyat sicramasi veride kalir; sonsuza
+        kadar 'supheli' demek o sembolu kalici olarak degerlemesiz birakir."""
+        kapanis, hacim = self._veri(sok_orani=-0.50, sok_hacim_carpani=1.0)
+        bilinen = {("X.IS", "2026-07-30")}
+        self.assertEqual(
+            kurumsal_olay_supheleri(kapanis, hacim, self.AYAR, bilinen), {})
+
+    def test_hacim_verisi_yoksa_supheli_kalir(self):
+        """Dogrulanamayan sicrama gercek sayilmaz - guvenli taraf."""
+        kapanis, _ = self._veri(sok_orani=-0.50, sok_hacim_carpani=1.0)
+        bos_hacim = pd.DataFrame(index=kapanis.index)
+        self.assertIn("X.IS", kurumsal_olay_supheleri(kapanis, bos_hacim, self.AYAR))
+
+    def test_supheli_sembol_degerlemeye_girmez(self):
+        gunler = pd.date_range("2026-07-01", periods=5, freq="D")
+        gecmis = pd.DataFrame({"X.IS": 100.0, "Y.IS": 50.0}, index=gunler)
+        fiyatlar = FiyatVerisi(
+            try_gecmis=gecmis, usdtry=40.0, eksik_semboller=[],
+            kurumsal_olay_supheleri={"X.IS": "test"},
+        )
+        self.assertNotIn("X.IS", fiyatlar.son_fiyatlar)
+        self.assertIn("Y.IS", fiyatlar.son_fiyatlar)
+
+
+class SinifBazliBayatlikTesti(unittest.TestCase):
+    """Bayatlik takvim gunuyle degil, kacirilan ISLEM GUNU ile olculur."""
+
+    ESIKLER = BayatlikEsikleri(varsayilan=7,
+                               sinif_bazli={"bist": 1, "kripto": 0})
+
+    def _gecmis(self):
+        """2026-08-03 Pazartesi'den 14 gun. BIST yalnizca hafta ici veri verir."""
+        gunler = pd.date_range("2026-08-03", periods=14, freq="D")
+        hafta_ici = gunler[gunler.dayofweek < 5]
+        bist = pd.Series(100.0, index=hafta_ici).reindex(gunler)
+        return gunler, pd.DataFrame({
+            "AAA.IS": bist,
+            "BBB.IS": bist * 2,
+            "BTC-USD": pd.Series(50.0, index=gunler),
+            "ETH-USD": pd.Series(30.0, index=gunler),
+        })
+
+    def _fiyatlar(self, gecmis):
+        return FiyatVerisi(
+            try_gecmis=gecmis, usdtry=40.0, eksik_semboller=[],
+            sinif_haritasi={"AAA.IS": "bist", "BBB.IS": "bist",
+                            "BTC-USD": "kripto", "ETH-USD": "kripto"},
+        )
+
+    def test_bayatlik_varlik_sinifi_bazli(self):
+        """Hafta sonu BIST'i bayat yapmaz - takvim gunu sayan kural her
+        Pazartesi 4 hisseyi yanlis isaretlerdi."""
+        gunler, gecmis = self._gecmis()
+        self.assertEqual(gunler[-1].dayofweek, 6)          # son gun Pazar
+        bayatlar = self._fiyatlar(gecmis).bayat_semboller(self.ESIKLER)
+        self.assertEqual(bayatlar, {})
+
+    def test_kripto_4_gunluk_veri_reddediliyor(self):
+        """Kripto 7/24 acik: 4 gun bar yoksa bu veri kesintisidir."""
+        _, gecmis = self._gecmis()
+        gecmis.loc[gecmis.index[-4:], "BTC-USD"] = np.nan
+        bayatlar = self._fiyatlar(gecmis).bayat_semboller(self.ESIKLER)
+        self.assertIn("BTC-USD", bayatlar)
+        self.assertEqual(bayatlar["BTC-USD"], 4)
+        self.assertNotIn("ETH-USD", bayatlar)
+
+    def test_bist_gercek_kesintisi_yakalanir(self):
+        """Hafta sonu affedilir ama 3 islem gunu kacirmak affedilmez."""
+        _, gecmis = self._gecmis()
+        gecmis.loc[gecmis.index[-6:], "AAA.IS"] = np.nan
+        bayatlar = self._fiyatlar(gecmis).bayat_semboller(self.ESIKLER)
+        self.assertIn("AAA.IS", bayatlar)
+        self.assertNotIn("BBB.IS", bayatlar)
+
+    def test_sinifi_tanimsiz_sembol_varsayilana_duser(self):
+        _, gecmis = self._gecmis()
+        gecmis["BILINMEYEN"] = np.nan
+        gecmis.loc[gecmis.index[0], "BILINMEYEN"] = 10.0
+        bayatlar = self._fiyatlar(gecmis).bayat_semboller(self.ESIKLER)
+        self.assertIn("BILINMEYEN", bayatlar)       # 13 gun > varsayilan 7
 
 
 if __name__ == "__main__":

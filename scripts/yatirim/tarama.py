@@ -81,7 +81,7 @@ def _portfoy_getirisi(fiyatlar, portfoy) -> pd.Series:
 
 def adaylari_degerlendir(evren: list[str], portfoy_getirisi: pd.Series,
                          gun: int, yil: int) -> list[Aday]:
-    kapanis = kapanislari_indir(evren, gun)
+    kapanis, _ = kapanislari_indir(evren, gun)   # hacim tarama icin gereksiz
 
     adaylar: list[Aday] = []
     for ticker in kapanis.columns:

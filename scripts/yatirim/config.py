@@ -53,6 +53,31 @@ class Esikler:
 
 
 @dataclass(frozen=True)
+class BayatlikEsikleri:
+    """Varlik sinifi basina bayatlik esigi, KACIRILAN ISLEM GUNU cinsinden.
+
+    Takvim gunu degil: BIST Cuma'dan Pazartesi'ye 3 takvim gunu gecirir ama
+    1 islem gunu. Takvim gunu sayan bir esik her Pazartesi yanlis alarm verir.
+    """
+
+    varsayilan: float = 7.0
+    sinif_bazli: dict[str, float] = field(default_factory=dict)
+
+    def gun(self, sinif: str) -> float:
+        return self.sinif_bazli.get(sinif, self.varsayilan)
+
+
+@dataclass(frozen=True)
+class KurumsalOlayAyarlari:
+    """Kayitli olmayan bedelsiz/split suphesinin tespit parametreleri."""
+
+    getiri_esigi: float = 0.25
+    hacim_carpani: float = 1.5
+    hacim_penceresi: int = 20
+    tarama_gunu: int = 5
+
+
+@dataclass(frozen=True)
 class Yapilandirma:
     ayarlar: Ayarlar
     esikler: Esikler
@@ -61,10 +86,16 @@ class Yapilandirma:
     nakit_try: float
     pozisyonlar: list[Pozisyon] = field(default_factory=list)
     sablon: bool = False          # portfoy.yaml doldurulmamis ornek veri mi
+    bayatlik: BayatlikEsikleri = field(default_factory=BayatlikEsikleri)
+    kurumsal_olay: KurumsalOlayAyarlari = field(default_factory=KurumsalOlayAyarlari)
 
     @property
     def fiyat_sembolleri(self) -> list[str]:
         return sorted({*self.varliklar, self.ayarlar.kur_sembolu})
+
+    @property
+    def sinif_haritasi(self) -> dict[str, str]:
+        return {sembol: varlik.sinif for sembol, varlik in self.varliklar.items()}
 
 
 def _yukle(dosya: Path) -> dict:
@@ -153,6 +184,41 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
             "(beta 1 = varlik parasi kadar risk tasiyor)"
         )
 
+    bayat_ham = varlik_ham.get("bayatlik_esikleri") or {}
+    bayatlik = BayatlikEsikleri(
+        varsayilan=float(bayat_ham.get("varsayilan", 7.0)),
+        sinif_bazli={ad: float(d) for ad, d in bayat_ham.items() if ad != "varsayilan"},
+    )
+    # Yazim hatasi sessizce varsayilana dusmesin: `kripo: 0` yazilsaydi kripto
+    # 7 gunluk esikle olculur ve kimse fark etmezdi.
+    tanimsiz = sorted(set(bayatlik.sinif_bazli) - {v.sinif for v in varliklar.values()})
+    if tanimsiz:
+        raise ValueError(
+            f"bayatlik_esikleri'nde tanimsiz varlik sinifi: {tanimsiz}. "
+            f"Gecerli siniflar: {sorted({v.sinif for v in varliklar.values()})}"
+        )
+    for ad, deger in bayatlik.sinif_bazli.items():
+        if deger < 0:
+            raise ValueError(f"bayatlik_esikleri.{ad} negatif olamaz, {deger} geldi")
+
+    olay_ham = varlik_ham.get("kurumsal_olay") or {}
+    kurumsal_olay = KurumsalOlayAyarlari(
+        getiri_esigi=float(olay_ham.get("getiri_esigi", 0.25)),
+        hacim_carpani=float(olay_ham.get("hacim_carpani", 1.5)),
+        hacim_penceresi=int(olay_ham.get("hacim_penceresi", 20)),
+        tarama_gunu=int(olay_ham.get("tarama_gunu", 5)),
+    )
+    if not 0 < kurumsal_olay.getiri_esigi < 1:
+        raise ValueError(
+            "kurumsal_olay.getiri_esigi 0 ile 1 arasinda olmali, "
+            f"{kurumsal_olay.getiri_esigi} geldi"
+        )
+    if kurumsal_olay.hacim_carpani < 1:
+        raise ValueError(
+            "kurumsal_olay.hacim_carpani 1'den kucuk olamaz "
+            "(1 = medyan hacim, altini 'artis' saymak anlamsiz)"
+        )
+
     return Yapilandirma(
         ayarlar=Ayarlar(
             kur_sembolu=ayar_ham["kur_sembolu"],
@@ -165,6 +231,8 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
         nakit_try=float(portfoy_ham.get("nakit_try", 0.0)),
         pozisyonlar=pozisyonlar,
         sablon=bool(portfoy_ham.get("sablon", False)),
+        bayatlik=bayatlik,
+        kurumsal_olay=kurumsal_olay,
     )
 
 

@@ -200,11 +200,20 @@ def _korelasyon_bolumu(korelasyon: pd.DataFrame) -> list[str]:
     return satirlar
 
 
-def _uyari_bolumu(portfoy: Portfoy, fiyatlar: FiyatVerisi, risk: RiskRaporu) -> list[str]:
+def _uyari_bolumu(portfoy: Portfoy, fiyatlar: FiyatVerisi, risk: RiskRaporu,
+                  bayatlik=None) -> list[str]:
     sorunlar = []
+    for sembol, gerekce in sorted(fiyatlar.kurumsal_olay_supheleri.items()):
+        sorunlar.append(
+            f"**Olasi kurumsal olay - {sembol}**: {gerekce}. Degerleme DURDURULDU. "
+            "Bedelsiz/split ise `simulasyon/kurumsal-olaylar.yaml` dosyasina yaz; "
+            "gercek hareketse hacim esigini gozden gecir. "
+            "UYARI: risk metrikleri bu sembol icin hala ham seriden hesaplaniyor, "
+            "volatilite ve korelasyon sisirilmis olabilir."
+        )
     if fiyatlar.eksik_semboller:
         sorunlar.append(f"Fiyat verisi gelmeyen sembol: {', '.join(fiyatlar.eksik_semboller)}")
-    bayatlar = fiyatlar.bayat_semboller()
+    bayatlar = fiyatlar.bayat_semboller(bayatlik)
     if bayatlar:
         detay = ", ".join(f"{s} ({g} gun)" for s, g in sorted(bayatlar.items()))
         sorunlar.append(
@@ -301,7 +310,7 @@ def rapor_olustur(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
     satirlar += _korelasyon_bolumu(risk.korelasyon)
     if durum:
         satirlar += _islem_gecmisi_bolumu(durum)
-    satirlar += _uyari_bolumu(portfoy, fiyatlar, risk)
+    satirlar += _uyari_bolumu(portfoy, fiyatlar, risk, yapilandirma.bayatlik)
     satirlar += _limitler()
     return "\n".join(satirlar)
 

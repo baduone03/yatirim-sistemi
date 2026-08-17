@@ -1,0 +1,29 @@
+# KURUMSAL OLAY DEFTERI - bedelsiz, split, ters split.
+#
+# NEDEN AYRI DOSYA: islem defteri (islemler.yaml) append-only'dir ve yalnizca
+# SENIN yaptigin islemleri tutar. Bedelsiz/split senin yaptigin bir islem
+# degil - sirket yapar, adedin degisir, cebinden para cikmaz. Ledger'a sahte
+# bir "AL" satiri yazmak defteri bozar.
+#
+# ALANLAR
+#   tarih  : olayin EX-TARIHI (YYYY-AA-GG). O gun fiyat zaten duzeltilmis
+#            acilir, bu yuzden olay ayni tarihli islemlerden ONCE uygulanir.
+#   sembol : varliklar.yaml'daki sembol
+#   tip    : bedelsiz | split | ters_split
+#   oran   : ADET carpani.
+#              %100 bedelsiz -> 2.0   (adet ikiye katlanir)
+#              %50 bedelsiz  -> 1.5
+#              4:1 split     -> 4.0
+#              1:10 ters     -> 0.1
+#   not    : kaynak/aciklama (KAP bildirimi, tarih, link)
+#
+# MUHASEBE KURALI - onemli:
+#   adet          x= oran
+#   TOPLAM maliyet DEGISMEZ   (cebinden para cikmadi)
+#   birim maliyet /= oran     (turetilir, ayrica yazilmaz)
+#
+# Toplam maliyeti orana BOLMEK yaygin bir hatadir: 1000 TL'ye alinan 10 lot
+# 2.0 oranli bedelsizden sonra 20 lot olur ama maliyet yine 1000 TL'dir.
+# Maliyeti 500'e dusurmek, olmayan %100 kar uydurur.
+
+olaylar: []

@@ -144,7 +144,7 @@ def _islem_satirlari(durum, tarih: str) -> list[str]:
 
 def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
                 durum=None, baslik: str = "Yatirim", fiyatlar=None,
-                esikler: Esikler = VARSAYILAN_ESIKLER) -> str:
+                esikler: Esikler = VARSAYILAN_ESIKLER, bayatlik=None) -> str:
     """Rapordan kisa Telegram ozeti uretir - detay markdown raporda kalir."""
     if durum:
         taban = durum.baslangic_nakit_try
@@ -166,6 +166,15 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
 
     if durum:
         satirlar += _islem_satirlari(durum, date.today().isoformat())
+
+    # Kurumsal olay suphesi en agir uyari: rakamlar yanlis olabilir ve sebebi
+    # veri eksikligi degil, kayitli olmayan bir bedelsiz/split olabilir.
+    supheliler = fiyatlar.kurumsal_olay_supheleri if fiyatlar is not None else {}
+    if supheliler:
+        satirlar += ["", "<b>🛑 Olasi kurumsal olay</b>"]
+        for sembol, gerekce in sorted(supheliler.items()):
+            satirlar.append(f"• {_kacis(sembol)}: {_kacis(gerekce)}")
+        satirlar.append("Degerleme durduruldu. Bedelsiz/split ise olay defterine yaz.")
 
     # Fiyatlanamayan pozisyon varsa sapma hesabi eksik veri uzerinden yapilmis
     # demektir; tavsiyeyi guvenilir gibi gondermek yanlis islem yaptirir.
@@ -202,7 +211,7 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
         satirlar += ["", "Esik asilmadi — islem gerekmiyor."]
 
     # Veri sorunu sessiz kalmamali: bayat fiyat yanlis degerleme demek.
-    bayatlar = fiyatlar.bayat_semboller() if fiyatlar is not None else {}
+    bayatlar = fiyatlar.bayat_semboller(bayatlik) if fiyatlar is not None else {}
     if bayatlar:
         satirlar += ["", "<b>⚠️ Bayat fiyat verisi</b>"]
         for sembol, gecikme in sorted(bayatlar.items()):

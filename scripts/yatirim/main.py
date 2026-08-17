@@ -22,6 +22,7 @@ from config import (  # noqa: E402
     yapilandirmayi_oku,
 )
 from fetch import fiyatlari_getir  # noqa: E402
+from kurumsal_olay import bilinen_olay_anahtarlari, olaylari_oku  # noqa: E402
 from ledger import durumu_hesapla, islemleri_oku  # noqa: E402
 from notify import TelegramHatasi, mesaj_gonder, ozet_mesaji  # noqa: E402
 from portfolio import (  # noqa: E402
@@ -35,6 +36,7 @@ from risk import riski_hesapla  # noqa: E402
 SISTEM_DOSYASI = PROJE_DIZINI / "00-sistem.md"
 SIM_DIZINI = PROJE_DIZINI / "simulasyon"
 SIM_DEFTERI = SIM_DIZINI / "islemler.yaml"
+SIM_OLAY_DEFTERI = SIM_DIZINI / "kurumsal-olaylar.yaml"
 SIM_RAPOR_DIZINI = SIM_DIZINI / "raporlar"
 
 
@@ -58,11 +60,11 @@ def _sistem_ozetini_guncelle(ozet: str) -> None:
     SISTEM_DOSYASI.write_text(desen.sub(lambda _: ozet, icerik), encoding="utf-8")
 
 
-def _durumu_yukle(sim: bool):
+def _durumu_yukle(sim: bool, olaylar):
     if not sim:
         return None
     islemler, baslangic_nakit, komisyon = islemleri_oku(SIM_DEFTERI)
-    return durumu_hesapla(islemler, baslangic_nakit, komisyon)
+    return durumu_hesapla(islemler, baslangic_nakit, komisyon, olaylar)
 
 
 def main() -> int:
@@ -78,10 +80,13 @@ def main() -> int:
     yapilandirma = yapilandirmayi_oku()
     if not argumanlar.sim:
         sablonu_reddet(yapilandirma)
-    durum = _durumu_yukle(argumanlar.sim)
+    olaylar = olaylari_oku(SIM_OLAY_DEFTERI)
+    durum = _durumu_yukle(argumanlar.sim, olaylar)
 
     print(f"{len(yapilandirma.fiyat_sembolleri)} sembol icin fiyat cekiliyor...")
-    fiyatlar = fiyatlari_getir(yapilandirma)
+    # Deftere yazilmis olaylar otomatik tespiti tetiklemez - yoksa kayitli bir
+    # bedelsizden sonra o sembolun degerlemesi sonsuza kadar durur.
+    fiyatlar = fiyatlari_getir(yapilandirma, bilinen_olay_anahtarlari(olaylar))
 
     portfoy = (
         portfoyu_ledgerdan_hesapla(yapilandirma, fiyatlar, durum)
@@ -105,12 +110,15 @@ def main() -> int:
     print(f"Rapor yazildi: {rapor_dosyasi}")
     if fiyatlar.eksik_semboller:
         print(f"UYARI - fiyat gelmeyen sembol: {', '.join(fiyatlar.eksik_semboller)}")
+    for sembol, gerekce in sorted(fiyatlar.kurumsal_olay_supheleri.items()):
+        print(f"UYARI - olasi kurumsal olay, degerleme durduruldu: {sembol} ({gerekce})")
 
     if argumanlar.telegram:
         baslik = f"{'Simulasyon' if durum else 'Portfoy'} {rapor_adi}"
         try:
             mesaj_gonder(ozet_mesaji(portfoy, sapmalar, risk, durum, baslik,
-                                     fiyatlar, yapilandirma.esikler))
+                                     fiyatlar, yapilandirma.esikler,
+                                     yapilandirma.bayatlik))
             print("Telegram ozeti gonderildi.")
         except TelegramHatasi as hata:
             # Rapor diske yazildi ve GECERLI - kaybolmadi.
