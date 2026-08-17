@@ -90,8 +90,7 @@ class VeriKaynaklari:
     coingecko_url: str = ""
     coingecko_kimlikleri: dict[str, str] = field(default_factory=dict)
     tcmb_url: str = ""
-    tcmb_seri: str = "TP.DK.USD.A"
-    tcmb_anahtar_env: str = "EVDS_API_ANAHTARI"
+    tcmb_seri: str = "TP.DK.USD.A.EF.YTL"
     tcmb_bayatlik_gun: int = 1
     btcturk_bayatlik_dakika: float = 15.0
     prim_esigi: float = 0.03
@@ -254,9 +253,8 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
         coingecko_kimlikleri=dict(
             (kaynak_ham.get("coingecko") or {}).get("kimlikler") or {}),
         tcmb_url=str((kaynak_ham.get("tcmb") or {}).get("url", "")),
-        tcmb_seri=str((kaynak_ham.get("tcmb") or {}).get("seri", "TP.DK.USD.A")),
-        tcmb_anahtar_env=str(
-            (kaynak_ham.get("tcmb") or {}).get("anahtar_env", "EVDS_API_ANAHTARI")),
+        tcmb_seri=str(
+            (kaynak_ham.get("tcmb") or {}).get("seri", "TP.DK.USD.A.EF.YTL")),
         tcmb_bayatlik_gun=int((kaynak_ham.get("tcmb") or {}).get("bayatlik_gun", 1)),
         btcturk_bayatlik_dakika=float(
             ucgen_ham.get("btcturk_bayatlik_dakika", 15.0)),

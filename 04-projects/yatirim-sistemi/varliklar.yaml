@@ -81,9 +81,14 @@ veri_kaynaklari:
       BTC-USD: bitcoin
       ETH-USD: ethereum
   tcmb:
-    url: "https://evds2.tcmb.gov.tr/service/evds"
-    seri: "TP.DK.USD.A"        # USD doviz alis
-    anahtar_env: "EVDS_API_ANAHTARI"
+    # ANAHTAR GEREKTIRMEZ. Eski `evds2.../service/evds/series=...` yolu
+    # (anahtar isteyen) 2026 arayuz gecisiyle JSON dondurmeyi birakti, artik
+    # web uygulamasinin HTML'ini veriyor. Yeni uc ayni kuru kimliksiz veriyor.
+    url: "https://evds3.tcmb.gov.tr/igmevdsms-dis/sk-seriler"
+    # Bu uc yalnizca "sik kullanilan seriler"i doner; icindeki tek USD serisi
+    # EFEKTIF alistir. Doviz alis (TP.DK.USD.A) ile farki binde 1 civari -
+    # %3'luk prim esigi yaninda onemsiz.
+    seri: "TP.DK.USD.A.EF.YTL"
     # TCMB yalnizca IS GUNU ~15:30'da kur yayimlar. Hafta sonu yeni kur yok.
     # 1 gunden eski kur bayat sayilir ve Yahoo'ya dusulur - yoksa Pazar gunu
     # olculen sey "TR primi" degil, kurun bayatligi olur.

@@ -244,15 +244,8 @@ def _kur_kotasyonu(kaynaklar, env, yahoo_usdtry: float, getir,
 
     if not kaynaklar.tcmb_url:
         return yedek, uyarilar
-    anahtar = (env or {}).get(kaynaklar.tcmb_anahtar_env, "")
-    if not anahtar:
-        uyarilar.append(
-            f"TCMB EVDS anahtari yok ({kaynaklar.tcmb_anahtar_env} tanimsiz) "
-            "- USD/TRY Yahoo'dan alindi.")
-        return yedek, uyarilar
     try:
-        kur = tcmb_usdtry(kaynaklar.tcmb_url, kaynaklar.tcmb_seri, anahtar,
-                          getir=getir, bugun=bugun)
+        kur = tcmb_usdtry(kaynaklar.tcmb_url, kaynaklar.tcmb_seri, getir=getir)
     except KaynakHatasi as hata:
         uyarilar.append(f"TCMB okunamadi ({hata}) - USD/TRY Yahoo'dan alindi.")
         return yedek, uyarilar

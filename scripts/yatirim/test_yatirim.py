@@ -1001,8 +1001,8 @@ class TcmbKurTesti(unittest.TestCase):
             btcturk_ciftleri={"BTC-USD": "BTCTRY"},
             coingecko_url="http://sahte/gecko",
             coingecko_kimlikleri={"BTC-USD": "bitcoin"},
-            tcmb_url="http://sahte/evds",
-            tcmb_anahtar_env="EVDS_API_ANAHTARI", tcmb_bayatlik_gun=1,
+            tcmb_url="http://sahte/sk-seriler",
+            tcmb_seri="TP.DK.USD.A.EF.YTL", tcmb_bayatlik_gun=1,
         )
         varsayilan.update(kaynak)
         return Yapilandirma(
@@ -1010,8 +1010,12 @@ class TcmbKurTesti(unittest.TestCase):
             varliklar={"BTC-USD": Varlik("BTC-USD", "Bitcoin", "kripto", "USD")},
             nakit_try=0.0, kaynaklar=VeriKaynaklari(**varsayilan))
 
-    def _getir_fabrikasi(self, kur_tarihi: str):
+    def _getir_fabrikasi(self, kur_tarihi: str, seri: str = "TP.DK.USD.A.EF.YTL"):
+        """Gercek `sk-seriler` cevabinin sekli: dict degil LISTE."""
+        self.cagrilar = []
+
         def getir(url, params=None, headers=None):
+            self.cagrilar.append((url, params, headers))
             if "ticker" in url:
                 return {"data": [{"pair": "BTCTRY", "last": "2500000",
                                   "timestamp": int(
@@ -1019,38 +1023,55 @@ class TcmbKurTesti(unittest.TestCase):
                                       .timestamp() * 1000)}]}
             if "gecko" in url:
                 return {"bitcoin": {"usd": 62_500.0}}
-            return {"items": [{"Tarih": kur_tarihi, "TP_DK_USD_A": "41.5"}]}
+            return [
+                {"seriKodu": "TP.DK.EUR.A.EF.YTL", "tarih": kur_tarihi,
+                 "deger": 55.1},
+                {"seriKodu": seri, "tarih": kur_tarihi, "deger": 47.6872},
+            ]
         return getir
 
     def _kur_kaynagi(self, sonuc) -> str:
         return sonuc.sonuclar["BTC-USD"].kur_kaynagi
 
-    def test_anahtar_yoksa_yahooya_duser(self):
-        sonuc = kripto_ucgenlemesi(
-            self._yapilandirma(), yahoo_usdtry=40.0, env={},
-            getir=self._getir_fabrikasi("17-08-2026"),
+    def _calistir(self, getir):
+        return kripto_ucgenlemesi(
+            self._yapilandirma(), yahoo_usdtry=40.0, env={}, getir=getir,
             simdi=datetime(2026, 8, 17, 12, tzinfo=timezone.utc), bugun=self.BUGUN)
-        self.assertEqual(self._kur_kaynagi(sonuc), "yahoo")
-        self.assertTrue(any("anahtari yok" in u for u in sonuc.uyarilar))
 
     def test_taze_tcmb_kuru_kullanilir(self):
-        sonuc = kripto_ucgenlemesi(
-            self._yapilandirma(), yahoo_usdtry=40.0,
-            env={"EVDS_API_ANAHTARI": "sahte"},
-            getir=self._getir_fabrikasi("17-08-2026"),
-            simdi=datetime(2026, 8, 17, 12, tzinfo=timezone.utc), bugun=self.BUGUN)
+        sonuc = self._calistir(self._getir_fabrikasi("17-08-2026"))
         self.assertEqual(self._kur_kaynagi(sonuc), "tcmb")
 
     def test_bayat_tcmb_kuru_reddedilir(self):
         """TCMB hafta sonu kur yayimlamaz. Cuma kuruyla Pazar ucgenlemesi,
         TR primi diye kurun bayatligini olcer."""
-        sonuc = kripto_ucgenlemesi(
-            self._yapilandirma(), yahoo_usdtry=40.0,
-            env={"EVDS_API_ANAHTARI": "sahte"},
-            getir=self._getir_fabrikasi("14-08-2026"),          # Cuma
-            simdi=datetime(2026, 8, 17, 12, tzinfo=timezone.utc), bugun=self.BUGUN)
+        sonuc = self._calistir(self._getir_fabrikasi("14-08-2026"))   # Cuma
         self.assertEqual(self._kur_kaynagi(sonuc), "yahoo (tcmb bayat)")
         self.assertTrue(any("bayat" in u for u in sonuc.uyarilar))
+
+    def test_tcmb_cagrisinda_ANAHTAR_GONDERILMIYOR(self):
+        """Guvenlik: bu uc nokta kimlik istemiyor, sir de gonderilmemeli."""
+        self._calistir(self._getir_fabrikasi("17-08-2026"))
+        tcmb_cagrilari = [c for c in self.cagrilar if "sk-seriler" in c[0]]
+        self.assertEqual(len(tcmb_cagrilari), 1)
+        _, params, headers = tcmb_cagrilari[0]
+        self.assertIsNone(headers)
+        self.assertIsNone(params)
+
+    def test_seri_bulunamazsa_yahooya_duser(self):
+        """Uc nokta calisir ama seri kodu degisirse sessizce yanlis kur alma."""
+        sonuc = self._calistir(
+            self._getir_fabrikasi("17-08-2026", seri="TP.DK.BASKA"))
+        self.assertEqual(self._kur_kaynagi(sonuc), "yahoo")
+        self.assertTrue(any("TCMB okunamadi" in u for u in sonuc.uyarilar))
+
+    def test_uc_nokta_tanimsizsa_yahoo(self):
+        yapilandirma = self._yapilandirma(tcmb_url="")
+        sonuc = kripto_ucgenlemesi(
+            yapilandirma, yahoo_usdtry=40.0, env={},
+            getir=self._getir_fabrikasi("17-08-2026"),
+            simdi=datetime(2026, 8, 17, 12, tzinfo=timezone.utc), bugun=self.BUGUN)
+        self.assertEqual(self._kur_kaynagi(sonuc), "yahoo")
 
 
 if __name__ == "__main__":

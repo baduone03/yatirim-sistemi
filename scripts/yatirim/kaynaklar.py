@@ -29,7 +29,7 @@ class KaynakHatasi(RuntimeError):
 
 
 def http_json(url: str, params: dict | None = None,
-              headers: dict | None = None) -> dict:
+              headers: dict | None = None) -> dict | list:
     """Varsayilan ag katmani. Testlerde bu fonksiyon YERINE sahte gecirilir."""
     try:
         cevap = requests.get(url, params=params, headers=headers,
@@ -148,37 +148,34 @@ class KurKotasyonu:
         return ((bugun or date.today()) - self.tarih).days > esik_gun
 
 
-def tcmb_usdtry(url: str, seri: str, anahtar: str, gun: int = 10,
-                getir=http_json, bugun: date | None = None) -> KurKotasyonu:
-    """TCMB EVDS'ten en son yayimlanan USD/TRY.
+def tcmb_usdtry(url: str, seri: str, getir=http_json) -> KurKotasyonu:
+    """TCMB'nin sik kullanilan seriler ucundan guncel USD/TRY.
 
-    TCMB kuru yalnizca IS GUNLERI, ~15:30'da yayimlanir. Hafta sonu ve resmi
-    tatilde yeni kur YOKTUR. Bu yuzden tek gun degil bir aralik istenir ve
-    donen en son kayit alinir; kaydin TARIHI de dondurulur ki cagiran
-    bayatligi olcebilsin. Cuma kurunu Pazar gunu taze sanmak, kriptodaki
-    "TR primi" olcumunu tamamen bozar - olculen sey prim degil kurun
-    bayatligi olur.
+    ANAHTAR GEREKMIYOR - bilincli secim. Eski `/service/evds/series=...` yolu
+    (anahtar isteyen) 2026 arayuz gecisiyle JSON dondurmeyi birakti; yeni
+    `igmevdsms-dis/sk-seriler` ucu ayni kuru kimliksiz veriyor. Sirri
+    gerekmeyen bir yere gondermemek, gondermekten iyidir.
+
+    Kaydin TARIHI de dondurulur ki cagiran bayatligi olcebilsin: TCMB kuru
+    yalnizca is gunu yayimlanir, hafta sonu yeni kur yoktur. Cuma kurunu
+    Pazar gunu taze sanmak "TR primi" olcumunu bozar - olculen sey prim
+    degil kurun bayatligi olur.
     """
-    bugun = bugun or date.today()
-    basla = bugun - timedelta(days=gun)
-    ham = getir(
-        f"{url}/series={seri}&startDate={basla:%d-%m-%Y}"
-        f"&endDate={bugun:%d-%m-%Y}&type=json",
-        headers={"key": anahtar},
-    )
-    kayitlar = [k for k in (ham.get("items") or []) if k.get(TCMB_SERI_ALANI)]
+    ham = getir(url)
+    kayitlar = [k for k in (ham or []) if k.get("seriKodu") == seri]
     if not kayitlar:
+        mevcut = sorted({str(k.get("seriKodu")) for k in (ham or [])})[:6]
         raise KaynakHatasi(
-            f"TCMB EVDS {seri} icin {basla}..{bugun} araliginda veri dondurmedi")
-    son = kayitlar[-1]
+            f"TCMB {seri} serisi cevapta yok. Donen seriler: {mevcut}")
+    son = kayitlar[0]
     try:
         return KurKotasyonu(
-            deger=float(son[TCMB_SERI_ALANI]),
-            tarih=datetime.strptime(son["Tarih"], "%d-%m-%Y").date(),
+            deger=float(son["deger"]),
+            tarih=datetime.strptime(son["tarih"], "%d-%m-%Y").date(),
             kaynak="tcmb",
         )
-    except (KeyError, ValueError) as hata:
-        raise KaynakHatasi(f"TCMB EVDS kaydi okunamadi: {hata}") from hata
+    except (KeyError, TypeError, ValueError) as hata:
+        raise KaynakHatasi(f"TCMB kaydi okunamadi: {hata}") from hata
 
 
 # --------------------------------------------------------------------------
