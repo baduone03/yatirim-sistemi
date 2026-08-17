@@ -14,13 +14,13 @@ from bicim import yuzde as _yuzde
 from maliyet import MaliyetDagilimi, MaliyetModeli, donem_orani
 from portfolio import Portfoy, SinifSapmasi
 from rapor_maliyet import (
-    SINYAL_YOK,
     eksik_maliyet_bolumu,
     getiri_satirlari,
     maliyet_dagilimi_bolumu,
     maliyet_kalemleri,
 )
 from risk import RiskRaporu
+from sinyal import KIS, SEMBOL, SINIF, Karar
 
 OZET_BASLANGIC = "<!-- OZET:BASLANGIC -->"
 OZET_BITIS = "<!-- OZET:BITIS -->"
@@ -95,7 +95,7 @@ def _pozisyon_bolumu(portfoy: Portfoy) -> list[str]:
 
 def _dagilim_bolumu(sapmalar: list[SinifSapmasi], toplam_deger: float,
                     esik: float, eksik_pozisyon: list[str],
-                    maliyet: MaliyetModeli | None = None) -> list[str]:
+                    karar: Karar) -> list[str]:
     satirlar = ["## Varlik dagilimi ve rebalancing", ""]
 
     if eksik_pozisyon:
@@ -117,20 +117,18 @@ def _dagilim_bolumu(sapmalar: list[SinifSapmasi], toplam_deger: float,
     uyarilar = []
     for sapma in sapmalar:
         tutar = abs(sapma.sapma) * toplam_deger
-        # Sinifta uygulanabilir tek bir sembol bile yoksa tavsiye uygulanamaz
-        # bir emirdir: "bist'i 2.000 TL azalt" demek satilabilir bir sembol
-        # gerektirir.
-        acik = maliyet is None or maliyet.sinif_sinyali_acik(sapma.sinif)
-        if abs(sapma.sapma) < esik:
-            eylem = "dengede"
-        elif not acik:
-            eylem = SINYAL_YOK
-        elif sapma.sapma > 0:
-            eylem = f"{_tl(tutar)} azalt"
-            uyarilar.append(f"`{sapma.sinif}` hedefin {_oran(sapma.sapma)} uzerinde")
+        # Esik testi burada YAPILMAZ - karar sinyal.py'da bir kere olculur.
+        # Rapor ile Telegram ayri ayri olcseydi biri bastirirken digeri sinyal
+        # gosterirdi; sinif sinyalinin uygulanabilirligi (eksik maliyet, bekleme,
+        # devre kesici) de o tek noktada degerlendirilir.
+        sonuc = karar.sonuc(SINIF, sapma.sinif)
+        if sonuc is not None and sonuc.acik:
+            eylem = f"{_tl(tutar)} {sonuc.yon}"
+            nere = "uzerinde" if sapma.sapma > 0 else "altinda"
+            uyarilar.append(
+                f"`{sapma.sinif}` hedefin {_oran(abs(sapma.sapma))} {nere}")
         else:
-            eylem = f"{_tl(tutar)} artir"
-            uyarilar.append(f"`{sapma.sinif}` hedefin {_oran(-sapma.sapma)} altinda")
+            eylem = sonuc.etiket if sonuc is not None else "dengede"
         satirlar.append(
             f"| {sapma.sinif} | {_oran(sapma.guncel_agirlik)} | "
             f"{_oran(sapma.hedef_agirlik)} | {_yuzde(sapma.sapma)} | {eylem} |"
@@ -145,7 +143,7 @@ def _dagilim_bolumu(sapmalar: list[SinifSapmasi], toplam_deger: float,
 
 
 def _risk_bolumu(risk: RiskRaporu, varlik_adlari: dict[str, str],
-                 esikler, maliyet: MaliyetModeli | None = None) -> list[str]:
+                 esikler, karar: Karar) -> list[str]:
     satirlar = [
         "## Risk metrikleri",
         "",
@@ -163,12 +161,12 @@ def _risk_bolumu(risk: RiskRaporu, varlik_adlari: dict[str, str],
     kisilacaklar = []
     bastirilanlar = []
     for varlik_riski in risk.varlik_riskleri:
-        kis = esikler.kisilmali(varlik_riski)
-        acik = maliyet is None or maliyet.sinyal_acik(varlik_riski.sembol)
-        if kis and acik:
+        sonuc = karar.sonuc(SEMBOL, varlik_riski.sembol)
+        kis = sonuc is not None and sonuc.yon == KIS
+        if kis and sonuc.acik:
             kisilacaklar.append(varlik_riski)
         elif kis:
-            bastirilanlar.append(varlik_riski)
+            bastirilanlar.append((varlik_riski, sonuc.etiket))
         satirlar.append(
             f"| {varlik_adlari.get(varlik_riski.sembol, varlik_riski.sembol)} | "
             f"{_oran(varlik_riski.yillik_volatilite)} | "
@@ -186,6 +184,10 @@ def _risk_bolumu(risk: RiskRaporu, varlik_adlari: dict[str, str],
         f"**ve** beta > {esikler.risk_beta_ust:.2f}. Tek basina katki yetmez - "
         "6 pozisyonda ortalama katki %16.7'dir, birilerinin tavani asmasi zorunludur.",
         "",
+        f"Sinyal acildiktan sonra katki {_oran(esikler.risk_katkisi_geri_donus, 0)} "
+        "altina inmeden kapanmaz (histerezis). Tek esik olsaydi katki tavanin "
+        "etrafinda salinirken her kosuda ters sinyal cikardi.",
+        "",
     ]
 
     if kisilacaklar:
@@ -198,15 +200,41 @@ def _risk_bolumu(risk: RiskRaporu, varlik_adlari: dict[str, str],
         satirlar.append("")
     if bastirilanlar:
         satirlar.append(
-            f"> **{SINYAL_YOK}** - esigi asan ama maliyet modeli eksik oldugu "
-            "icin sinyal uretilmeyen varlik:")
-        for varlik_riski in bastirilanlar:
+            "> **Bastirilan sinyal** - esigi asti ama uretilmedi:")
+        for varlik_riski, etiket in bastirilanlar:
             satirlar.append(
                 f"> - `{varlik_riski.sembol}` katki "
-                f"{_oran(varlik_riski.risk_katkisi)}, beta {varlik_riski.beta:.2f}"
+                f"{_oran(varlik_riski.risk_katkisi)}, beta {varlik_riski.beta:.2f} "
+                f"— {etiket}"
             )
         satirlar.append("")
     return satirlar
+
+
+def _devre_kesici_bolumu(karar: Karar) -> list[str]:
+    """Raporun EN USTUNE basilan blok - eksik maliyet uyarisiyla ayni yerde.
+
+    Tavani asan sinyal sayisi tavsiye degil ariza belirtisidir: tek bir bozuk
+    fiyat, kacirilan bir bedelsiz veya kur hatasi tum portfoyu birden "yanlis
+    agirlikta" gosterir. Boyle bir gunde dogru davranis islem yapmak degil,
+    veriye bakmaktir.
+    """
+    if not karar.devre_kesildi:
+        return []
+    return [
+        "> ## 🛑 ANORMAL ISLEM YOGUNLUGU",
+        ">",
+        f"> Bugun {karar.gunluk_sayi} islem sinyali olustu, gunluk tavan "
+        f"{karar.gunluk_maks}. **Sinyal uretimi durduruldu** - asagidaki "
+        "tablolarda hicbir eylem onerisi yok.",
+        ">",
+        "> Bu kadar sinyalin ayni anda cikmasi genellikle portfoyun degil "
+        "VERININ bozuk oldugunu gosterir: bayat fiyat, kayitli olmayan "
+        "bedelsiz, yanlis kur. Once uyari bolumune bak.",
+        ">",
+        "> Tavan: `varliklar.yaml` -> `devre_kesici.gunluk_maks_islem`",
+        "",
+    ]
 
 
 def _korelasyon_bolumu(korelasyon: pd.DataFrame) -> list[str]:
@@ -400,7 +428,7 @@ def donem_gunu(yapilandirma: Yapilandirma, durum=None,
 
 def rapor_olustur(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
                   portfoy: Portfoy, sapmalar: list[SinifSapmasi],
-                  risk: RiskRaporu, durum=None,
+                  risk: RiskRaporu, karar: Karar, durum=None,
                   maliyet: MaliyetModeli | None = None) -> str:
     bugun = date.today().isoformat()
     varlik_adlari = {s: v.ad for s, v in yapilandirma.varliklar.items()}
@@ -413,6 +441,7 @@ def rapor_olustur(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
 
     satirlar = _frontmatter(bugun, fiyatlar.son_tarih, baslik)
     satirlar += [f"# {baslik} {bugun}", ""]
+    satirlar += _devre_kesici_bolumu(karar)
     satirlar += eksik_maliyet_bolumu(maliyet)
     if durum:
         satirlar += _sim_bolumu(durum, portfoy)
@@ -421,8 +450,8 @@ def rapor_olustur(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
     satirlar += _pozisyon_bolumu(portfoy)
     satirlar += _dagilim_bolumu(sapmalar, portfoy.toplam_deger_try,
                                 yapilandirma.esikler.rebalancing_sapma,
-                                portfoy.fiyatlanamayan, maliyet)
-    satirlar += _risk_bolumu(risk, varlik_adlari, yapilandirma.esikler, maliyet)
+                                portfoy.fiyatlanamayan, karar)
+    satirlar += _risk_bolumu(risk, varlik_adlari, yapilandirma.esikler, karar)
     satirlar += _korelasyon_bolumu(risk.korelasyon)
     if durum:
         satirlar += _islem_gecmisi_bolumu(durum)

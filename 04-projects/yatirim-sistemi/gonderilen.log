@@ -1,0 +1,12 @@
+# Gonderilen Telegram mesajlarinin append-only kaydi. Idempotency icin.
+#
+# Bicim: <gonderim zamani UTC> <anahtar>
+# Anahtarlar:
+#   ozet:{tarih}                          -> gunluk ozet mesaji
+#   islem:{sembol}:{tarih}:{saat}:{yon}   -> tekil islem sinyali
+#
+# Anahtar burada varsa mesaj TEKRAR GONDERILMEZ. Bir mesaji bilerek yeniden
+# gondermek istiyorsan ilgili satiri sil - baska yolu yok, bilincli boyle.
+#
+# Bu dosya repoya commit edilir: Actions her kosuda temiz checkout aldigi icin
+# kayit commit edilmezse idempotency hicbir sey hatirlamaz.

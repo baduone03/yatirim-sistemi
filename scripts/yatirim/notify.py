@@ -11,16 +11,23 @@ Token asla koda veya rapora yazilmaz.
 from __future__ import annotations
 
 import os
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import requests
 
-from config import PROJE_DIZINI, Esikler
+from config import PROJE_DIZINI
 from maliyet import donem_orani
 from portfolio import Portfoy, SinifSapmasi
-
-VARSAYILAN_ESIKLER = Esikler(rebalancing_sapma=0.05, risk_katkisi_ust=0.25)
+from sinyal import (
+    GONDERILEN_LOG,
+    SEMBOL,
+    SINIF,
+    Karar,
+    gonderildi_yaz,
+    gonderilen_anahtarlar,
+    simdi_utc,
+)
 
 ENV_DOSYASI = PROJE_DIZINI.parents[1] / ".env"
 API_KOKU = "https://api.telegram.org"
@@ -115,6 +122,30 @@ def mesaj_gonder(metin: str, env: dict[str, str] | None = None) -> None:
         raise TelegramHatasi(f"Telegram reddetti (HTTP {yanit.status_code}): {aciklama}")
 
 
+def idempotent_gonder(metin: str, anahtar: str, ek_anahtarlar: list[str] | None = None,
+                      env: dict[str, str] | None = None,
+                      log: Path = GONDERILEN_LOG,
+                      simdi: datetime | None = None) -> bool:
+    """Ayni anahtar daha once gonderildiyse GONDERMEZ.
+
+    Doner: True = gonderildi, False = zaten gonderilmisti.
+
+    `anahtar` tekillik anahtaridir (gunluk ozette `ozet:{tarih}`).
+    `ek_anahtarlar` yalnizca kayda gecer; mesajin icerdigi tekil islem
+    sinyallerini isaretler ki ileride sinyal bazli gonderim eklendiginde ayni
+    sinyal ikinci kez gitmesin.
+
+    Log SONRA yazilir: once yazip sonra gonderirsek basarisiz bir gonderim
+    "gonderildi" isaretlenir ve mesaj bir daha asla denenmez.
+    """
+    if anahtar in gonderilen_anahtarlar(log):
+        return False
+    simdi = simdi or simdi_utc()
+    mesaj_gonder(metin, env)
+    gonderildi_yaz([anahtar, *(ek_anahtarlar or [])], simdi, log)
+    return True
+
+
 def _tl(deger: float) -> str:
     return f"{deger:,.0f} TL".replace(",", ".")
 
@@ -200,10 +231,27 @@ def hurdle_eksik_mesaji(baslik: str, seri: str) -> str:
     ])
 
 
+def _devre_kesici_satirlari(karar: Karar) -> list[str]:
+    """Tavan asildiginda mesajin BASINA gelir.
+
+    Sinyaller zaten bastirildi; okuyanin gormesi gereken sey islem listesi
+    degil, listenin neden bos oldugu.
+    """
+    if not karar.devre_kesildi:
+        return []
+    return [
+        "",
+        "<b>🛑 ANORMAL ISLEM YOGUNLUGU</b>",
+        f"Bugun {karar.gunluk_sayi} sinyal olustu, tavan {karar.gunluk_maks}.",
+        "Sinyal uretimi DURDURULDU - bugun islem yok.",
+        "Bu genellikle portfoyun degil VERININ bozuk oldugunu gosterir "
+        "(bayat fiyat, kayitli olmayan bedelsiz, yanlis kur). Raporu ac.",
+    ]
+
+
 def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
-                durum=None, baslik: str = "Yatirim", fiyatlar=None,
-                esikler: Esikler = VARSAYILAN_ESIKLER, bayatlik=None,
-                maliyet=None) -> str:
+                karar: Karar, durum=None, baslik: str = "Yatirim", fiyatlar=None,
+                bayatlik=None, maliyet=None) -> str:
     """Rapordan kisa Telegram ozeti uretir - detay markdown raporda kalir."""
     if durum:
         taban = durum.baslangic_nakit_try
@@ -223,6 +271,7 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
         f" | Drawdown {risk.portfoy_max_drawdown * 100:.1f}%",
     ]
     satirlar += _asiri_getiri_satiri(getiri, durum, maliyet)
+    satirlar += _devre_kesici_satirlari(karar)
 
     if durum:
         satirlar += _islem_satirlari(durum, date.today().isoformat())
@@ -273,9 +322,10 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
                 f"• <code>{_kacis(kalem)}</code> — {len(semboller)} varlik")
         satirlar.append("Degerler: varliklar.yaml -> maliyet")
 
-    sapanlar = [s for s in sapmalar
-                if abs(s.sapma) >= esikler.rebalancing_sapma
-                and (maliyet is None or maliyet.sinif_sinyali_acik(s.sinif))]
+    # Esik testi BURADA YAPILMAZ. Rapor ile mesaj ayri ayri olcseydi biri
+    # bastirirken digeri sinyal gosterirdi; karar sinyal.py'da bir kere olculur.
+    acik_siniflar = {s.ad for s in karar.sinyaller(SINIF)}
+    sapanlar = [s for s in sapmalar if s.sinif in acik_siniflar]
     if sapanlar:
         satirlar += ["", "<b>Rebalancing uyarisi</b>"]
         for sapma in sapanlar:
@@ -286,8 +336,8 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
                 f"{abs(sapma.sapma) * 100:.1f} puan {yon}"
             )
 
-    yogun = [r for r in risk.varlik_riskleri if esikler.kisilmali(r)
-             and (maliyet is None or maliyet.sinyal_acik(r.sembol))]
+    acik_semboller = {s.ad for s in karar.sinyaller(SEMBOL)}
+    yogun = [r for r in risk.varlik_riskleri if r.sembol in acik_semboller]
     if yogun:
         satirlar += ["", "<b>Kisilmali</b>"]
         for varlik_riski in yogun:
@@ -297,7 +347,7 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
                 f"beta {varlik_riski.beta:.2f}"
             )
 
-    if not sapanlar and not yogun and not engellenenler:
+    if not sapanlar and not yogun and not engellenenler and not karar.devre_kesildi:
         satirlar += ["", "Esik asilmadi — islem gerekmiyor."]
 
     # Veri sorunu sessiz kalmamali: bayat fiyat yanlis degerleme demek.

@@ -17,8 +17,6 @@ from maliyet import (
 )
 from portfolio import Portfoy
 
-SINYAL_YOK = "SINYAL YOK (eksik maliyet)"
-
 
 def kaynak_etiketi(kaynak: str) -> str:
     return kaynak if kaynak != "yapilandirma" else "varliklar.yaml (yedek deger)"

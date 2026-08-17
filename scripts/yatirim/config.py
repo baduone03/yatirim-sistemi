@@ -42,16 +42,55 @@ class Ayarlar:
 
 @dataclass(frozen=True)
 class Esikler:
-    """Karar esikleri - kodda sabit degil, varliklar.yaml'dan gelir."""
+    """Karar esikleri - kodda sabit degil, varliklar.yaml'dan gelir.
+
+    Her esik bir BANT: sinyal `_ust` degerinde acilir, `_geri_donus` degerine
+    inmeden kapanmaz. Tek esikli kural, deger esigin etrafinda salinirken her
+    kosuda ters sinyal uretir - komisyon oder, pozisyon degismez.
+
+    `acik` parametresi latch durumudur ve cagirandan gelir; Esikler durum
+    tutmaz, yalnizca sayi karsilastirir.
+    """
 
     rebalancing_sapma: float
     risk_katkisi_ust: float
     risk_beta_ust: float = 1.50
+    rebalancing_geri_donus: float = 0.0
+    risk_katkisi_geri_donus: float = 0.0
 
-    def kisilmali(self, varlik_riski) -> bool:
-        """Kisma karari: katki VE beta birlikte tavani asmali."""
-        return (varlik_riski.risk_katkisi > self.risk_katkisi_ust
+    def sapma_asildi(self, sapma: float, acik: bool = False) -> bool:
+        """Rebalancing sapmasi bandi. Esige esitken latch ACIK kalir."""
+        return abs(sapma) >= (self.rebalancing_geri_donus if acik
+                              else self.rebalancing_sapma)
+
+    def kisilmali(self, varlik_riski, acik: bool = False) -> bool:
+        """Kisma karari: katki VE beta birlikte tavani asmali.
+
+        Bant yalnizca katkiya uygulanir - beta = katki/agirlik oldugu icin
+        katki bandi betanin salinimini da buyuk olcude sonumler.
+        """
+        esik = self.risk_katkisi_geri_donus if acik else self.risk_katkisi_ust
+        return (varlik_riski.risk_katkisi > esik
                 and varlik_riski.beta > self.risk_beta_ust)
+
+
+@dataclass(frozen=True)
+class Bekleme:
+    """Ayni sembolde iki sinyal arasindaki asgari sure.
+
+    Sure, son URETILEN sinyalden olculur (`sinyal-durumu.yaml`), islem
+    defterinden degil: defter yalnizca TARIH tutar, "24 saat" gun cozunurlugunde
+    tanimsizdir.
+    """
+
+    ayni_sembol_saat: float = 0.0
+
+
+@dataclass(frozen=True)
+class DevreKesici:
+    """Gunluk sinyal tavani. Asilirsa o gun HICBIR sinyal uretilmez."""
+
+    gunluk_maks_islem: int = 6
 
 
 @dataclass(frozen=True)
@@ -116,6 +155,8 @@ class Yapilandirma:
     kurumsal_olay: KurumsalOlayAyarlari = field(default_factory=KurumsalOlayAyarlari)
     kaynaklar: VeriKaynaklari = field(default_factory=VeriKaynaklari)
     maliyet: MaliyetModeli = field(default_factory=MaliyetModeli)
+    bekleme: Bekleme = field(default_factory=Bekleme)
+    devre_kesici: DevreKesici = field(default_factory=DevreKesici)
 
     @property
     def fiyat_sembolleri(self) -> list[str]:
@@ -201,6 +242,12 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
         rebalancing_sapma=float(esik_ham.get("rebalancing_sapma", 0.05)),
         risk_katkisi_ust=float(esik_ham.get("risk_katkisi_ust", 0.25)),
         risk_beta_ust=float(esik_ham.get("risk_beta_ust", 1.50)),
+        # Varsayilanlar tetiklerle (0.05 / 0.25) ayni sekle sahip: sapma bandi
+        # yarilanir, katki bandi 3 puan iner. Tetigi ozellestirip geri donusu
+        # unutan yapilandirma asagidaki dogrulamada patlar - sessizce uyumsuz
+        # bir bant olusmaz.
+        rebalancing_geri_donus=float(esik_ham.get("rebalancing_geri_donus", 0.025)),
+        risk_katkisi_geri_donus=float(esik_ham.get("risk_katkisi_geri_donus", 0.22)),
     )
     for ad, deger in (("rebalancing_sapma", esikler.rebalancing_sapma),
                       ("risk_katkisi_ust", esikler.risk_katkisi_ust)):
@@ -211,6 +258,33 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
             f"esikler.risk_beta_ust 1'den buyuk olmali, {esikler.risk_beta_ust} geldi "
             "(beta 1 = varlik parasi kadar risk tasiyor)"
         )
+    # Geri donus esigi tetigin ALTINDA olmali. Esit veya ustunde olsaydi
+    # histerezis bandi ters doner: latch acildigi anda kapanir (bant yok) ya da
+    # bir daha hic kapanmaz. Ikisi de sessizce yanlis calisir.
+    for tetik_ad, tetik, donus_ad, donus in (
+            ("rebalancing_sapma", esikler.rebalancing_sapma,
+             "rebalancing_geri_donus", esikler.rebalancing_geri_donus),
+            ("risk_katkisi_ust", esikler.risk_katkisi_ust,
+             "risk_katkisi_geri_donus", esikler.risk_katkisi_geri_donus)):
+        if not 0 < donus < tetik:
+            raise ValueError(
+                f"esikler.{donus_ad} 0 ile esikler.{tetik_ad} ({tetik}) arasinda "
+                f"olmali, {donus} geldi. Histerezis bandi bu iki sayidan olusur; "
+                "geri donus tetigin altinda degilse bant yoktur.")
+
+    bekleme_ham = varlik_ham.get("bekleme") or {}
+    bekleme = Bekleme(ayni_sembol_saat=float(bekleme_ham.get("ayni_sembol_saat", 0.0)))
+    if bekleme.ayni_sembol_saat < 0:
+        raise ValueError(
+            f"bekleme.ayni_sembol_saat negatif olamaz, {bekleme.ayni_sembol_saat} geldi")
+
+    kesici_ham = varlik_ham.get("devre_kesici") or {}
+    devre_kesici = DevreKesici(
+        gunluk_maks_islem=int(kesici_ham.get("gunluk_maks_islem", 6)))
+    if devre_kesici.gunluk_maks_islem < 1:
+        raise ValueError(
+            "devre_kesici.gunluk_maks_islem en az 1 olmali, "
+            f"{devre_kesici.gunluk_maks_islem} geldi (0 = sistem hic sinyal uretmez)")
 
     bayat_ham = varlik_ham.get("bayatlik_esikleri") or {}
     bayatlik = BayatlikEsikleri(
@@ -298,6 +372,8 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
         kurumsal_olay=kurumsal_olay,
         kaynaklar=kaynaklar,
         maliyet=maliyet,
+        bekleme=bekleme,
+        devre_kesici=devre_kesici,
     )
 
 

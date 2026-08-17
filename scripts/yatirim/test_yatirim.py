@@ -26,6 +26,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import (
     Ayarlar,
     BayatlikEsikleri,
+    Bekleme,
+    DevreKesici,
     Esikler,
     KurumsalOlayAyarlari,
     Varlik,
@@ -62,7 +64,14 @@ from maliyet import (
     modeli_kur,
     reel_getiri,
 )
-from notify import _islem_satirlari, _kacis, env_oku, ozet_mesaji
+from notify import (
+    TelegramHatasi,
+    _islem_satirlari,
+    _kacis,
+    env_oku,
+    idempotent_gonder,
+    ozet_mesaji,
+)
 from portfolio import (
     Portfoy,
     PozisyonDegeri,
@@ -71,7 +80,7 @@ from portfolio import (
     portfoyu_ledgerdan_hesapla,
     sinif_sapmalari,
 )
-from report import SINYAL_YOK, _dagilim_bolumu, _risk_bolumu
+from report import _dagilim_bolumu, _devre_kesici_bolumu, _risk_bolumu
 from risk import (
     RiskRaporu,
     VarlikRiski,
@@ -80,9 +89,43 @@ from risk import (
     riski_hesapla,
     yillik_periyot_sayisi,
 )
+from sinyal import (
+    ARTIR,
+    AZALT,
+    BEKLEME,
+    DEVRE_KESICI,
+    EKSIK_MALIYET,
+    KIS,
+    SEMBOL,
+    SINIF,
+    SinyalDurumu,
+    SinyalGecmisi,
+    gecmisi_oku,
+    gecmisi_yaz,
+    gonderildi_yaz,
+    gonderilen_anahtarlar,
+    islem_anahtari,
+    kararlari_uret,
+    ozet_anahtari,
+)
 
 AYARLAR = Ayarlar(kur_sembolu="USDTRY=X", gecmis_gun=365, islem_gunu_yil=252)
-ESIKLER = Esikler(rebalancing_sapma=0.03, risk_katkisi_ust=0.20)
+ESIKLER = Esikler(rebalancing_sapma=0.03, risk_katkisi_ust=0.20,
+                  rebalancing_geri_donus=0.015, risk_katkisi_geri_donus=0.17)
+BEKLEME_YOK = Bekleme(ayni_sembol_saat=0.0)
+BEKLEME_20 = Bekleme(ayni_sembol_saat=20.0)
+KESICI = DevreKesici(gunluk_maks_islem=6)
+BUGUN = "2026-08-17"
+
+
+def karar_ver(sapmalar=(), risk=None, esikler=ESIKLER, bekleme=BEKLEME_YOK,
+              kesici=KESICI, gecmis=None, maliyet=None, simdi=None):
+    """Testlerde karar uretmenin kisa yolu."""
+    return kararlari_uret(
+        list(sapmalar),
+        risk if risk is not None else RiskRaporu(0.0, 0.0, [], pd.DataFrame(), 0, []),
+        esikler, bekleme, kesici, gecmis or SinyalGecmisi(), BUGUN, maliyet,
+        simdi or datetime(2026, 8, 17, 16, 0, tzinfo=timezone.utc))
 
 
 def gecici_yaz(icerik: str, ad: str = "test.yaml") -> Path:
@@ -599,7 +642,8 @@ class BildirimTesti(unittest.TestCase):
         sapmalar = sinif_sapmalari(portfoy, yapilandirma.hedef_dagilim)
         rapor = riski_hesapla(yapilandirma, fiyatlar, portfoy)
 
-        mesaj = ozet_mesaji(portfoy, sapmalar, rapor, durum, "Test")
+        mesaj = ozet_mesaji(portfoy, sapmalar, rapor,
+                            karar_ver(sapmalar, rapor), durum, "Test")
         self.assertIn("Test", mesaj)
         self.assertNotIn("<script", mesaj.lower())
 
@@ -1319,26 +1363,32 @@ class SinyalBastirmaTesti(unittest.TestCase):
     def setUp(self):
         self.model = modeli_kur(MaliyetModeliTesti.HAM, MaliyetModeliTesti.SINIFLAR)
 
+    def _risk(self):
+        return RiskRaporu(
+            portfoy_volatilitesi=0.3, portfoy_max_drawdown=0.1,
+            varlik_riskleri=[VarlikRiski("QQQ", 0.4, 0.2, 0.35, 0.15)],
+            korelasyon=pd.DataFrame(), gozlem_sayisi=100, yetersiz_veri=[])
+
     def test_rebalancing_tavsiyesi_bastirilir(self):
         sapmalar = [SinifSapmasi("nasdaq", 0.40, 0.25),
                     SinifSapmasi("bist", 0.10, 0.30)]
-        metin = "\n".join(_dagilim_bolumu(sapmalar, 20_000, 0.03, [], self.model))
-        self.assertIn(SINYAL_YOK, metin)
+        karar = karar_ver(sapmalar, maliyet=self.model)
+        metin = "\n".join(_dagilim_bolumu(sapmalar, 20_000, 0.03, [], karar))
+        self.assertIn(EKSIK_MALIYET, metin)
         self.assertNotIn("azalt", metin)        # nasdaq blokluydu
         self.assertIn("artir", metin)           # bist acik
 
     def test_maliyet_modelsiz_davranis_degismez(self):
         sapmalar = [SinifSapmasi("nasdaq", 0.40, 0.25)]
-        metin = "\n".join(_dagilim_bolumu(sapmalar, 20_000, 0.03, []))
+        metin = "\n".join(
+            _dagilim_bolumu(sapmalar, 20_000, 0.03, [], karar_ver(sapmalar)))
         self.assertIn("azalt", metin)
 
     def test_kisma_sinyali_bastirilir(self):
-        risk = RiskRaporu(
-            portfoy_volatilitesi=0.3, portfoy_max_drawdown=0.1,
-            varlik_riskleri=[VarlikRiski("QQQ", 0.4, 0.2, 0.35, 0.15)],
-            korelasyon=pd.DataFrame(), gozlem_sayisi=100, yetersiz_veri=[])
-        metin = "\n".join(_risk_bolumu(risk, {}, ESIKLER, self.model))
-        self.assertIn(SINYAL_YOK, metin)
+        risk = self._risk()
+        karar = karar_ver(risk=risk, maliyet=self.model)
+        metin = "\n".join(_risk_bolumu(risk, {}, ESIKLER, karar))
+        self.assertIn(EKSIK_MALIYET, metin)
         self.assertNotIn("**Kisilmali:**", metin)
 
     def test_telegram_da_bastirir(self):
@@ -1347,18 +1397,17 @@ class SinyalBastirmaTesti(unittest.TestCase):
         portfoy = Portfoy(
             pozisyonlar=[PozisyonDegeri("QQQ", "QQQ", "nasdaq", 1, 8000, 8000)],
             nakit_try=2000.0, fiyatlanamayan=[])
-        risk = RiskRaporu(
-            portfoy_volatilitesi=0.3, portfoy_max_drawdown=0.1,
-            varlik_riskleri=[VarlikRiski("QQQ", 0.4, 0.2, 0.35, 0.15)],
-            korelasyon=pd.DataFrame(), gozlem_sayisi=100, yetersiz_veri=[])
+        risk = self._risk()
         sapmalar = [SinifSapmasi("nasdaq", 0.80, 0.25)]
 
-        acik = ozet_mesaji(portfoy, sapmalar, risk, None, "Test", None, ESIKLER)
+        acik = ozet_mesaji(portfoy, sapmalar, risk, karar_ver(sapmalar, risk),
+                           None, "Test")
         self.assertIn("Kisilmali", acik)
         self.assertIn("Rebalancing", acik)
 
-        kapali = ozet_mesaji(portfoy, sapmalar, risk, None, "Test", None,
-                             ESIKLER, None, self.model)
+        kapali = ozet_mesaji(portfoy, sapmalar, risk,
+                             karar_ver(sapmalar, risk, maliyet=self.model),
+                             None, "Test", None, None, self.model)
         self.assertNotIn("Kisilmali", kapali)
         self.assertNotIn("Rebalancing", kapali)
         self.assertIn("Eksik maliyet kalemi", kapali)
@@ -1406,6 +1455,302 @@ class TcmbOranTesti(unittest.TestCase):
     def test_olmayan_seri_none_doner(self):
         self.assertIsNone(tcmb_yuzde_orani(
             self._kayitlar(), "TP.YOK", 21, date(2026, 8, 17)))
+
+
+def _riskler(*varliklar: VarlikRiski) -> RiskRaporu:
+    return RiskRaporu(portfoy_volatilitesi=0.3, portfoy_max_drawdown=-0.1,
+                      varlik_riskleri=list(varliklar), korelasyon=pd.DataFrame(),
+                      gozlem_sayisi=100, yetersiz_veri=[])
+
+
+class HisterezisTesti(unittest.TestCase):
+    """Sinyal tetikte acilir, geri donuse inmeden kapanmaz."""
+
+    def _sapma(self, sapma: float) -> SinifSapmasi:
+        # SinifSapmasi.sapma = guncel - hedef
+        return SinifSapmasi("bist", 0.30 + sapma, 0.30)
+
+    def test_histerezis_salinim(self):
+        """Esik etrafinda salinan deger her kosuda sinyal URETMEMELI.
+
+        Tek esikli kural 2.9 -> 3.1 -> 2.9 puan salinimda ac/kapa/ac yapardi;
+        bant sayesinde sinyal 1.5'in altina inene kadar acik KALIR ve
+        arada ters islem cikmaz.
+        """
+        gecmis = SinyalGecmisi()
+        gorulen = []
+        for puan in (0.029, 0.031, 0.029, 0.020, 0.016, 0.014, 0.020):
+            karar = karar_ver([self._sapma(puan)], gecmis=gecmis)
+            gorulen.append(karar.acik_mi(SINIF, "bist"))
+            gecmis = karar.gecmis
+        #                2.9    3.1   2.9   2.0   1.6   1.4    2.0
+        self.assertEqual(gorulen,
+                         [False, True, True, True, True, False, False])
+
+    def test_geri_donus_altinda_latch_kapanir(self):
+        acik = karar_ver([self._sapma(0.04)]).gecmis
+        self.assertTrue(acik.durum(SINIF, "bist").acik)
+        kapali = karar_ver([self._sapma(0.010)], gecmis=acik).gecmis
+        self.assertFalse(kapali.durum(SINIF, "bist").acik)
+
+    def test_ters_yon_tetigi_yeniden_asmali(self):
+        """+2 puandan -2 puana gecen sinif ters islem onerisi URETMEMELI.
+
+        Geri donus esigi (1.5) yalnizca AYNI yondeki sinyali ayakta tutar.
+        Ters yon icin tetigi (3 puan) yeniden asmak sart - yoksa bant, hic
+        tetiklenmemis bir ters islemi mesrulastirir.
+        """
+        acik = karar_ver([self._sapma(0.04)])          # +4 puan -> azalt
+        self.assertEqual(acik.sonuc(SINIF, "bist").yon, AZALT)
+
+        ters = karar_ver([self._sapma(-0.02)], gecmis=acik.gecmis)
+        self.assertFalse(ters.acik_mi(SINIF, "bist"))
+
+        buyuk_ters = karar_ver([self._sapma(-0.04)], gecmis=acik.gecmis)
+        self.assertTrue(buyuk_ters.acik_mi(SINIF, "bist"))
+        self.assertEqual(buyuk_ters.sonuc(SINIF, "bist").yon, ARTIR)
+
+    def test_kisma_bandi_katkiya_uygulanir(self):
+        """Katki %20 tetigini asip %18'e dustugunde sinyal acik kalir."""
+        yuksek = _riskler(VarlikRiski("A", 0.4, -0.2, 0.22, 0.10))   # beta 2.20
+        orta = _riskler(VarlikRiski("A", 0.4, -0.2, 0.18, 0.10))     # beta 1.80
+        dusuk = _riskler(VarlikRiski("A", 0.4, -0.2, 0.16, 0.10))    # beta 1.60
+
+        self.assertFalse(karar_ver(risk=orta).acik_mi(SEMBOL, "A"))
+        acik = karar_ver(risk=yuksek)
+        self.assertTrue(acik.acik_mi(SEMBOL, "A"))
+        surdu = karar_ver(risk=orta, gecmis=acik.gecmis)
+        self.assertTrue(surdu.acik_mi(SEMBOL, "A"))
+        self.assertFalse(
+            karar_ver(risk=dusuk, gecmis=surdu.gecmis).acik_mi(SEMBOL, "A"))
+
+    def test_gecersiz_bant_reddedilir(self):
+        """Geri donus tetigin ustundeyse bant yoktur - sessiz kalmamali."""
+        varliklar = gecici_yaz(
+            "ayarlar: {kur_sembolu: 'USDTRY=X', gecmis_gun: 365, islem_gunu_yil: 252}\n"
+            "esikler: {rebalancing_sapma: 0.03, rebalancing_geri_donus: 0.05,\n"
+            "          risk_katkisi_ust: 0.2, risk_katkisi_geri_donus: 0.17}\n"
+            "hedef_dagilim: {bist: 1.0}\n"
+            "varliklar:\n  - {sembol: A.IS, ad: A, sinif: bist, kur: TRY}\n",
+            ad="varliklar.yaml")
+        with self.assertRaisesRegex(ValueError, "rebalancing_geri_donus"):
+            yapilandirmayi_oku(
+                varliklar_dosyasi=varliklar,
+                portfoy_dosyasi=gecici_yaz("nakit_try: 0\npozisyonlar: []\n",
+                                           ad="portfoy.yaml"))
+
+
+class BeklemeSuresiTesti(unittest.TestCase):
+    """Ayni sembolde asgari sure gecmeden ikinci sinyal cikmaz."""
+
+    ZAMAN = datetime(2026, 8, 17, 16, 0, tzinfo=timezone.utc)
+
+    def _risk(self):
+        return _riskler(VarlikRiski("A", 0.4, -0.2, 0.30, 0.10))
+
+    def test_bekleme_suresi_24saat(self):
+        """24 saatlik pencerede ikinci sinyal engellenir, sonrasinda cikar."""
+        bekleme = Bekleme(ayni_sembol_saat=24.0)
+        ilk = karar_ver(risk=self._risk(), bekleme=bekleme, simdi=self.ZAMAN)
+        self.assertTrue(ilk.acik_mi(SEMBOL, "A"))
+
+        erken = karar_ver(risk=self._risk(), bekleme=bekleme,
+                          gecmis=ilk.gecmis, simdi=self.ZAMAN + timedelta(hours=5))
+        self.assertFalse(erken.acik_mi(SEMBOL, "A"))
+        self.assertEqual(erken.sonuc(SEMBOL, "A").sebep, BEKLEME)
+        self.assertAlmostEqual(erken.sonuc(SEMBOL, "A").kalan_saat, 19.0)
+
+        gec = karar_ver(risk=self._risk(), bekleme=bekleme,
+                        gecmis=ilk.gecmis, simdi=self.ZAMAN + timedelta(hours=25))
+        self.assertTrue(gec.acik_mi(SEMBOL, "A"))
+
+    def test_24_saat_gunluk_kadansla_carpisir(self):
+        """Yapilandirmadaki 20 saatin gerekcesi.
+
+        Actions gunde bir kez calisiyor -> iki kosu arasi tam 24.0 saat, cron
+        gecikmesiyle bazen 23.7 bazen 24.3. Esik 24 olsaydi gunlerin yaklasik
+        yarisinda TUM sembol sinyalleri sessizce dusurulurdu. 20 saat gunluk
+        kadansta hicbir seyi engellemez, kadans saatlige cikinca devreye girer.
+        """
+        ilk = karar_ver(risk=self._risk(), bekleme=Bekleme(24.0), simdi=self.ZAMAN)
+        gec = self.ZAMAN + timedelta(hours=23, minutes=42)   # cron gecikmesi
+        self.assertFalse(
+            karar_ver(risk=self._risk(), bekleme=Bekleme(24.0),
+                      gecmis=ilk.gecmis, simdi=gec).acik_mi(SEMBOL, "A"))
+        self.assertTrue(
+            karar_ver(risk=self._risk(), bekleme=BEKLEME_20,
+                      gecmis=ilk.gecmis, simdi=gec).acik_mi(SEMBOL, "A"))
+
+    def test_bastirilan_sinyal_saati_ilerletmez(self):
+        """Bastirilan sinyal saati ilerletseydi bekleme kendini uzatir ve
+        sembol bir daha ASLA sinyal uretmezdi."""
+        ilk = karar_ver(risk=self._risk(), bekleme=BEKLEME_20, simdi=self.ZAMAN)
+        damga = ilk.gecmis.durum(SEMBOL, "A").son_sinyal
+
+        erken = karar_ver(risk=self._risk(), bekleme=BEKLEME_20,
+                          gecmis=ilk.gecmis, simdi=self.ZAMAN + timedelta(hours=5))
+        self.assertEqual(erken.gecmis.durum(SEMBOL, "A").son_sinyal, damga)
+
+    def test_rapor_bekleme_etiketini_basar(self):
+        """Bos hucre "dengede" der; okuyan esigin asilmadigini sanar."""
+        ilk = karar_ver(risk=self._risk(), bekleme=BEKLEME_20, simdi=self.ZAMAN)
+        erken = karar_ver(risk=self._risk(), bekleme=BEKLEME_20,
+                          gecmis=ilk.gecmis, simdi=self.ZAMAN + timedelta(hours=5))
+        metin = "\n".join(_risk_bolumu(self._risk(), {}, ESIKLER, erken))
+        self.assertIn("BEKLEME (15 saat)", metin)
+
+    def test_bekleme_kapaliyken_engel_yok(self):
+        ilk = karar_ver(risk=self._risk(), simdi=self.ZAMAN)
+        ikinci = karar_ver(risk=self._risk(), gecmis=ilk.gecmis,
+                           simdi=self.ZAMAN + timedelta(minutes=1))
+        self.assertTrue(ikinci.acik_mi(SEMBOL, "A"))
+
+
+class DevreKesiciTesti(unittest.TestCase):
+    """Gunluk tavan asilirsa HICBIR sinyal uretilmez."""
+
+    def _riskler_n(self, adet: int) -> RiskRaporu:
+        return _riskler(*[VarlikRiski(f"S{i}", 0.4, -0.2, 0.30, 0.10)
+                          for i in range(adet)])
+
+    def test_devre_kesici_6_islem(self):
+        """6 sinyal gecer, 7. tumunu durdurur - tavan ASILINCA kesilir."""
+        alti = karar_ver(risk=self._riskler_n(6))
+        self.assertFalse(alti.devre_kesildi)
+        self.assertEqual(len(alti.sinyaller()), 6)
+
+        yedi = karar_ver(risk=self._riskler_n(7))
+        self.assertTrue(yedi.devre_kesildi)
+        self.assertEqual(yedi.sinyaller(), [])
+        self.assertEqual(yedi.gunluk_sayi, 7)
+        self.assertEqual(yedi.sonuc(SEMBOL, "S0").sebep, DEVRE_KESICI)
+
+    def test_gun_icinde_birikir(self):
+        """Siklik artinca tavan tek kosuya degil GUNE uygulanmali."""
+        ilk = karar_ver(risk=self._riskler_n(4))
+        self.assertFalse(ilk.devre_kesildi)
+        self.assertEqual(ilk.gecmis.gunluk_sayi, 4)
+
+        ikinci = karar_ver(risk=self._riskler_n(4), gecmis=ilk.gecmis)
+        self.assertTrue(ikinci.devre_kesildi)
+        self.assertEqual(ikinci.gunluk_sayi, 8)
+
+    def test_sayac_gun_degisince_sifirlanir(self):
+        dun = SinyalGecmisi(gun="2026-08-16", gunluk_sayi=99)
+        karar = karar_ver(risk=self._riskler_n(2), gecmis=dun)
+        self.assertFalse(karar.devre_kesildi)
+        self.assertEqual(karar.gunluk_sayi, 2)
+
+    def test_kesilen_gunde_sayac_ilerlemez(self):
+        """Sayac ilerleseydi devre bir daha asla kapanmazdi."""
+        kesik = karar_ver(risk=self._riskler_n(7))
+        self.assertEqual(kesik.gecmis.gunluk_sayi, 0)
+
+    def test_rapor_ve_mesaj_uyariyi_basar(self):
+        risk = self._riskler_n(7)
+        karar = karar_ver(risk=risk)
+        rapor = "\n".join(_risk_bolumu(risk, {}, ESIKLER, karar))
+        self.assertIn(DEVRE_KESICI, rapor)
+        self.assertNotIn("**Kisilmali:**", rapor)
+
+        # Uyari raporun EN USTUNDE olmali - asagida kalirsa kimse gormez.
+        ust = "\n".join(_devre_kesici_bolumu(karar))
+        self.assertIn("ANORMAL ISLEM YOGUNLUGU", ust)
+        self.assertIn("7 islem sinyali", ust)
+        self.assertEqual(_devre_kesici_bolumu(karar_ver(risk=self._riskler_n(2))), [])
+
+        portfoy = Portfoy(pozisyonlar=[], nakit_try=1000.0, fiyatlanamayan=[])
+        mesaj = ozet_mesaji(portfoy, [], risk, karar, None, "Test")
+        self.assertIn("ANORMAL ISLEM YOGUNLUGU", mesaj)
+        self.assertNotIn("Esik asilmadi", mesaj)
+
+
+class IdempotencyTesti(unittest.TestCase):
+    """Ayni mesaj iki kere gonderilmez."""
+
+    def setUp(self):
+        self.log = Path(tempfile.mkdtemp()) / "gonderilen.log"
+        self.zaman = datetime(2026, 8, 17, 16, 30, tzinfo=timezone.utc)
+
+    def test_idempotency_ayni_mesaj_iki_kez(self):
+        cagrilar = []
+        with unittest.mock.patch("notify.mesaj_gonder",
+                                 side_effect=lambda m, e=None: cagrilar.append(m)):
+            ilk = idempotent_gonder("ozet", ozet_anahtari(BUGUN), [], {},
+                                    self.log, self.zaman)
+            ikinci = idempotent_gonder("ozet", ozet_anahtari(BUGUN), [], {},
+                                       self.log, self.zaman + timedelta(hours=1))
+        self.assertTrue(ilk)
+        self.assertFalse(ikinci)
+        self.assertEqual(len(cagrilar), 1)
+
+    def test_ertesi_gun_yeniden_gonderilir(self):
+        gonderildi_yaz([ozet_anahtari(BUGUN)], self.zaman, self.log)
+        with unittest.mock.patch("notify.mesaj_gonder"):
+            self.assertTrue(idempotent_gonder(
+                "ozet", ozet_anahtari("2026-08-18"), [], {}, self.log, self.zaman))
+
+    def test_gonderim_basarisizsa_log_yazilmaz(self):
+        """Once yazip sonra gonderseydik basarisiz mesaj bir daha denenmezdi."""
+        with unittest.mock.patch("notify.mesaj_gonder",
+                                 side_effect=TelegramHatasi("ag yok")):
+            with self.assertRaises(TelegramHatasi):
+                idempotent_gonder("ozet", ozet_anahtari(BUGUN), [], {},
+                                  self.log, self.zaman)
+        self.assertEqual(gonderilen_anahtarlar(self.log), set())
+
+    def test_islem_anahtari_saat_icerir(self):
+        """Siklik artinca ayni gun ayni sembolde iki farkli sinyal olabilir."""
+        sabah = islem_anahtari("A.IS", KIS,
+                               datetime(2026, 8, 17, 9, 5, tzinfo=timezone.utc))
+        aksam = islem_anahtari("A.IS", KIS,
+                               datetime(2026, 8, 17, 17, 5, tzinfo=timezone.utc))
+        self.assertEqual(sabah, "islem:A.IS:2026-08-17:09:kis")
+        self.assertNotEqual(sabah, aksam)
+
+    def test_ek_anahtarlar_kaydedilir(self):
+        with unittest.mock.patch("notify.mesaj_gonder"):
+            idempotent_gonder("ozet", ozet_anahtari(BUGUN),
+                              ["islem:A.IS:2026-08-17:16:kis"], {}, self.log,
+                              self.zaman)
+        self.assertEqual(
+            gonderilen_anahtarlar(self.log),
+            {ozet_anahtari(BUGUN), "islem:A.IS:2026-08-17:16:kis"})
+
+
+class SinyalDurumuDosyasiTesti(unittest.TestCase):
+    """Latch hafizasi diskte kalici olmali - yoksa histerezis calismaz."""
+
+    def setUp(self):
+        self.dosya = Path(tempfile.mkdtemp()) / "sinyal-durumu.yaml"
+
+    def test_yazilip_okunan_durum_ayni(self):
+        gecmis = SinyalGecmisi(
+            siniflar={"bist": SinyalDurumu(True, AZALT, "2026-08-17T16:00:00+00:00")},
+            semboller={"A.IS": SinyalDurumu(True, KIS, "2026-08-17T16:00:00+00:00")},
+            gun=BUGUN, gunluk_sayi=2)
+        gecmisi_yaz(gecmis, self.dosya)
+        okunan = gecmisi_oku(self.dosya)
+        self.assertEqual(okunan.durum(SINIF, "bist"), gecmis.siniflar["bist"])
+        self.assertEqual(okunan.durum(SEMBOL, "A.IS"), gecmis.semboller["A.IS"])
+        self.assertEqual(okunan.gunluk_sayi, 2)
+
+    def test_dosya_yoksa_bos_gecmis(self):
+        bos = gecmisi_oku(self.dosya)
+        self.assertFalse(bos.durum(SINIF, "bist").acik)
+        self.assertEqual(bos.bugunku_sayi(BUGUN), 0)
+
+    def test_bozuk_zaman_damgasi_atilir_ve_uyarir(self):
+        """Sessizce yok saymak beklemeyi ya sonsuza kilitler ya devre disi
+        birakir; ikisi de gorunmez olmamali."""
+        self.dosya.write_text(
+            "gun: '2026-08-17'\ngunluk_sayi: 1\nsiniflar: {}\n"
+            "semboller:\n  A.IS: {acik: true, yon: kis, son_sinyal: 'dun'}\n",
+            encoding="utf-8")
+        okunan = gecmisi_oku(self.dosya)
+        self.assertEqual(okunan.durum(SEMBOL, "A.IS").son_sinyal, "")
+        self.assertTrue(okunan.durum(SEMBOL, "A.IS").acik)
+        self.assertTrue(any("son_sinyal" in u for u in okunan.uyarilar))
 
 
 if __name__ == "__main__":

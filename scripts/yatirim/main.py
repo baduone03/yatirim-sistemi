@@ -28,6 +28,7 @@ from notify import (  # noqa: E402
     TelegramHatasi,
     env_oku,
     hurdle_eksik_mesaji,
+    idempotent_gonder,
     mesaj_gonder,
     ozet_mesaji,
     ucgenleme_durdurma_mesaji,
@@ -39,6 +40,14 @@ from portfolio import (  # noqa: E402
 )
 from report import OZET_BASLANGIC, OZET_BITIS, rapor_olustur, sistem_ozeti  # noqa: E402
 from risk import riski_hesapla  # noqa: E402
+from sinyal import (  # noqa: E402
+    gecmisi_oku,
+    gecmisi_yaz,
+    karar_anahtarlari,
+    kararlari_uret,
+    ozet_anahtari,
+    simdi_utc,
+)
 
 SISTEM_DOSYASI = PROJE_DIZINI / "00-sistem.md"
 SIM_DIZINI = PROJE_DIZINI / "simulasyon"
@@ -145,30 +154,52 @@ def main() -> int:
     sapmalar = sinif_sapmalari(portfoy, yapilandirma.hedef_dagilim)
     risk = riski_hesapla(yapilandirma, fiyatlar, portfoy)
 
+    # Sinyal karari TEK noktada verilir; rapor ve Telegram yalnizca render eder.
+    simdi = simdi_utc()
+    karar = kararlari_uret(sapmalar, risk, yapilandirma.esikler,
+                           yapilandirma.bekleme, yapilandirma.devre_kesici,
+                           gecmisi_oku(), rapor_adi, maliyet, simdi)
+    for uyari in karar.uyarilar:
+        print(f"UYARI - {uyari}")
+
     rapor_dizini = SIM_RAPOR_DIZINI if durum else RAPOR_DIZINI
     rapor_dizini.mkdir(parents=True, exist_ok=True)
     rapor_dosyasi = rapor_dizini / f"{rapor_adi}.md"
     rapor_dosyasi.write_text(
-        rapor_olustur(yapilandirma, fiyatlar, portfoy, sapmalar, risk, durum,
-                      maliyet),
+        rapor_olustur(yapilandirma, fiyatlar, portfoy, sapmalar, risk, karar,
+                      durum, maliyet),
         encoding="utf-8",
     )
+    # Latch/bekleme/sayac hafizasi rapor yazildiktan SONRA kalicilasir: rapor
+    # uretilemezse sinyal "uretilmis" sayilmamali.
+    gecmisi_yaz(karar.gecmis)
 
     if not durum:
         _sistem_ozetini_guncelle(sistem_ozeti(portfoy, risk, rapor_adi))
 
     print(f"Rapor yazildi: {rapor_dosyasi}")
+    if karar.devre_kesildi:
+        print(f"UYARI - devre kesici: {karar.gunluk_sayi} sinyal olustu "
+              f"(tavan {karar.gunluk_maks}), sinyal uretimi durduruldu.")
     if fiyatlar.eksik_semboller:
         print(f"UYARI - fiyat gelmeyen sembol: {', '.join(fiyatlar.eksik_semboller)}")
     for sembol, gerekce in sorted(fiyatlar.kurumsal_olay_supheleri.items()):
         print(f"UYARI - olasi kurumsal olay, degerleme durduruldu: {sembol} ({gerekce})")
 
     if argumanlar.telegram:
+        anahtar = ozet_anahtari(rapor_adi)
         try:
-            mesaj_gonder(ozet_mesaji(portfoy, sapmalar, risk, durum, baslik,
-                                     fiyatlar, yapilandirma.esikler,
-                                     yapilandirma.bayatlik, maliyet), ortam)
-            print("Telegram ozeti gonderildi.")
+            gonderildi = idempotent_gonder(
+                ozet_mesaji(portfoy, sapmalar, risk, karar, durum, baslik,
+                            fiyatlar, yapilandirma.bayatlik, maliyet),
+                anahtar, karar_anahtarlari(karar, simdi), ortam, simdi=simdi)
+            if gonderildi:
+                print("Telegram ozeti gonderildi.")
+            else:
+                # Sessizce atlamak yanlis olur: kosuyu elle tekrarlayan kisi
+                # mesaji bekler ve gelmeyince sistemi bozuk sanir.
+                print(f"Telegram ozeti ATLANDI - '{anahtar}' zaten gonderilmis.")
+                print("  Yeniden gondermek icin bu satiri gonderilen.log'dan sil.")
         except TelegramHatasi as hata:
             # Rapor diske yazildi ve GECERLI - kaybolmadi.
             # Yine de exit 1 doneriyoruz: bu sistemin cikti kanali Telegram,

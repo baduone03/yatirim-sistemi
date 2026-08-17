@@ -17,10 +17,19 @@ ayarlar:
 
 # Karar esikleri. Simulasyon modunda AGRESIF ayarlandi.
 # Gercek parayla calisirken komisyon maliyeti nedeniyle gevsetilmeli.
+# Karar esikleri. HEPSI KESIR (0.03 = 3 puan, 0.20 = %20).
+#
+# Dosyanin tamami kesir kullanir; tek bir alani "3" veya "20" diye yazmak
+# esigin 100 katina cikmasi demektir ve hicbir hata vermez.
+#
+# Her esik bir BANT: sinyal tetikte acilir, geri donuse inmeden kapanmaz.
+# Tek esikli kural, deger esigin etrafinda salinirken her kosuda ters sinyal
+# uretir; sen komisyon odersin, pozisyon ayni kalir.
 esikler:
-  # Bir varlik sinifi hedefinden bu kadar SAPARSA rebalancing uyarisi cikar.
+  # Rebalancing sapmasi. Tetik 3 puan, geri donus 1.5 puan.
   # 0.05 (muhafazakar) -> 0.03 (agresif): daha sik duzeltme, daha cok komisyon.
   rebalancing_sapma: 0.03
+  rebalancing_geri_donus: 0.015
 
   # Kisma karari IKI kosulun BIRDEN saglanmasini ister:
   #   1) risk katkisi tavani asmali
@@ -29,8 +38,37 @@ esikler:
   # Tek basina katki yetmez: 6 pozisyonda ortalama katki %16.7'dir, birilerinin
   # %20'yi asmasi matematiksel zorunluluk. Ham katkiyi kovalamak, parasindan
   # AZ risk tasiyan verimli varliklari (ornegin QQQ, beta 0.85) sattirir.
+  #
+  # Bant yalnizca katkiya uygulanir: beta = katki/agirlik oldugu icin katki
+  # bandi betanin salinimini da sonumler. Beta tavani her iki yonde de duz esik.
   risk_katkisi_ust: 0.20
+  risk_katkisi_geri_donus: 0.17
   risk_beta_ust: 1.50
+
+# Ayni sembolde iki sinyal arasindaki asgari sure.
+#
+# Sure son URETILEN sinyalden olculur (sinyal-durumu.yaml), islem defterinden
+# DEGIL: defter yalnizca tarih tutar, "24 saat" gun cozunurlugunde tanimsizdir.
+#
+# NEDEN 24 DEGIL 20: rapor su an gunde bir kez calisiyor (Actions 16:00 UTC).
+# Iki kosu arasi tam 24.0 saat, ustelik Actions cron'u 5-30 dakika kayabiliyor.
+# Esik 24 olsaydi kosular arasi sure bazen 23.7 bazen 24.3 saat cikar ve
+# gunlerin yaklasik yarisinda TUM sembol sinyalleri sessizce dusurulurdu.
+# 20 saat gunluk kadansta hicbir seyi engellemez (dogru davranis: gunde bir
+# kosuda ayni sembol churn'u zaten olamaz) ama kadans saatlige cikarildigi an
+# devreye girer. Kadansi artirirken bu degeri de 24'e cikar.
+bekleme:
+  ayni_sembol_saat: 20
+
+# Gunluk sinyal tavani. Asilirsa o gun HICBIR sinyal uretilmez ve Telegram'a
+# "ANORMAL ISLEM YOGUNLUGU" uyarisi gider.
+#
+# Amac tek bir bozuk girdinin (yanlis fiyat, kacirilan bedelsiz, kur hatasi)
+# toplu islem onerisine donusmesini engellemek. 11 varlikli bir portfoyde
+# gunde 6 sinyal zaten portfoyun yarisini elden gecirmek demek; 6'yi asan
+# sayi tavsiye degil, ariza belirtisidir.
+devre_kesici:
+  gunluk_maks_islem: 6
 
 # Bayatlik esikleri - varlik sinifi bazinda.
 #
