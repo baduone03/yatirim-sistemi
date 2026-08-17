@@ -21,7 +21,7 @@ $tarih = Get-Date -Format "yyyy-MM-dd"
 $hedef = Join-Path $yedek $tarih
 New-Item -ItemType Directory -Path $hedef -Force | Out-Null
 foreach ($k in @("01-inbox", "02-sources", "03-wiki", "05-daily", "06-archive",
-                 "07-dogrulanmis", "memory.md")) {
+                 "07-dogrulanmis", "memory.md", ".claude")) {
     $kaynak = Join-Path $vault $k
     if (Test-Path $kaynak) { Copy-Item $kaynak $hedef -Recurse -Force }
 }
