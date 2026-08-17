@@ -46,19 +46,34 @@ from kaynaklar import (
     UcgenlemeAyarlari,
     UcgenlemeSonucu,
     btcturk_fiyatlari,
+    tcmb_kayitlari,
+    tcmb_yuzde_orani,
     ucgenle,
 )
 from kurumsal_olay import KurumsalOlay, olaylari_oku
 from ledger import durumu_hesapla, islemleri_oku
+from maliyet import (
+    IslemProfili,
+    MaliyetDagilimi,
+    MaliyetKalemi,
+    MaliyetModeli,
+    asiri_getiri,
+    donem_orani,
+    modeli_kur,
+    reel_getiri,
+)
 from notify import _islem_satirlari, _kacis, env_oku, ozet_mesaji
 from portfolio import (
     Portfoy,
     PozisyonDegeri,
+    SinifSapmasi,
     portfoyu_hesapla,
     portfoyu_ledgerdan_hesapla,
     sinif_sapmalari,
 )
+from report import SINYAL_YOK, _dagilim_bolumu, _risk_bolumu
 from risk import (
+    RiskRaporu,
     VarlikRiski,
     _max_drawdown,
     ortak_getiriler,
@@ -79,7 +94,8 @@ def gecici_yaz(icerik: str, ad: str = "test.yaml") -> Path:
 def defter_durumu(islemler: str, nakit: float = 10000.0, komisyon: float = 0.0):
     icerik = (f"baslangic_nakit_try: {nakit}\nkomisyon_orani: {komisyon}\n"
               f"islemler:\n{islemler}")
-    return durumu_hesapla(*islemleri_oku(gecici_yaz(icerik)))
+    kayitlar, baslangic, oran, _ = islemleri_oku(gecici_yaz(icerik))
+    return durumu_hesapla(kayitlar, baslangic, oran)
 
 
 class LedgerTesti(unittest.TestCase):
@@ -629,7 +645,7 @@ class KurumsalOlayDefteriTesti(unittest.TestCase):
 
     def _durum(self, islemler: str, olaylar: list[KurumsalOlay]):
         icerik = f"baslangic_nakit_try: 10000\nkomisyon_orani: 0\nislemler:\n{islemler}"
-        kayitlar, nakit, komisyon = islemleri_oku(gecici_yaz(icerik))
+        kayitlar, nakit, komisyon, _ = islemleri_oku(gecici_yaz(icerik))
         return durumu_hesapla(kayitlar, nakit, komisyon, olaylar)
 
     def test_bedelsiz_efektif_adet(self):
@@ -1072,6 +1088,315 @@ class TcmbKurTesti(unittest.TestCase):
             getir=self._getir_fabrikasi("17-08-2026"),
             simdi=datetime(2026, 8, 17, 12, tzinfo=timezone.utc), bugun=self.BUGUN)
         self.assertEqual(self._kur_kaynagi(sonuc), "yahoo")
+
+
+class MaliyetModeliTesti(unittest.TestCase):
+    """Bilinmeyen maliyet SIFIR SAYILMAZ; eksik kalem sinyali bastirir."""
+
+    HAM = {
+        "maliyet": {
+            "sinif_profili": {"bist": "bist", "nasdaq": "abd"},
+            "islem": {
+                "bist": {"komisyon_tip": "oransal", "komisyon_oran": 0.0015,
+                         "kur_cevrimi": False, "menkul_spread": 0.001},
+                "abd": {"komisyon_tip": "sabit", "komisyon_usd": 1.5,
+                        "kur_cevrimi": True, "kur_spread_tek_yon": None,
+                        "kambiyo_vergisi": None, "menkul_spread": 0.00002},
+            },
+            "tasima": {
+                "A.IS": {"gider_orani_yillik": 0.0, "temettu_verimi": 0.0},
+                "QQQ": {"gider_orani_yillik": 0.002, "temettu_verimi": None},
+            },
+            "firsat": {"tl_risksiz_yillik": 0.48},
+        },
+        "enflasyon": {"yillik": 0.25},
+    }
+    SINIFLAR = {"A.IS": "bist", "QQQ": "nasdaq"}
+
+    def _model(self, ham=None) -> MaliyetModeli:
+        return modeli_kur(ham or self.HAM, self.SINIFLAR)
+
+    def test_eksik_maliyet_sinyal_uretmiyor(self):
+        """`null` kalemi olan varlik icin islem sinyali cikmaz.
+
+        Bu kuralin tamami: bilinmeyen maliyeti sifir saymak, karsiz bir
+        islemi karli gosteren sessiz basarisizliktir.
+        """
+        model = self._model()
+        self.assertFalse(model.sinyal_acik("QQQ"))
+        self.assertIn("QQQ", model.engellenenler)
+        # Gerekce SOMUT olmali: hangi kalem eksik, YAML'da nereye yazilacak.
+        eksik = model.engellenenler["QQQ"]
+        self.assertIn("abd.kur_spread_tek_yon", eksik)
+        self.assertIn("abd.kambiyo_vergisi", eksik)
+        self.assertIn("QQQ.temettu_verimi", eksik)
+
+    def test_sifir_bilinmiyor_degildir(self):
+        """0.0 olculmus bir degerdir, null degildir. Ikisini karistiran bir
+        model ya hisse senedini sonsuza kadar bloklar ya da bilinmeyeni
+        sifir sayar."""
+        model = self._model()
+        self.assertTrue(model.sinyal_acik("A.IS"))
+        self.assertEqual(model.engellenenler, {"QQQ": unittest.mock.ANY})
+
+    def test_profil_tanimsizsa_bloklanir(self):
+        """Sinif haritasinda olmayan sinif = maliyeti bilinmeyen sinif."""
+        model = modeli_kur(self.HAM, {"BTC-USD": "kripto"})
+        self.assertFalse(model.sinyal_acik("BTC-USD"))
+        self.assertIn("profili tanimsiz", model.engellenenler["BTC-USD"][0])
+
+    def test_bilinmeyen_sembol_sinyal_uretmez(self):
+        """Modelde hic gecmeyen sembol icin de sinyal cikmamali."""
+        self.assertFalse(self._model().sinyal_acik("YOK.IS"))
+
+    def test_sinif_sinyali_tum_semboller_blokluysa_kapanir(self):
+        model = self._model()
+        self.assertTrue(model.sinif_sinyali_acik("bist"))
+        self.assertFalse(model.sinif_sinyali_acik("nasdaq"))
+
+    def test_maliyet_tabani_pozisyon_buyutmekle_asilmaz(self):
+        """Sabit komisyon kuculur, oransal spread KUCULMEZ.
+
+        Bu yuzden ABD isleminin pozisyon boyutlandirmasiyla asilamayan bir
+        maliyet tabani vardir; onceki model bu tabani hic gormuyordu.
+        """
+        profil = IslemProfili(
+            ad="abd", komisyon_tip="sabit", komisyon_usd=1.5, kur_cevrimi=True,
+            kur_spread_tek_yon=0.004, kambiyo_vergisi=0.0, menkul_spread=0.00002)
+        kucuk = profil.gidis_donus(4_000, usdtry=47.69)
+        buyuk = profil.gidis_donus(200_000, usdtry=47.69)
+        self.assertLess(buyuk, kucuk)                 # komisyon payi eridi
+        self.assertGreater(buyuk, 2 * 0.004)          # ama spread tabani duruyor
+
+    def test_eksik_kalemli_profil_maliyet_hesaplamaz(self):
+        """Eksik kalemle hesaplanan bir maliyet, eksik kismi sifir sayar."""
+        self.assertIsNone(self._model().gidis_donus("QQQ", 10_000, 47.69))
+
+    def test_canli_oran_okunamazsa_yedek_kalir(self):
+        """TCMB'nin bir gunluk kesintisi hurdle rate'i SIFIRLAMAMALI."""
+        model = self._model().oranlarla(None, None, ["TCMB okunamadi"])
+        self.assertAlmostEqual(model.tl_risksiz_yillik, 0.48)
+        self.assertEqual(model.risksiz_kaynagi, "yapilandirma")
+        self.assertIn("TCMB okunamadi", model.uyarilar)
+
+    def test_canli_oran_yedegi_ezer(self):
+        model = self._model().oranlarla((0.5191, "tcmb TP.TRY.MT02"), None, [])
+        self.assertAlmostEqual(model.tl_risksiz_yillik, 0.5191)
+        self.assertIn("tcmb", model.risksiz_kaynagi)
+        # Yeni nesne dondu, eskisi degismedi.
+        self.assertAlmostEqual(self._model().tl_risksiz_yillik, 0.48)
+
+
+class HurdleReelGetiriTesti(unittest.TestCase):
+    """Sifira gore degil, risksiz getiriye ve enflasyona gore olcum."""
+
+    def test_hurdle_rate_asiri_getiri(self):
+        """Risksizin ALTINDAKI getiri negatif asiri getiri verir.
+
+        Sifira gore pozitif ama mevduata gore negatif bir portfoy basarili
+        degildir; eski rapor bunu basari olarak gosteriyordu.
+        """
+        risksiz = donem_orani(0.48, 365)
+        self.assertAlmostEqual(risksiz, 0.48, places=9)
+        self.assertLess(asiri_getiri(0.20, risksiz), 0)     # %20 < %48 -> kotu
+        self.assertGreater(asiri_getiri(0.60, risksiz), 0)
+
+    def test_donem_orani_bilesik(self):
+        """Yillik oran doneme BILESIK indirgenir, dogrusal degil."""
+        yarim = donem_orani(0.48, 182.5)
+        self.assertAlmostEqual((1 + yarim) ** 2 - 1, 0.48, places=9)
+        self.assertLess(yarim, 0.24)               # dogrusal olsaydi tam %24
+        self.assertEqual(donem_orani(0.48, 0), 0.0)
+        self.assertEqual(donem_orani(0.48, -5), 0.0)
+
+    def test_reel_getiri_carpimsal(self):
+        """(1+n)/(1+e)-1 kullanilir; toplamsal (n-e) DEGIL.
+
+        %40 nominal / %25 enflasyonda toplamsal %15 der, dogrusu %12.0.
+        Yuksek enflasyonda bu fark yanlis karar verdirecek buyukluktedir.
+        """
+        reel = reel_getiri(0.40, 0.25)
+        self.assertAlmostEqual(reel, 0.12, places=9)
+        self.assertNotAlmostEqual(reel, 0.40 - 0.25, places=3)
+
+    def test_reel_getiri_enflasyon_uzerinde_pozitif(self):
+        self.assertGreater(reel_getiri(0.30, 0.25), 0)
+        self.assertLess(reel_getiri(0.20, 0.25), 0)
+
+
+class NakitGetirisiTesti(unittest.TestCase):
+    """Yatirilmamis TL sifir getiriyle DURMAZ."""
+
+    def _durum(self, islemler: str = "", **ek):
+        icerik = (f"baslangic_nakit_try: 10000\nkomisyon_orani: 0\n"
+                  f"baslangic_tarihi: 2026-01-01\nislemler:\n{islemler}")
+        kayitlar, nakit, komisyon, baslangic = islemleri_oku(gecici_yaz(icerik))
+        return durumu_hesapla(kayitlar, nakit, komisyon, None,
+                              baslangic_tarihi=baslangic, **ek)
+
+    def test_nakit_getirisi(self):
+        """Nakit risksiz oranda isler. Sifir getiri modellemek 'nakitte
+        beklemek maliyetsiz' yanilgisi uretir."""
+        durum = self._durum(nakit_getirisi_yillik=0.48, bugun="2026-12-31")
+        beklenen = 10000 * ((1.48) ** (364 / 365) - 1)
+        self.assertAlmostEqual(durum.nakit_getirisi_try, beklenen, places=6)
+        self.assertGreater(durum.nakit_getirisi_try, 0)
+        self.assertAlmostEqual(durum.nakit_try, 10000 + beklenen, places=6)
+
+    def test_oran_verilmezse_davranis_degismez(self):
+        """Geriye uyum: faiz kapaliyken defter eskisi gibi calisir."""
+        durum = self._durum(bugun="2026-12-31")
+        self.assertEqual(durum.nakit_getirisi_try, 0.0)
+        self.assertEqual(durum.nakit_try, 10000)
+
+    def test_faiz_islem_sonrasi_bakiyeye_isler(self):
+        """Alimdan sonra kalan bakiyeye faiz isler - tum sermayeye degil."""
+        durum = self._durum(
+            "  - {tarih: 2026-07-01, yon: AL, sembol: X, adet: 10, fiyat_try: 600}\n",
+            nakit_getirisi_yillik=0.48, bugun="2026-12-31")
+        ilk = 10000 * ((1.48) ** (181 / 365) - 1)          # 01-01 -> 07-01
+        kalan = 10000 + ilk - 6000
+        ikinci = kalan * ((1.48) ** (183 / 365) - 1)       # 07-01 -> 12-31
+        self.assertAlmostEqual(durum.nakit_getirisi_try, ilk + ikinci, places=6)
+
+    def test_ayni_gun_islemde_faiz_islemez(self):
+        durum = self._durum(
+            "  - {tarih: 2026-01-01, yon: AL, sembol: X, adet: 1, fiyat_try: 100}\n"
+            "  - {tarih: 2026-01-01, yon: AL, sembol: Y, adet: 1, fiyat_try: 100}\n",
+            nakit_getirisi_yillik=0.48, bugun="2026-01-01")
+        self.assertEqual(durum.nakit_getirisi_try, 0.0)
+
+
+class MaliyetDagilimiTesti(unittest.TestCase):
+    """Brut -> net -> asiri yolu. Olculemeyen kalem sifir SAYILMAZ."""
+
+    def _dagilim(self, **ek) -> MaliyetDagilimi:
+        varsayilan = dict(
+            brut_getiri=0.0840,
+            kalemler=[
+                MaliyetKalemi("Komisyon", 0.0120),
+                MaliyetKalemi("Kur spread", None),
+                MaliyetKalemi("Gider orani", 0.0009),
+                MaliyetKalemi("Temettu stopaji", None),
+                MaliyetKalemi("Vergi", None),
+            ],
+            risksiz=0.0500,
+            donem_gun=365,
+        )
+        varsayilan.update(ek)
+        return MaliyetDagilimi(**varsayilan)
+
+    def test_maliyet_dagilimi_toplami(self):
+        """Net = brut - OLCULEN kalemler. Olculemeyenler toplama girmez."""
+        dagilim = self._dagilim()
+        self.assertAlmostEqual(dagilim.olculen_maliyet, 0.0129)
+        self.assertAlmostEqual(dagilim.net_getiri, 0.0840 - 0.0129)
+        self.assertAlmostEqual(dagilim.asiri_getiri, 0.0840 - 0.0129 - 0.0500)
+
+    def test_olculemeyen_kalem_sifir_sayilmaz(self):
+        """None'i 0.0 yapan bir uygulama ayni sonucu verirdi - ayrimi
+        `eksik_kalemler` gorunur kilar, yoksa rapor net getiriyi kesin
+        sanip ust sinir oldugunu soylemez."""
+        dagilim = self._dagilim()
+        self.assertEqual(dagilim.eksik_kalemler,
+                         ["Kur spread", "Temettu stopaji", "Vergi"])
+        sifirli = self._dagilim(kalemler=[
+            MaliyetKalemi(k.ad, k.oran if k.olculdu else 0.0)
+            for k in dagilim.kalemler])
+        self.assertEqual(sifirli.eksik_kalemler, [])
+        self.assertAlmostEqual(sifirli.net_getiri, dagilim.net_getiri)
+
+    def test_sifir_olculmus_kalem_eksik_sayilmaz(self):
+        """0.0 bir olcumdur: yapisal sifir (kur cevrimi yok) eksik degildir."""
+        dagilim = self._dagilim(kalemler=[MaliyetKalemi("Kur spread", 0.0)])
+        self.assertEqual(dagilim.eksik_kalemler, [])
+        self.assertAlmostEqual(dagilim.net_getiri, 0.0840)
+
+
+class SinyalBastirmaTesti(unittest.TestCase):
+    """Eksik maliyet kalemi hem raporda hem Telegram'da sinyali bastirir."""
+
+    def setUp(self):
+        self.model = modeli_kur(MaliyetModeliTesti.HAM, MaliyetModeliTesti.SINIFLAR)
+
+    def test_rebalancing_tavsiyesi_bastirilir(self):
+        sapmalar = [SinifSapmasi("nasdaq", 0.40, 0.25),
+                    SinifSapmasi("bist", 0.10, 0.30)]
+        metin = "\n".join(_dagilim_bolumu(sapmalar, 20_000, 0.03, [], self.model))
+        self.assertIn(SINYAL_YOK, metin)
+        self.assertNotIn("azalt", metin)        # nasdaq blokluydu
+        self.assertIn("artir", metin)           # bist acik
+
+    def test_maliyet_modelsiz_davranis_degismez(self):
+        sapmalar = [SinifSapmasi("nasdaq", 0.40, 0.25)]
+        metin = "\n".join(_dagilim_bolumu(sapmalar, 20_000, 0.03, []))
+        self.assertIn("azalt", metin)
+
+    def test_kisma_sinyali_bastirilir(self):
+        risk = RiskRaporu(
+            portfoy_volatilitesi=0.3, portfoy_max_drawdown=0.1,
+            varlik_riskleri=[VarlikRiski("QQQ", 0.4, 0.2, 0.35, 0.15)],
+            korelasyon=pd.DataFrame(), gozlem_sayisi=100, yetersiz_veri=[])
+        metin = "\n".join(_risk_bolumu(risk, {}, ESIKLER, self.model))
+        self.assertIn(SINYAL_YOK, metin)
+        self.assertNotIn("**Kisilmali:**", metin)
+
+    def test_telegram_da_bastirir(self):
+        """Rapor bastirip Telegram bastirmazsa kural bosa duser - Dodo
+        mesaja bakip islem yapar."""
+        portfoy = Portfoy(
+            pozisyonlar=[PozisyonDegeri("QQQ", "QQQ", "nasdaq", 1, 8000, 8000)],
+            nakit_try=2000.0, fiyatlanamayan=[])
+        risk = RiskRaporu(
+            portfoy_volatilitesi=0.3, portfoy_max_drawdown=0.1,
+            varlik_riskleri=[VarlikRiski("QQQ", 0.4, 0.2, 0.35, 0.15)],
+            korelasyon=pd.DataFrame(), gozlem_sayisi=100, yetersiz_veri=[])
+        sapmalar = [SinifSapmasi("nasdaq", 0.80, 0.25)]
+
+        acik = ozet_mesaji(portfoy, sapmalar, risk, None, "Test", None, ESIKLER)
+        self.assertIn("Kisilmali", acik)
+        self.assertIn("Rebalancing", acik)
+
+        kapali = ozet_mesaji(portfoy, sapmalar, risk, None, "Test", None,
+                             ESIKLER, None, self.model)
+        self.assertNotIn("Kisilmali", kapali)
+        self.assertNotIn("Rebalancing", kapali)
+        self.assertIn("Eksik maliyet kalemi", kapali)
+        self.assertIn("QQQ.temettu_verimi", kapali)
+
+
+class TcmbOranTesti(unittest.TestCase):
+    """Yuzde cinsinden yayimlanan seriler ve tarih bicimleri."""
+
+    KAYITLAR = [
+        {"seriKodu": "TP.TRY.MT02", "tarih": "07-08-2026", "deger": 47.91},
+        {"seriKodu": "TP.PKAUO.S01.E.U", "tarih": "AĞUSTOS 2026", "deger": 23.69},
+    ]
+
+    def _kayitlar(self):
+        return tcmb_kayitlari("http://sahte", getir=lambda *a, **k: self.KAYITLAR)
+
+    def test_yuzde_ondalik_orana_cevrilir(self):
+        """47.91 yuzdedir; 47.91 kat getiri degil %47.91."""
+        oran, kaynak = tcmb_yuzde_orani(
+            self._kayitlar(), "TP.TRY.MT02", 21, date(2026, 8, 17))
+        self.assertAlmostEqual(oran, 0.4791)
+        self.assertIn("TP.TRY.MT02", kaynak)
+
+    def test_aylik_tarih_cozulur(self):
+        """Aylik seri 'AGUSTOS 2026' yazar, gunluk seri '07-08-2026'."""
+        kayitlar = self._kayitlar()
+        self.assertEqual(kayitlar["TP.PKAUO.S01.E.U"].tarih, date(2026, 8, 1))
+        self.assertEqual(kayitlar["TP.TRY.MT02"].tarih, date(2026, 8, 7))
+
+    def test_bayat_seri_reddedilir(self):
+        """Bayat oran sessizce kullanilirsa hurdle rate aylarca yanlis kalir."""
+        self.assertIsNone(tcmb_yuzde_orani(
+            self._kayitlar(), "TP.TRY.MT02", 21, date(2026, 10, 1)))
+
+    def test_olmayan_seri_none_doner(self):
+        self.assertIsNone(tcmb_yuzde_orani(
+            self._kayitlar(), "TP.YOK", 21, date(2026, 8, 17)))
 
 
 if __name__ == "__main__":

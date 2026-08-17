@@ -148,34 +148,98 @@ class KurKotasyonu:
         return ((bugun or date.today()) - self.tarih).days > esik_gun
 
 
-def tcmb_usdtry(url: str, seri: str, getir=http_json) -> KurKotasyonu:
-    """TCMB'nin sik kullanilan seriler ucundan guncel USD/TRY.
+@dataclass(frozen=True)
+class TcmbKaydi:
+    seri: str
+    deger: float
+    tarih: date
+
+    def bayat_mi(self, esik_gun: int, bugun: date | None = None) -> bool:
+        return ((bugun or date.today()) - self.tarih).days > esik_gun
+
+
+# Aylik seriler tarihi "AGUSTOS 2026" gibi yazar, gunluk seriler "07-08-2026".
+_AYLAR = {
+    "OCAK": 1, "SUBAT": 2, "MART": 3, "NISAN": 4, "MAYIS": 5, "HAZIRAN": 6,
+    "TEMMUZ": 7, "AGUSTOS": 8, "EYLUL": 9, "EKIM": 10, "KASIM": 11, "ARALIK": 12,
+}
+_TR_HARFLER = str.maketrans("ŞİĞÜÖÇşiğüöç", "SIGUOCSIGUOC")
+
+
+def _tcmb_tarihi(ham: str) -> date:
+    """TCMB tarihini cozer. Aylik seride ayin ILK gunu alinir.
+
+    Ilk gun bilincli: aylik veriyi oldugundan TAZE gostermek, bayat bir
+    enflasyon rakamini guncel sanmak demektir. Yanlis tarafa yuvarliyoruz.
+    """
+    metin = str(ham).strip()
+    try:
+        return datetime.strptime(metin, "%d-%m-%Y").date()
+    except ValueError:
+        pass
+    parcalar = metin.translate(_TR_HARFLER).upper().split()
+    if len(parcalar) == 2 and parcalar[0] in _AYLAR:
+        return date(int(parcalar[1]), _AYLAR[parcalar[0]], 1)
+    raise KaynakHatasi(f"TCMB tarihi cozulemedi: '{ham}'")
+
+
+def tcmb_kayitlari(url: str, getir=http_json) -> dict[str, TcmbKaydi]:
+    """TCMB'nin "sik kullanilan seriler" ucu -> {seri_kodu: TcmbKaydi}.
 
     ANAHTAR GEREKMIYOR - bilincli secim. Eski `/service/evds/series=...` yolu
-    (anahtar isteyen) 2026 arayuz gecisiyle JSON dondurmeyi birakti; yeni
-    `igmevdsms-dis/sk-seriler` ucu ayni kuru kimliksiz veriyor. Sirri
-    gerekmeyen bir yere gondermemek, gondermekten iyidir.
+    (anahtar isteyen) 2026 arayuz gecisiyle JSON dondurmeyi birakti; bu uc
+    ayni verileri kimliksiz veriyor. Sirri gerekmeyen bir yere gondermemek,
+    gondermekten iyidir.
+
+    Uctan yalnizca birkac seri doner (USD, EUR, mevduat faizi, TUFE beklentisi
+    vb.). Tam EVDS seri arsivi `POST /fe` ucundadir ve WAF arkasindadir -
+    tarayici disindan cekilemez.
+    """
+    ham = getir(url)
+    kayitlar: dict[str, TcmbKaydi] = {}
+    for kayit in ham or []:
+        kod = kayit.get("seriKodu")
+        if not kod or kod in kayitlar:
+            continue          # ilk kayit en gunceli
+        try:
+            kayitlar[kod] = TcmbKaydi(
+                seri=kod,
+                deger=float(kayit["deger"]),
+                tarih=_tcmb_tarihi(kayit["tarih"]),
+            )
+        except (KeyError, TypeError, ValueError) as hata:
+            raise KaynakHatasi(f"TCMB {kod} kaydi okunamadi: {hata}") from hata
+    return kayitlar
+
+
+def tcmb_usdtry(url: str, seri: str, getir=http_json) -> KurKotasyonu:
+    """Guncel USD/TRY.
 
     Kaydin TARIHI de dondurulur ki cagiran bayatligi olcebilsin: TCMB kuru
     yalnizca is gunu yayimlanir, hafta sonu yeni kur yoktur. Cuma kurunu
     Pazar gunu taze sanmak "TR primi" olcumunu bozar - olculen sey prim
     degil kurun bayatligi olur.
     """
-    ham = getir(url)
-    kayitlar = [k for k in (ham or []) if k.get("seriKodu") == seri]
-    if not kayitlar:
-        mevcut = sorted({str(k.get("seriKodu")) for k in (ham or [])})[:6]
+    kayitlar = tcmb_kayitlari(url, getir)
+    kayit = kayitlar.get(seri)
+    if kayit is None:
         raise KaynakHatasi(
-            f"TCMB {seri} serisi cevapta yok. Donen seriler: {mevcut}")
-    son = kayitlar[0]
-    try:
-        return KurKotasyonu(
-            deger=float(son["deger"]),
-            tarih=datetime.strptime(son["tarih"], "%d-%m-%Y").date(),
-            kaynak="tcmb",
-        )
-    except (KeyError, TypeError, ValueError) as hata:
-        raise KaynakHatasi(f"TCMB kaydi okunamadi: {hata}") from hata
+            f"TCMB {seri} serisi cevapta yok. Donen seriler: {sorted(kayitlar)[:6]}")
+    return KurKotasyonu(deger=kayit.deger, tarih=kayit.tarih, kaynak="tcmb")
+
+
+def tcmb_yuzde_orani(kayitlar: dict[str, TcmbKaydi], seri: str,
+                     bayatlik_gun: int, bugun: date | None = None,
+                     ) -> tuple[float, str] | None:
+    """Yuzde cinsinden yayimlanan seriyi ONDALIK orana cevirir (47.91 -> 0.4791).
+
+    Ag'a CIKMAZ - onceden cekilmis kayitlar uzerinde calisir. Seri yoksa veya
+    bayatsa None doner; cagiran yapilandirmadaki yedek degere duser.
+    """
+    kayit = kayitlar.get(seri)
+    if kayit is None or kayit.bayat_mi(bayatlik_gun, bugun):
+        return None
+    return kayit.deger / 100.0, f"tcmb {seri} ({kayit.tarih.isoformat()})"
 
 
 # --------------------------------------------------------------------------

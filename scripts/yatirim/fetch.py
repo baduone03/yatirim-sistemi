@@ -17,9 +17,12 @@ from kaynaklar import (
     btcturk_fiyatlari,
     coingecko_usd,
     http_json,
+    tcmb_kayitlari,
     tcmb_usdtry,
+    tcmb_yuzde_orani,
     ucgenle,
 )
+from maliyet import MaliyetModeli
 
 
 BAYAT_ESIGI_GUN = 7
@@ -301,6 +304,44 @@ def kripto_ucgenlemesi(yapilandirma: Yapilandirma, yahoo_usdtry: float,
         for sembol in sorted(kaynaklar.btcturk_ciftleri)
     }
     return UcgenlemeSonucu(sonuclar=sonuclar, uyarilar=uyarilar)
+
+
+def maliyet_modelini_coz(yapilandirma: Yapilandirma, getir=http_json,
+                         bugun: date | None = None) -> MaliyetModeli:
+    """Hurdle rate ve enflasyonu TCMB'den canli okur, yedege dusebilir.
+
+    Neden canli: %48 mevduat faizi ortaminda YAML'a yazilmis bir hurdle rate
+    aylar icinde sessizce yanlislasir ve her pozitif getiri yeniden "basari"
+    gorunur. Neden yedek: TCMB'nin bir gunluk kesintisi hurdle rate'i
+    SIFIRLAMAMALI - USD/TRY'de kurulan ayni Yahoo yedegi mantigi.
+
+    Fiyat ucgenlemesi de ayni uctan USD/TRY cekiyor; iki ayri istek atiliyor.
+    Tek istekte birlestirmek cagri grafigini iki modul arasinda dolastirirdi,
+    kazanci kucuk statik bir JSON'un ikinci kez okunmasi olurdu.
+    """
+    model = yapilandirma.maliyet
+    url = yapilandirma.kaynaklar.tcmb_url
+    if not url or not (model.risksiz_serisi or model.enflasyon_serisi):
+        return model
+    try:
+        kayitlar = tcmb_kayitlari(url, getir)
+    except KaynakHatasi as hata:
+        return model.oranlarla(None, None, [
+            f"TCMB oran serileri okunamadi ({hata}) - hurdle rate ve enflasyon "
+            "yapilandirmadaki yedek degerlerden alindi."])
+
+    uyarilar: list[str] = []
+    canli: dict[str, tuple[float, str] | None] = {}
+    for alan, seri, esik, etiket in (
+        ("risksiz", model.risksiz_serisi, model.risksiz_bayatlik_gun, "hurdle rate"),
+        ("enflasyon", model.enflasyon_serisi, model.enflasyon_bayatlik_gun, "enflasyon"),
+    ):
+        canli[alan] = tcmb_yuzde_orani(kayitlar, seri, esik, bugun) if seri else None
+        if seri and canli[alan] is None:
+            uyarilar.append(
+                f"TCMB {seri} serisi yok veya {esik} gunden bayat - {etiket} "
+                "yapilandirmadaki yedek degerden alindi.")
+    return model.oranlarla(canli["risksiz"], canli["enflasyon"], uyarilar)
 
 
 def fiyatlari_getir(yapilandirma: Yapilandirma,

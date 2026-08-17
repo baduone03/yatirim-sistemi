@@ -173,7 +173,7 @@ def main() -> int:
     fiyatlar = fiyatlari_getir(yapilandirma)
 
     if argumanlar.sim:
-        islemler, nakit, komisyon = islemleri_oku(SIM_DEFTERI)
+        islemler, nakit, komisyon, _ = islemleri_oku(SIM_DEFTERI)
         durum = durumu_hesapla(islemler, nakit, komisyon)
         portfoy = portfoyu_ledgerdan_hesapla(yapilandirma, fiyatlar, durum)
         kaynak = "simulasyon"

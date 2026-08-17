@@ -17,6 +17,7 @@ from pathlib import Path
 import requests
 
 from config import PROJE_DIZINI, Esikler
+from maliyet import donem_orani
 from portfolio import Portfoy, SinifSapmasi
 
 VARSAYILAN_ESIKLER = Esikler(rebalancing_sapma=0.05, risk_katkisi_ust=0.25)
@@ -163,9 +164,46 @@ def ucgenleme_durdurma_mesaji(durduranlar, baslik: str) -> str:
     return "\n".join(satirlar)
 
 
+def _asiri_getiri_satiri(getiri: float, durum, maliyet) -> list[str]:
+    """Risksiz getiriye gore fazla/eksik.
+
+    Brut getiriyi tek basina gostermek yaniltir: %1 kazanan bir portfoy, ayni
+    donemde mevduat %0.5 verdiyse iyi, %2 verdiyse kotudur.
+    """
+    if maliyet is None or durum is None or not durum.baslangic_tarihi:
+        return []
+    if maliyet.tl_risksiz_yillik is None:
+        return []
+    try:
+        gun = (date.today() - date.fromisoformat(durum.baslangic_tarihi)).days
+    except ValueError:
+        return []
+    if gun <= 0:
+        return []
+    risksiz = donem_orani(maliyet.tl_risksiz_yillik, gun)
+    isaret = "🟢" if getiri >= risksiz else "🔴"
+    return [f"{isaret} Asiri getiri {(getiri - risksiz) * 100:+.2f}% "
+            f"(risksiz {risksiz * 100:.2f}%, {gun} gun)"]
+
+
+def hurdle_eksik_mesaji(baslik: str, seri: str) -> str:
+    """Hurdle rate yoksa rapor uretilmez - sessiz kalmak en kotu secenek."""
+    return "\n".join([
+        f"<b>🛑 {_kacis(baslik)} - RAPOR URETILMEDI</b>",
+        "",
+        "TL risksiz getiri (hurdle rate) yok.",
+        f"Canli seri: {_kacis(seri) or '(tanimsiz)'}",
+        "Yedek: varliklar.yaml -> maliyet.firsat.tl_risksiz_yillik",
+        "",
+        "Bu deger olmadan getiri sifira gore olculur ve risksiz getirinin "
+        "altinda kalan her portfoy 'basarili' gorunur.",
+    ])
+
+
 def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
                 durum=None, baslik: str = "Yatirim", fiyatlar=None,
-                esikler: Esikler = VARSAYILAN_ESIKLER, bayatlik=None) -> str:
+                esikler: Esikler = VARSAYILAN_ESIKLER, bayatlik=None,
+                maliyet=None) -> str:
     """Rapordan kisa Telegram ozeti uretir - detay markdown raporda kalir."""
     if durum:
         taban = durum.baslangic_nakit_try
@@ -184,6 +222,7 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
         f"Volatilite {risk.portfoy_volatilitesi * 100:.1f}%"
         f" | Drawdown {risk.portfoy_max_drawdown * 100:.1f}%",
     ]
+    satirlar += _asiri_getiri_satiri(getiri, durum, maliyet)
 
     if durum:
         satirlar += _islem_satirlari(durum, date.today().isoformat())
@@ -219,7 +258,18 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
             "Rebalancing tavsiyesi bu yuzden guvenilmez.",
         ]
 
-    sapanlar = [s for s in sapmalar if abs(s.sapma) >= esikler.rebalancing_sapma]
+    # Eksik maliyet kalemi olan varlik icin sinyal URETILMEZ. Bastirmayi
+    # Telegram'da da uygulamak sart: rapor bastiriyor ama mesaj bastirmiyorsa
+    # Dodo mesaja bakip islem yapar ve tum kural bosa duser.
+    engellenenler = maliyet.engellenenler if maliyet is not None else {}
+    if engellenenler:
+        satirlar += ["", "<b>🛑 Eksik maliyet kalemi - sinyal yok</b>"]
+        for sembol, kalemler in engellenenler.items():
+            satirlar.append(f"• {_kacis(sembol)}: {_kacis(', '.join(kalemler))}")
+
+    sapanlar = [s for s in sapmalar
+                if abs(s.sapma) >= esikler.rebalancing_sapma
+                and (maliyet is None or maliyet.sinif_sinyali_acik(s.sinif))]
     if sapanlar:
         satirlar += ["", "<b>Rebalancing uyarisi</b>"]
         for sapma in sapanlar:
@@ -230,7 +280,8 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
                 f"{abs(sapma.sapma) * 100:.1f} puan {yon}"
             )
 
-    yogun = [r for r in risk.varlik_riskleri if esikler.kisilmali(r)]
+    yogun = [r for r in risk.varlik_riskleri if esikler.kisilmali(r)
+             and (maliyet is None or maliyet.sinyal_acik(r.sembol))]
     if yogun:
         satirlar += ["", "<b>Kisilmali</b>"]
         for varlik_riski in yogun:
@@ -240,7 +291,7 @@ def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
                 f"beta {varlik_riski.beta:.2f}"
             )
 
-    if not sapanlar and not yogun:
+    if not sapanlar and not yogun and not engellenenler:
         satirlar += ["", "Esik asilmadi — islem gerekmiyor."]
 
     # Veri sorunu sessiz kalmamali: bayat fiyat yanlis degerleme demek.

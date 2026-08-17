@@ -7,6 +7,8 @@ from pathlib import Path
 
 import yaml
 
+from maliyet import MaliyetModeli, modeli_kur
+
 PROJE_DIZINI = Path(__file__).resolve().parents[2] / "04-projects" / "yatirim-sistemi"
 VARLIKLAR_DOSYASI = PROJE_DIZINI / "varliklar.yaml"
 PORTFOY_DOSYASI = PROJE_DIZINI / "portfoy.yaml"
@@ -113,6 +115,7 @@ class Yapilandirma:
     bayatlik: BayatlikEsikleri = field(default_factory=BayatlikEsikleri)
     kurumsal_olay: KurumsalOlayAyarlari = field(default_factory=KurumsalOlayAyarlari)
     kaynaklar: VeriKaynaklari = field(default_factory=VeriKaynaklari)
+    maliyet: MaliyetModeli = field(default_factory=MaliyetModeli)
 
     @property
     def fiyat_sembolleri(self) -> list[str]:
@@ -275,6 +278,10 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
                 f"veri_kaynaklari.{ad} icinde varliklar.yaml'da olmayan "
                 f"sembol var: {tanimsiz}")
 
+    sinif_haritasi = {s: v.sinif for s, v in varliklar.items()}
+    maliyet = modeli_kur(varlik_ham, sinif_haritasi)
+    _maliyeti_dogrula(varlik_ham, varliklar)
+
     return Yapilandirma(
         ayarlar=Ayarlar(
             kur_sembolu=ayar_ham["kur_sembolu"],
@@ -290,7 +297,44 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
         bayatlik=bayatlik,
         kurumsal_olay=kurumsal_olay,
         kaynaklar=kaynaklar,
+        maliyet=maliyet,
     )
+
+
+def _maliyeti_dogrula(varlik_ham: dict, varliklar: dict[str, Varlik]) -> None:
+    """Maliyet blogundaki yazim hatalarini yakalar.
+
+    Yazim hatasi burada sessizce "eksik kalem"e donusurse sinyal bastirilir ve
+    sebep hicbir zaman anlasilmaz: rapor "profil tanimsiz" der, YAML'da profil
+    gorunur durur. Hatayi okuma aninda patlatmak tek dogru davranis.
+    """
+    maliyet_ham = varlik_ham.get("maliyet") or {}
+    profil_haritasi = maliyet_ham.get("sinif_profili") or {}
+    tanimli_profiller = set(maliyet_ham.get("islem") or {})
+    siniflar = {v.sinif for v in varliklar.values()}
+
+    tanimsiz_sinif = sorted(set(profil_haritasi) - siniflar)
+    if tanimsiz_sinif:
+        raise ValueError(
+            f"maliyet.sinif_profili'nde tanimsiz varlik sinifi: {tanimsiz_sinif}. "
+            f"Gecerli siniflar: {sorted(siniflar)}")
+
+    eksik_profil = sorted(set(profil_haritasi.values()) - tanimli_profiller)
+    if eksik_profil:
+        raise ValueError(
+            f"maliyet.sinif_profili tanimsiz profile isaret ediyor: {eksik_profil}. "
+            f"maliyet.islem altinda tanimli olanlar: {sorted(tanimli_profiller)}")
+
+    tanimsiz_sembol = sorted(set(maliyet_ham.get("tasima") or {}) - set(varliklar))
+    if tanimsiz_sembol:
+        raise ValueError(
+            f"maliyet.tasima'da varliklar.yaml'da olmayan sembol: {tanimsiz_sembol}")
+
+    nakit_ham = varlik_ham.get("nakit") or {}
+    kaynak = nakit_ham.get("getiri_kaynagi")
+    if kaynak not in (None, "tl_risksiz"):
+        raise ValueError(
+            f"nakit.getiri_kaynagi yalnizca 'tl_risksiz' olabilir, '{kaynak}' geldi")
 
 
 def sablonu_reddet(yapilandirma: Yapilandirma, dosya: Path = PORTFOY_DOSYASI) -> None:

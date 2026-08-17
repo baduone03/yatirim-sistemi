@@ -8,23 +8,22 @@ import pandas as pd
 
 from config import Yapilandirma
 from fetch import FiyatVerisi
+from bicim import oran as _oran
+from bicim import tl as _tl
+from bicim import yuzde as _yuzde
+from maliyet import MaliyetDagilimi, MaliyetModeli, donem_orani
 from portfolio import Portfoy, SinifSapmasi
+from rapor_maliyet import (
+    SINYAL_YOK,
+    eksik_maliyet_bolumu,
+    getiri_satirlari,
+    maliyet_dagilimi_bolumu,
+    maliyet_kalemleri,
+)
 from risk import RiskRaporu
 
 OZET_BASLANGIC = "<!-- OZET:BASLANGIC -->"
 OZET_BITIS = "<!-- OZET:BITIS -->"
-
-
-def _tl(deger: float) -> str:
-    return f"{deger:,.0f} TL".replace(",", ".")
-
-
-def _yuzde(oran: float, basamak: int = 1) -> str:
-    return f"{oran * 100:+.{basamak}f}%"
-
-
-def _oran(oran: float, basamak: int = 1) -> str:
-    return f"{oran * 100:.{basamak}f}%"
 
 
 def _frontmatter(bugun: str, fiyat_tarihi: str, baslik: str = "Yatirim Raporu") -> list[str]:
@@ -42,7 +41,9 @@ def _frontmatter(bugun: str, fiyat_tarihi: str, baslik: str = "Yatirim Raporu") 
 
 
 def _ozet_bolumu(portfoy: Portfoy, risk: RiskRaporu, fiyatlar: FiyatVerisi,
-                 sim: bool = False) -> list[str]:
+                 sim: bool = False, model: MaliyetModeli | None = None,
+                 donem_getirisi: float | None = None,
+                 donem_gun: int = 0) -> list[str]:
     """Portfoy ozeti.
 
     Sim modunda 'toplam maliyet' satiri YAZILMAZ: nakit zaten satis hasilatini
@@ -55,7 +56,7 @@ def _ozet_bolumu(portfoy: Portfoy, risk: RiskRaporu, fiyatlar: FiyatVerisi,
         portfoy.toplam_deger_try - portfoy.toplam_maliyet_try)
     getiri = kar_zarar / maliyet if maliyet else 0.0
     etiket = "Gerceklesmemis K/Z (aciktaki)" if sim else "Kar/zarar"
-    return [
+    satirlar = [
         "## Ozet",
         "",
         "| Olcut | Deger |",
@@ -67,8 +68,10 @@ def _ozet_bolumu(portfoy: Portfoy, risk: RiskRaporu, fiyatlar: FiyatVerisi,
         f"| USD/TRY | {fiyatlar.usdtry:,.2f} |",
         f"| Yillik volatilite | {_oran(risk.portfoy_volatilitesi)} |",
         f"| Max drawdown (hipotetik) | {_oran(risk.portfoy_max_drawdown)} |",
-        "",
     ]
+    satirlar += getiri_satirlari(model, donem_getirisi, donem_gun)
+    satirlar.append("")
+    return satirlar
 
 
 def _pozisyon_bolumu(portfoy: Portfoy) -> list[str]:
@@ -91,7 +94,8 @@ def _pozisyon_bolumu(portfoy: Portfoy) -> list[str]:
 
 
 def _dagilim_bolumu(sapmalar: list[SinifSapmasi], toplam_deger: float,
-                    esik: float, eksik_pozisyon: list[str]) -> list[str]:
+                    esik: float, eksik_pozisyon: list[str],
+                    maliyet: MaliyetModeli | None = None) -> list[str]:
     satirlar = ["## Varlik dagilimi ve rebalancing", ""]
 
     if eksik_pozisyon:
@@ -113,8 +117,14 @@ def _dagilim_bolumu(sapmalar: list[SinifSapmasi], toplam_deger: float,
     uyarilar = []
     for sapma in sapmalar:
         tutar = abs(sapma.sapma) * toplam_deger
+        # Sinifta uygulanabilir tek bir sembol bile yoksa tavsiye uygulanamaz
+        # bir emirdir: "bist'i 2.000 TL azalt" demek satilabilir bir sembol
+        # gerektirir.
+        acik = maliyet is None or maliyet.sinif_sinyali_acik(sapma.sinif)
         if abs(sapma.sapma) < esik:
             eylem = "dengede"
+        elif not acik:
+            eylem = SINYAL_YOK
         elif sapma.sapma > 0:
             eylem = f"{_tl(tutar)} azalt"
             uyarilar.append(f"`{sapma.sinif}` hedefin {_oran(sapma.sapma)} uzerinde")
@@ -135,7 +145,7 @@ def _dagilim_bolumu(sapmalar: list[SinifSapmasi], toplam_deger: float,
 
 
 def _risk_bolumu(risk: RiskRaporu, varlik_adlari: dict[str, str],
-                 esikler) -> list[str]:
+                 esikler, maliyet: MaliyetModeli | None = None) -> list[str]:
     satirlar = [
         "## Risk metrikleri",
         "",
@@ -151,10 +161,14 @@ def _risk_bolumu(risk: RiskRaporu, varlik_adlari: dict[str, str],
         "|---|---:|---:|---:|---:|---:|",
     ]
     kisilacaklar = []
+    bastirilanlar = []
     for varlik_riski in risk.varlik_riskleri:
         kis = esikler.kisilmali(varlik_riski)
-        if kis:
+        acik = maliyet is None or maliyet.sinyal_acik(varlik_riski.sembol)
+        if kis and acik:
             kisilacaklar.append(varlik_riski)
+        elif kis:
+            bastirilanlar.append(varlik_riski)
         satirlar.append(
             f"| {varlik_adlari.get(varlik_riski.sembol, varlik_riski.sembol)} | "
             f"{_oran(varlik_riski.yillik_volatilite)} | "
@@ -177,6 +191,16 @@ def _risk_bolumu(risk: RiskRaporu, varlik_adlari: dict[str, str],
     if kisilacaklar:
         satirlar.append("> **Kisilmali:**")
         for varlik_riski in kisilacaklar:
+            satirlar.append(
+                f"> - `{varlik_riski.sembol}` katki "
+                f"{_oran(varlik_riski.risk_katkisi)}, beta {varlik_riski.beta:.2f}"
+            )
+        satirlar.append("")
+    if bastirilanlar:
+        satirlar.append(
+            f"> **{SINYAL_YOK}** - esigi asan ama maliyet modeli eksik oldugu "
+            "icin sinyal uretilmeyen varlik:")
+        for varlik_riski in bastirilanlar:
             satirlar.append(
                 f"> - `{varlik_riski.sembol}` katki "
                 f"{_oran(varlik_riski.risk_katkisi)}, beta {varlik_riski.beta:.2f}"
@@ -235,8 +259,10 @@ def _ucgenleme_bolumu(fiyatlar: FiyatVerisi) -> list[str]:
 
 
 def _uyari_bolumu(portfoy: Portfoy, fiyatlar: FiyatVerisi, risk: RiskRaporu,
-                  bayatlik=None) -> list[str]:
+                  bayatlik=None, maliyet: MaliyetModeli | None = None) -> list[str]:
     sorunlar = []
+    for uyari in (maliyet.uyarilar if maliyet else []):
+        sorunlar.append(uyari)
     for sonuc in fiyatlar.ucgenleme.durduranlar:
         sorunlar.append(
             f"**UCGENLEME DURDURDU - {sonuc.sembol}**: {sonuc.gerekce}. "
@@ -284,9 +310,11 @@ def _sim_bolumu(durum, portfoy: Portfoy) -> list[str]:
     getiri = net / baslangic if baslangic else 0.0
     gerceklesmemis = portfoy.gerceklesmemis_kar_try
 
-    # Ozdeslik: net = gerceklesmemis + gerceklesen - alis_komisyonu.
+    # Ozdeslik:
+    #   net = gerceklesmemis + gerceklesen + nakit_getirisi - alis_komisyonu
     # Kalan farki gizlemek yerine yazdiriyoruz; tutmuyorsa muhasebe bozuk demektir.
-    fark = net - gerceklesmemis - durum.gerceklesen_kar_try
+    fark = (net - gerceklesmemis - durum.gerceklesen_kar_try
+            - durum.nakit_getirisi_try)
 
     satirlar = [
         "## Simulasyon performansi",
@@ -298,12 +326,26 @@ def _sim_bolumu(durum, portfoy: Portfoy) -> list[str]:
         f"| **Net sonuc** | **{_tl(net)} ({_yuzde(getiri)})** |",
         f"| Gerceklesen kar (satislardan) | {_tl(durum.gerceklesen_kar_try)} |",
         f"| Gerceklesmemis kar (aciktaki) | {_tl(gerceklesmemis)} |",
+    ]
+    if durum.nakit_getirisi_yillik is not None:
+        satirlar.append(
+            f"| Nakit getirisi (BRUT) | {_tl(durum.nakit_getirisi_try)} "
+            f"(yillik {_oran(durum.nakit_getirisi_yillik)}) |")
+    satirlar += [
         f"| Alis komisyonu (maliyete girmez) | {_tl(-fark)} |",
         f"| Odenen komisyon (toplam) | {_tl(durum.toplam_komisyon_try)} "
         f"(oran {_oran(durum.komisyon_orani, 2)}) |",
         f"| Islem sayisi | {len(durum.islemler)} |",
         "",
     ]
+    if durum.nakit_getirisi_yillik is not None:
+        satirlar += [
+            "> Nakit sifir getiriyle DURMAZ - yatirilmamis TL risksiz oranda "
+            "isletilir. Aksi halde sistem 'nakitte beklemek maliyetsiz' sanir "
+            "ve gereginden fazla islem onerir. Getiri **BRUT**: mevduat stopaji "
+            "bilinmedigi icin modele girmedi, gercek net getiri bundan DUSUK.",
+            "",
+        ]
     return satirlar
 
 
@@ -335,28 +377,70 @@ def _limitler() -> list[str]:
     ]
 
 
+def donem_gunu(yapilandirma: Yapilandirma, durum=None,
+               bugun: date | None = None) -> int:
+    """Portfoyun kac gundur ayakta oldugu.
+
+    Yillik risksiz oran ile portfoy getirisini karsilastirmak icin sart:
+    yillik %48'i 4 gunluk bir getiriyle kiyaslamak elma-armut olur.
+    """
+    bugun = bugun or date.today()
+    if durum is not None:
+        baslangic = durum.baslangic_tarihi
+    else:
+        tarihler = [p.tarih for p in yapilandirma.pozisyonlar if p.tarih]
+        baslangic = min(tarihler) if tarihler else ""
+    if not baslangic:
+        return 0
+    try:
+        return max((bugun - date.fromisoformat(baslangic)).days, 0)
+    except ValueError:
+        return 0
+
+
 def rapor_olustur(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
                   portfoy: Portfoy, sapmalar: list[SinifSapmasi],
-                  risk: RiskRaporu, durum=None) -> str:
+                  risk: RiskRaporu, durum=None,
+                  maliyet: MaliyetModeli | None = None) -> str:
     bugun = date.today().isoformat()
     varlik_adlari = {s: v.ad for s, v in yapilandirma.varliklar.items()}
     baslik = "Simulasyon Raporu" if durum else "Yatirim Raporu"
+    maliyet = maliyet if maliyet is not None else yapilandirma.maliyet
+    gun = donem_gunu(yapilandirma, durum)
+
+    taban = durum.baslangic_nakit_try if durum else portfoy.toplam_maliyet_try
+    donem_getirisi = (portfoy.toplam_deger_try - taban) / taban if taban else None
 
     satirlar = _frontmatter(bugun, fiyatlar.son_tarih, baslik)
     satirlar += [f"# {baslik} {bugun}", ""]
+    satirlar += eksik_maliyet_bolumu(maliyet)
     if durum:
         satirlar += _sim_bolumu(durum, portfoy)
-    satirlar += _ozet_bolumu(portfoy, risk, fiyatlar, sim=bool(durum))
+    satirlar += _ozet_bolumu(portfoy, risk, fiyatlar, bool(durum), maliyet,
+                             donem_getirisi, gun)
     satirlar += _pozisyon_bolumu(portfoy)
     satirlar += _dagilim_bolumu(sapmalar, portfoy.toplam_deger_try,
                                 yapilandirma.esikler.rebalancing_sapma,
-                                portfoy.fiyatlanamayan)
-    satirlar += _risk_bolumu(risk, varlik_adlari, yapilandirma.esikler)
+                                portfoy.fiyatlanamayan, maliyet)
+    satirlar += _risk_bolumu(risk, varlik_adlari, yapilandirma.esikler, maliyet)
     satirlar += _korelasyon_bolumu(risk.korelasyon)
     if durum:
         satirlar += _islem_gecmisi_bolumu(durum)
+    if taban > 0 and gun > 0:
+        satirlar += maliyet_dagilimi_bolumu(
+            MaliyetDagilimi(
+                brut_getiri=(portfoy.toplam_deger_try
+                             + (durum.toplam_komisyon_try if durum else 0.0)
+                             - taban) / taban,
+                kalemler=maliyet_kalemleri(portfoy, durum, maliyet, gun, taban),
+                risksiz=donem_orani(maliyet.tl_risksiz_yillik, gun),
+                donem_gun=gun,
+            ),
+            maliyet,
+        )
     satirlar += _ucgenleme_bolumu(fiyatlar)
-    satirlar += _uyari_bolumu(portfoy, fiyatlar, risk, yapilandirma.bayatlik)
+    satirlar += _uyari_bolumu(portfoy, fiyatlar, risk, yapilandirma.bayatlik,
+                              maliyet)
     satirlar += _limitler()
     return "\n".join(satirlar)
 

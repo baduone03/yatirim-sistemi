@@ -319,7 +319,7 @@ def main() -> int:
 
     if not argumanlar.rapor:
         yapilandirma = yapilandirmayi_oku()
-        islemler, baslangic_nakit, komisyon = islemleri_oku(DEFTER_DOSYASI)
+        islemler, baslangic_nakit, komisyon, _ = islemleri_oku(DEFTER_DOSYASI)
         print(f"{len(kararlar)} karar icin olcum kontrol ediliyor...")
         fiyatlar = fiyatlari_getir(yapilandirma)
 

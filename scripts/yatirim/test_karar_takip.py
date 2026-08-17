@@ -88,7 +88,7 @@ class GecmiseDonukOlcumTesti(unittest.TestCase):
             f"  - {{tarih: {self.karar_gunu.isoformat()}, yon: AL, "
             "sembol: ALINAN.IS, adet: 50, fiyat_try: 105}\n",
             "islemler.yaml")
-        self.islemler, self.nakit, self.komisyon = islemleri_oku(defter)
+        self.islemler, self.nakit, self.komisyon, _ = islemleri_oku(defter)
         self.karar = Karar(
             id="test-takas", tarih=self.karar_gunu.isoformat(), tip="TAKAS",
             ozet="test", beklenti="test",

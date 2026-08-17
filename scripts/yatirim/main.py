@@ -21,12 +21,13 @@ from config import (  # noqa: E402
     sablonu_reddet,
     yapilandirmayi_oku,
 )
-from fetch import fiyatlari_getir  # noqa: E402
+from fetch import fiyatlari_getir, maliyet_modelini_coz  # noqa: E402
 from kurumsal_olay import bilinen_olay_anahtarlari, olaylari_oku  # noqa: E402
 from ledger import durumu_hesapla, islemleri_oku  # noqa: E402
 from notify import (  # noqa: E402
     TelegramHatasi,
     env_oku,
+    hurdle_eksik_mesaji,
     mesaj_gonder,
     ozet_mesaji,
     ucgenleme_durdurma_mesaji,
@@ -66,11 +67,14 @@ def _sistem_ozetini_guncelle(ozet: str) -> None:
     SISTEM_DOSYASI.write_text(desen.sub(lambda _: ozet, icerik), encoding="utf-8")
 
 
-def _durumu_yukle(sim: bool, olaylar):
+def _durumu_yukle(sim: bool, olaylar, nakit_getirisi_yillik: float | None):
     if not sim:
         return None
-    islemler, baslangic_nakit, komisyon = islemleri_oku(SIM_DEFTERI)
-    return durumu_hesapla(islemler, baslangic_nakit, komisyon, olaylar)
+    islemler, baslangic_nakit, komisyon, baslangic = islemleri_oku(SIM_DEFTERI)
+    return durumu_hesapla(islemler, baslangic_nakit, komisyon, olaylar,
+                          nakit_getirisi_yillik=nakit_getirisi_yillik,
+                          baslangic_tarihi=baslangic,
+                          bugun=date.today().isoformat())
 
 
 def main() -> int:
@@ -87,21 +91,40 @@ def main() -> int:
     if not argumanlar.sim:
         sablonu_reddet(yapilandirma)
     olaylar = olaylari_oku(SIM_OLAY_DEFTERI)
-    durum = _durumu_yukle(argumanlar.sim, olaylar)
+    ortam = env_oku()
+    rapor_adi = date.today().isoformat()
+    baslik = f"{'Simulasyon' if argumanlar.sim else 'Portfoy'} {rapor_adi}"
+
+    # Hurdle rate ZORUNLU: yoksa getiri sifira gore olculur ve her pozitif
+    # sonuc "basari" gorunur. Once canli TCMB, olmazsa varliklar.yaml yedegi.
+    maliyet = maliyet_modelini_coz(yapilandirma)
+    if maliyet.tl_risksiz_yillik is None:
+        print("HATA - TL risksiz getiri (hurdle rate) yok, rapor uretilmedi.",
+              file=sys.stderr)
+        print(f"  Canli seri: {maliyet.risksiz_serisi or '(tanimsiz)'}",
+              file=sys.stderr)
+        print("  Yedek: varliklar.yaml -> maliyet.firsat.tl_risksiz_yillik",
+              file=sys.stderr)
+        try:
+            mesaj_gonder(hurdle_eksik_mesaji(baslik, maliyet.risksiz_serisi), ortam)
+        except TelegramHatasi as hata:
+            print(f"UYARI - Telegram uyarisi da gonderilemedi: {hata}",
+                  file=sys.stderr)
+        return 1
+    for uyari in maliyet.uyarilar:
+        print(f"UYARI - {uyari}")
+
+    durum = _durumu_yukle(argumanlar.sim, olaylar, maliyet.tl_risksiz_yillik)
 
     print(f"{len(yapilandirma.fiyat_sembolleri)} sembol icin fiyat cekiliyor...")
     # Deftere yazilmis olaylar otomatik tespiti tetiklemez - yoksa kayitli bir
     # bedelsizden sonra o sembolun degerlemesi sonsuza kadar durur.
-    ortam = env_oku()
     fiyatlar = fiyatlari_getir(yapilandirma, bilinen_olay_anahtarlari(olaylar), ortam)
-
-    rapor_adi = date.today().isoformat()
     # Ucgenleme durdurdu: uc kaynak da taze ama birbirini tutmuyor. Rapor
     # URETILMEZ. Kaynaklardan biri eksik/bayat olsaydi durum OLCULEMEDI olur
     # ve rapor uretilirdi - CoinGecko'nun bir hikkirigi tum gunun raporunu
     # (BIST, altin, Nasdaq dahil) sildirmesin diye ayrim var.
     if fiyatlar.ucgenleme.durduranlar:
-        baslik = f"{'Simulasyon' if durum else 'Portfoy'} {rapor_adi}"
         mesaj = ucgenleme_durdurma_mesaji(fiyatlar.ucgenleme.durduranlar, baslik)
         print("HATA - ucgenleme durdurdu, rapor uretilmedi:", file=sys.stderr)
         for sonuc in fiyatlar.ucgenleme.durduranlar:
@@ -126,7 +149,9 @@ def main() -> int:
     rapor_dizini.mkdir(parents=True, exist_ok=True)
     rapor_dosyasi = rapor_dizini / f"{rapor_adi}.md"
     rapor_dosyasi.write_text(
-        rapor_olustur(yapilandirma, fiyatlar, portfoy, sapmalar, risk, durum), encoding="utf-8"
+        rapor_olustur(yapilandirma, fiyatlar, portfoy, sapmalar, risk, durum,
+                      maliyet),
+        encoding="utf-8",
     )
 
     if not durum:
@@ -139,11 +164,10 @@ def main() -> int:
         print(f"UYARI - olasi kurumsal olay, degerleme durduruldu: {sembol} ({gerekce})")
 
     if argumanlar.telegram:
-        baslik = f"{'Simulasyon' if durum else 'Portfoy'} {rapor_adi}"
         try:
             mesaj_gonder(ozet_mesaji(portfoy, sapmalar, risk, durum, baslik,
                                      fiyatlar, yapilandirma.esikler,
-                                     yapilandirma.bayatlik), ortam)
+                                     yapilandirma.bayatlik, maliyet), ortam)
             print("Telegram ozeti gonderildi.")
         except TelegramHatasi as hata:
             # Rapor diske yazildi ve GECERLI - kaybolmadi.

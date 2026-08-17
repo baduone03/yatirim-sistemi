@@ -98,6 +98,148 @@ veri_kaynaklari:
     prim_esigi: 0.03           # ustunde TR primi olarak kaydedilir + uyari
     durdurma_esigi: 0.08       # ustunde rapor URETILMEZ (uc kaynak da tazeyse)
 
+# ==========================================================================
+# UC SINIFLI MALIYET MODELI
+# ==========================================================================
+#
+# TEMEL KURAL: bilinmeyen kalem `null` birakilir, SIFIR YAZILMAZ.
+# Bilinmeyen maliyeti sifir saymak sessiz basarisizligin en tehlikeli
+# turudur: sistem hata vermez, yalnizca karsiz bir islemi karli gosterir.
+#
+# `null` bir kalem varsa:
+#   - rapor URETILIR (veri kaybi yok)
+#   - "EKSIK MALIYET KALEMI" uyarisi basilir
+#   - O VARLIK ICIN ISLEM SINYALI URETILMEZ (rebalancing + kisma)
+#
+# SIFIR ile NULL farki:
+#   0.0  = "olcup sifir buldum" (hisse senedinin fon gider orani yoktur)
+#   null = "bilmiyorum"          (kur spread'i platformdan sorulmadi)
+#
+# Kalem KAPSAM DISI ise iki bayrak kullanilir, boylece "yok" ile
+# "bilinmiyor" karistirilmaz:
+#   kur_cevrimi: false  -> kur spread'i ve kambiyo vergisi UYGULANMAZ
+#                          (TL hesaptan TL hisse alirken cevrim yoktur)
+#   temettu_verimi: 0.0 -> temettu odemiyor, stopaj sorusu duser
+maliyet:
+  # Varlik sinifi -> islem maliyeti profili. Haritada olmayan sinif
+  # "profil tanimsiz" sayilir ve o sinifin tum sembolleri bloklanir.
+  sinif_profili:
+    bist: bist
+    nasdaq: abd_midas
+    kripto: kripto_btcturk
+    maden: emtia_bilinmiyor
+
+  islem:
+    bist:
+      komisyon_tip: oransal
+      komisyon_oran: 0.0015        # islemler.yaml komisyon_orani ile ayni
+      kur_cevrimi: false           # TL hesap, TL hisse - cevrim yok
+      menkul_spread: 0.0010        # DOGRULANACAK, hisseye gore degisir
+
+    abd_midas:
+      komisyon_tip: sabit
+      komisyon_usd: 1.5            # DOGRULANACAK (resmi ucret tarifesi)
+      kur_cevrimi: true
+      kur_spread_tek_yon: null     # BILINMIYOR - en buyuk bosluk, Bolum 7/2
+      kambiyo_vergisi: null        # BILINMIYOR - mevzuat kontrolu gerek
+      menkul_spread: 0.00002       # QQQ/SPY, yuksek likidite
+
+    kripto_btcturk:
+      komisyon_tip: oransal
+      komisyon_oran: null          # BILINMIYOR - BTCTurk kademeli tarife
+      kur_cevrimi: false           # TRY cifti dogrudan alinir (BTCTRY)
+      menkul_spread: null          # BILINMIYOR - emir defteri derinligi
+
+    emtia_bilinmiyor:
+      # GC=F/SI=F bir vadeli sozlesme fiyatidir; gram altin fiilen hangi
+      # platformdan alinacagi kararlasmadi. Platform belli olunca bu blok
+      # gercek tarifeyle degistirilir.
+      komisyon_tip: oransal
+      komisyon_oran: null
+      kur_cevrimi: null            # platform TL mi USD mi bilinmiyor
+      menkul_spread: null
+
+  # Tasima maliyeti: tuttugun her gun isler, bilesiktir. Sembol bazinda.
+  # Listede OLMAYAN sembol "beyan edilmemis" sayilir ve bloklanir.
+  tasima:
+    THYAO.IS:
+      gider_orani_yillik: 0.0      # hisse senedi, fon degil - yapisal sifir
+      temettu_verimi: null         # DOGRULANACAK
+      temettu_stopaji: null        # DOGRULANACAK
+    ASELS.IS:
+      gider_orani_yillik: 0.0
+      temettu_verimi: null
+      temettu_stopaji: null
+    TUPRS.IS:
+      gider_orani_yillik: 0.0
+      temettu_verimi: null
+      temettu_stopaji: null
+    GARAN.IS:
+      gider_orani_yillik: 0.0
+      temettu_verimi: null
+      temettu_stopaji: null
+    QQQ:
+      gider_orani_yillik: 0.0020   # Invesco QQQ gider orani %0.20
+      temettu_verimi: null         # DOGRULANACAK (fon kunyesi)
+      temettu_stopaji: null        # DOGRULANACAK (CVOA + ABD stopaji)
+    AAPL:
+      gider_orani_yillik: 0.0
+      temettu_verimi: null
+      temettu_stopaji: null
+    NVDA:
+      gider_orani_yillik: 0.0
+      temettu_verimi: null
+      temettu_stopaji: null
+    BTC-USD:
+      gider_orani_yillik: 0.0
+      temettu_verimi: 0.0          # kripto temettu odemez - yapisal sifir
+    ETH-USD:
+      gider_orani_yillik: 0.0
+      temettu_verimi: 0.0
+    GC=F:
+      gider_orani_yillik: 0.0
+      temettu_verimi: 0.0          # fiziki maden temettu odemez
+    SI=F:
+      gider_orani_yillik: 0.0
+      temettu_verimi: 0.0
+    XU100.IS:
+      gider_orani_yillik: 0.0
+      temettu_verimi: 0.0          # endeks, satin alinmaz (izleme: true)
+
+  # Firsat maliyeti - hurdle rate. ZORUNLU.
+  # Deger yoksa (ne canli ne yedek) RAPOR URETILMEZ: sifira gore olculen
+  # her pozitif getiri "basari" gorunur, oysa gercek soru "bu pozisyon
+  # parayi TL mevduatta tutmaktan iyi mi".
+  firsat:
+    # Canli kaynak: TCMB sk-seriler ucu, ANAHTARSIZ. Yuzde cinsinden doner.
+    tcmb_serisi: "TP.TRY.MT02"     # Mevduat Faiz TL Orani (3 aya kadar vadeli)
+    bayatlik_gun: 21               # haftalik seri - 21 gun makul tolerans
+    # Canli okuma basarisiz/bayat olursa bu deger kullanilir ve raporda
+    # "yedek" olarak isaretlenir. Guncelleme: yukaridaki seriye bak.
+    tl_risksiz_yillik: 0.4791      # TCMB TP.TRY.MT02, 07-08-2026 = %47.91
+
+# Nakit modellemesi.
+# Yatirilmamis TL sifir getiriyle DURMAZ; duruyormus gibi modellersen sistem
+# "nakitte beklemek maliyetsiz" sanir ve gereginden fazla islem onerir.
+nakit:
+  getiri_kaynagi: tl_risksiz      # firsat.tl_risksiz_yillik ile ayni oran
+  stopaj: null                    # BILINMIYOR - bu yuzden getiri BRUT islenir,
+                                  # yani gercek net getiri daha DUSUK olacak
+
+# Enflasyon - reel getiri sutunu icin.
+# reel_getiri = (1 + nominal) / (1 + enflasyon) - 1   [CARPIMSAL]
+#
+# Sartname TP.FE.OKTG01 diyordu; o seri ARSIVLENMIS (son guncelleme
+# 09-02-2026) ve ustelik ozel kapsamli (cekirdek) TUFE, mansetler degil.
+# Guncel manset serisi TP.TUKFIY2025.GENEL fakat seri-veri ucu
+# (POST /fe) WAF arkasinda - tarayici disindan cekilemiyor.
+# Bu yuzden anahtarsiz sk-seriler ucundaki BEKLENTI serisi kullaniliyor;
+# gerceklesen degil beklenen enflasyondur ve rapor bunu yazar.
+enflasyon:
+  tcmb_serisi: "TP.PKAUO.S01.E.U"  # 12 ay sonrasi yillik TUFE beklentisi (%)
+  bayatlik_gun: 45                 # aylik seri
+  yillik: 0.2369                   # TCMB, AGUSTOS 2026 = %23.69 (beklenti)
+
 hedef_dagilim:
   bist: 0.30
   nasdaq: 0.25

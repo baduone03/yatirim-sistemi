@@ -8,11 +8,13 @@ uzerinden kaydedilir (yani kur farki maliyete dahildir).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 import yaml
 
 from kurumsal_olay import KurumsalOlay
+from maliyet import donem_orani
 
 ALIS = "AL"
 SATIS = "SAT"
@@ -49,10 +51,13 @@ class LedgerDurumu:
     islemler: list[Islem]
     komisyon_orani: float
     uygulanan_olaylar: list[KurumsalOlay] = field(default_factory=list)
+    nakit_getirisi_try: float = 0.0
+    nakit_getirisi_yillik: float | None = None
+    baslangic_tarihi: str = ""
 
 
-def islemleri_oku(dosya: Path) -> tuple[list[Islem], float, float]:
-    """Defteri okur; (islemler, baslangic_nakit, komisyon_orani) doner."""
+def islemleri_oku(dosya: Path) -> tuple[list[Islem], float, float, str]:
+    """Defteri okur; (islemler, baslangic_nakit, komisyon_orani, baslangic_tarihi)."""
     if not dosya.exists():
         raise FileNotFoundError(f"Islem defteri yok: {dosya}")
     ham = yaml.safe_load(dosya.read_text(encoding="utf-8"))
@@ -74,10 +79,15 @@ def islemleri_oku(dosya: Path) -> tuple[list[Islem], float, float]:
         if islem.adet <= 0 or islem.fiyat_try <= 0:
             raise ValueError(f"{islem.tarih} {islem.sembol}: adet ve fiyat pozitif olmali")
 
+    sirali = sorted(islemler, key=lambda i: i.tarih)
+    # Sermayenin var oldugu tarih. Ilk islemden ONCE de nakit faiz isler;
+    # ilk islem tarihini baslangic saymak o donemi kaybettirir.
+    varsayilan_baslangic = sirali[0].tarih if sirali else ""
     return (
-        sorted(islemler, key=lambda i: i.tarih),
+        sirali,
         float(ham["baslangic_nakit_try"]),
         float(ham.get("komisyon_orani", 0.0)),
+        str(ham.get("baslangic_tarihi", varsayilan_baslangic)),
     )
 
 
@@ -147,16 +157,47 @@ def _zaman_cizgisi(islemler: list[Islem],
     )
 
 
+def _faiz(bakiye: float, baslangic: str, bitis: str, yillik: float) -> float:
+    """Iki tarih arasinda nakit bakiyesinin getirisi. Bilesik.
+
+    Negatif veya sifir gun 0 doner: defterdeki ayni gunlu islemler arasinda
+    faiz islememeli, ve baslangic tarihi ilk islemden sonraysa geriye dogru
+    faiz uretilmemeli.
+    """
+    if bakiye <= 0 or not baslangic or not bitis:
+        return 0.0
+    gun = (date.fromisoformat(bitis) - date.fromisoformat(baslangic)).days
+    return bakiye * donem_orani(yillik, gun) if gun > 0 else 0.0
+
+
 def durumu_hesapla(islemler: list[Islem], baslangic_nakit: float,
                    komisyon_orani: float,
-                   olaylar: list[KurumsalOlay] | None = None) -> LedgerDurumu:
+                   olaylar: list[KurumsalOlay] | None = None,
+                   nakit_getirisi_yillik: float | None = None,
+                   baslangic_tarihi: str = "",
+                   bugun: str = "") -> LedgerDurumu:
+    """Defteri yurutup guncel durumu cikarir.
+
+    `nakit_getirisi_yillik` verilirse yatirilmamis TL bos durmaz: her islem
+    araliginda bakiyeye faiz islenir. Nakti sifir getiriyle modellemek
+    "nakitte beklemek maliyetsiz" yanilgisi uretir ve sistemi gereginden
+    fazla islem onermeye iter. Verilmezse davranis degismez.
+    """
     pozisyonlar: dict[str, LedgerPozisyonu] = {}
     nakit = baslangic_nakit
     gerceklesen = 0.0
     komisyon_toplami = 0.0
     uygulananlar: list[KurumsalOlay] = []
+    nakit_getirisi = 0.0
+    faiz_acik = nakit_getirisi_yillik is not None and bool(baslangic_tarihi)
+    son_faiz_tarihi = baslangic_tarihi
 
-    for _, tur, kayit in _zaman_cizgisi(islemler, olaylar or []):
+    for tarih, tur, kayit in _zaman_cizgisi(islemler, olaylar or []):
+        if faiz_acik:
+            kazanc = _faiz(nakit, son_faiz_tarihi, tarih, nakit_getirisi_yillik)
+            nakit += kazanc
+            nakit_getirisi += kazanc
+            son_faiz_tarihi = tarih
         if tur == 0:
             olay: KurumsalOlay = kayit
             yeni = _olayi_uygula(pozisyonlar.get(olay.sembol), olay)
@@ -184,6 +225,12 @@ def durumu_hesapla(islemler: list[Islem], baslangic_nakit: float,
                 f"{islem.tarih} {islem.sembol}: nakit yetersiz ({nakit:,.2f} TL)"
             )
 
+    # Son islemden bugune kadar kalan sure de faiz isler.
+    if faiz_acik and bugun:
+        kazanc = _faiz(nakit, son_faiz_tarihi, bugun, nakit_getirisi_yillik)
+        nakit += kazanc
+        nakit_getirisi += kazanc
+
     return LedgerDurumu(
         pozisyonlar={s: p for s, p in pozisyonlar.items() if p.adet > 1e-12},
         nakit_try=nakit,
@@ -193,4 +240,7 @@ def durumu_hesapla(islemler: list[Islem], baslangic_nakit: float,
         islemler=islemler,
         komisyon_orani=komisyon_orani,
         uygulanan_olaylar=uygulananlar,
+        nakit_getirisi_try=nakit_getirisi,
+        nakit_getirisi_yillik=nakit_getirisi_yillik,
+        baslangic_tarihi=baslangic_tarihi or (islemler[0].tarih if islemler else ""),
     )
