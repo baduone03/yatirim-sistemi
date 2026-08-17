@@ -35,9 +35,22 @@ def http_json(url: str, params: dict | None = None,
         cevap = requests.get(url, params=params, headers=headers,
                              timeout=ZAMAN_ASIMI)
         cevap.raise_for_status()
-        return cevap.json()
     except requests.RequestException as hata:
         raise KaynakHatasi(f"{url} okunamadi: {hata}") from hata
+
+    # HTTP 200 + HTML, "anahtar gecersiz" ile karistirilmamali. Sunucu web
+    # arayuzunu donduruyorsa istek kimlik dogrulama katmanina HIC ulasmamistir;
+    # sorun anahtarda degil, uc nokta adresindedir. Bu ayrimi yapmayan bir
+    # hata mesaji saatlerce yanlis yerde anahtar aratir.
+    govde = cevap.text.lstrip()
+    if govde[:1] == "<":
+        raise KaynakHatasi(
+            f"{url} JSON degil HTML dondurdu (HTTP {cevap.status_code}). "
+            "Uc nokta adresi degismis olabilir - anahtari degil ADRESI "
+            "kontrol et. Adres varliklar.yaml icinde, kodda degil."
+        )
+    try:
+        return cevap.json()
     except ValueError as hata:
         raise KaynakHatasi(f"{url} JSON dondurmedi: {hata}") from hata
 
