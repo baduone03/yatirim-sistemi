@@ -207,6 +207,9 @@ def kanaldan_gonder(bildirim: Bildirim, ayarlar: BildirimAyarlari,
     Sira onemli. Idempotency ilk sirada cunku zaten gonderilmis bir mesaji
     kuyruga almak onu ikinci kez gonderir. Sessiz saat hiz sinirindan once
     cunku gece hicbir sey gitmeyecekse sayaci mesgul etmenin anlami yok.
+
+    Sessiz saat kapisi TIPE BAKAR (`biriktirilir_mi`): islem karari gece de
+    gider, ozet ve uyari birikir.
     """
     simdi = simdi or simdi_utc()
     if bildirim.anahtar in gonderilen_anahtarlar(log):
@@ -220,12 +223,17 @@ def kanaldan_gonder(bildirim: Bildirim, ayarlar: BildirimAyarlari,
         bildirim.tip, bildirim.anahtar, bildirim.metin,
         simdi.isoformat(timespec="seconds"))
 
-    if ayarlar.sessiz_mi(simdi):
+    if ayarlar.biriktirilir_mi(damgali.tip, simdi):
         yeni = [*bekleyenler, damgali]
         kuyrugu_yaz(yeni, kuyruk)
         return GonderimSonucu(BIRIKTIRILDI, kuyruk=yeni)
 
-    if son_saatteki_gonderim(simdi, log) >= ayarlar.saatlik_maks_mesaj:
+    # Sessiz saatte istisna tip: hiz siniri BIRLESTIRMESI atlanir. Birlestirme
+    # bekleyen kuyrugu da yollar; gece 01:05'te gelen bir islem sinyali, saat
+    # 00:55'te dolan hiz sinirine takilip tum gece kuyrugunu bosaltirdi.
+    if not (ayarlar.sessiz_mi(simdi)
+            and damgali.tip in ayarlar.sessiz_istisna_tipler) \
+            and son_saatteki_gonderim(simdi, log) >= ayarlar.saatlik_maks_mesaj:
         # Hiz siniri asildi: mesaji ayri gondermek yerine biriktir ve
         # bekleyenlerle BIRLIKTE tek mesaj olarak yolla. Tek tek gondermek
         # sinirin varlik sebebini ortadan kaldirirdi.

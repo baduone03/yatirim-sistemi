@@ -28,6 +28,22 @@ sessiz_saatler:
   baslangic: "01:00"
   bitis: "08:00"
 
+  # Bu tipler sessiz saatte de GONDERILIR, birikmez.
+  #
+  # NEDEN: 01:00-08:00 arasinda BIST de Nasdaq da kapali. O saatte islem
+  # sinyali uretebilen tek sey kripto - ve kripto sinyalini sabaha
+  # biriktirmek onu islem olarak degersiz kilar; fiyatin 8 saat sonra
+  # orada olacaginin garantisi yok. Biriken bir "AL" mesaji, tavsiye degil
+  # kacirilan firsatin tutanagidir.
+  #
+  # Mesaj yagmuru riski yok: bekleme suresi (varliklar.yaml -> bekleme)
+  # sembol basina 20 saatte bir sinyalle siniriyor ve gece acik yalnizca
+  # 2 kripto varligi var. Teorik tavan: gecede 2 mesaj.
+  #
+  # Gece hic uyanmak istemiyorsan bu listeyi bos birak ([]) - o zaman islem
+  # sinyali de sabah 08:00'den sonraki ilk kosuda toplu gelir.
+  istisna_tipler: ["islem"]
+
 # Hangi saatte ne yapilir. TEK workflow var; hangi piyasanin acik oldugunu
 # script bu tabloya bakarak karar verir. Ayri workflow'lar olsaydi her biri
 # ayri checkout + pip install ederdi - Actions dakikasi ikiye katlanirdi.

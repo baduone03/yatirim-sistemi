@@ -7,15 +7,20 @@ name: Yatirim Takibi
 # Ayri workflow'lar (kripto/BIST/ABD) her biri ayri checkout + pip install
 # ederdi; Actions dakika butcesi ikiye katlanirdi.
 #
-# DAKIKA BUTCESI (private repo, GitHub Free = 2000 dk/ay, her kosu yukari
-# yuvarlanir):
+# DAKIKA BUTCESI (private repo, GitHub Free = 2000 dk/ay).
+#
+# OLCULEN kosu suresi: 31-40 sn (gh run list, 6 kosu). Faturalama kosu
+# basina YUKARI YUVARLANIR, yani her kosu 1 DAKIKA yazilir - 2 degil.
+# Tahmine dayali eski hesap butceyi iki katina cikarmisti.
+#
 #   2 saatlik grid  12/gun x 30.4 = 365 kosu
 #   gun sonu         1/gun        =  30 kosu
 #   brifing          1/hafta      =   4 kosu
-#   ~399 kosu x ~2 dk             = ~800 dk/ay = butcenin %40'i
+#   ~400 kosu x 1 dk              = ~400 dk/ay = butcenin %20'si
 #
-# 1 saatlik gride cikarilirsa ~1530 dk (%77) - kosu suresi 3 dakikaya cikarsa
-# butce asilir. 30 dakikalik grid ~2980 dk (%149), MUMKUN DEGIL.
+# 1 saatlik grid ~765 dk (%38) - rahat. 30 dakikalik grid ~1495 dk (%75)
+# ama RISKLI: kosu 60 saniyeyi asarsa fatura 2 dk'ya ciker ve toplam
+# ~2990 dk olur, butce asilir. 35 saniyelik kosuda 25 saniyelik pay var.
 #
 # Sikligi artirmanin tek faydasi ilk hareketi ne kadar gec duydugundur:
 # bekleme suresi (FAZ 4) zaten sembol basina gunde ~1 sinyalle siniriyor,
@@ -24,8 +29,12 @@ name: Yatirim Takibi
 on:
   schedule:
     # Saatler UTC. Turkiye kalici UTC+3, yaz saati yok.
-    - cron: '0 */2 * * *'     # 2 saatte bir, 7 gun - piyasa taramasi
-    - cron: '30 20 * * *'     # 23:30 TR - gun sonu ozeti
+    #
+    # Dakika 7, 0 DEGIL: GitHub zamanlanmis kosulari "best effort" calistirir
+    # ve saat basi kuyrugun en kalabalik oldugu andir. Tam saatte tetiklenen
+    # is 10-40 dakika gecikebiliyor; 7. dakika bedava gecikme sigortasi.
+    - cron: '7 */2 * * *'     # 2 saatte bir, 7 gun - piyasa taramasi
+    - cron: '30 20 * * *'     # 23:30 TR - gun sonu ozeti (esik tam 23:30)
     - cron: '0 6 * * 1'       # 09:00 TR Pazartesi - acilis brifingi
   workflow_dispatch:          # Actions sekmesinden elle tetiklenebilir
 

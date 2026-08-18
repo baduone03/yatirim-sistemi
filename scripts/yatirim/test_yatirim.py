@@ -1898,6 +1898,55 @@ class SessizSaatTesti(unittest.TestCase):
         self.assertTrue(gece.sessiz_mi(self._an(2)))
         self.assertFalse(gece.sessiz_mi(self._an(12)))
 
+    def _kanal(self, tip: str, an: datetime, ayarlar=None):
+        cagrilar = []
+        with unittest.mock.patch("notify.mesaj_gonder",
+                                 side_effect=lambda m, e=None: cagrilar.append(m)):
+            sonuc = kanaldan_gonder(Bildirim(tip, f"{tip}:test", f"{tip} metni"),
+                                    ayarlar or self.ayarlar, {}, self.log,
+                                    self.kuyruk, an)
+        return sonuc, cagrilar
+
+    def test_islem_karari_sessiz_saatte_gecer(self):
+        """Kripto 7/24. Gece 03:00'te uretilen islem sinyalini sabaha
+        biriktirmek onu islem olarak degersiz kilar - fiyat 8 saat sonra
+        orada olmayabilir."""
+        sonuc, cagrilar = self._kanal("islem", self._an(3))
+        self.assertEqual(sonuc.durum, GONDERILDI)
+        self.assertEqual(len(cagrilar), 1)
+        self.assertEqual(kuyrugu_oku(self.kuyruk), [])
+
+    def test_ozet_sessiz_saatte_yine_birikir(self):
+        """Istisna DAR olmali: gun sonu ozeti aciliyet tasimaz, birikmeli.
+        Istisna tum tiplere yayilsaydi sessiz saat kurali anlamsizlasirdi."""
+        sonuc, cagrilar = self._kanal("gunsonu", self._an(3))
+        self.assertEqual(sonuc.durum, BIRIKTIRILDI)
+        self.assertEqual(cagrilar, [])
+
+    def test_istisna_bos_birakilirsa_islem_de_birikir(self):
+        """`istisna_tipler: []` -> gece hic uyanma. Ayar gercekten kapanmali."""
+        kapali = BildirimAyarlari(sessiz_istisna_tipler=frozenset())
+        sonuc, cagrilar = self._kanal("islem", self._an(3), kapali)
+        self.assertEqual(sonuc.durum, BIRIKTIRILDI)
+        self.assertEqual(cagrilar, [])
+
+    def test_istisna_gece_kuyrugunu_bosaltmaz(self):
+        """Sessiz saatte gecen islem sinyali hiz siniri BIRLESTIRMESINI
+        tetiklememeli. Tetikleseydi 01:05'teki tek bir kripto sinyali, saat
+        00:55'te dolan sinir yuzunden tum gece kuyrugunu yollardi."""
+        gece_yarisi = self._an(0) + timedelta(minutes=55)
+        gonderildi_yaz([f"uyari:dolgu:{i}" for i in range(5)],
+                       gece_yarisi, self.log)
+        kuyrugu_yaz([Bildirim("uyari", "uyari:gece", "gece uyarisi")], self.kuyruk)
+
+        sonuc, cagrilar = self._kanal("islem", self._an(1) + timedelta(minutes=5))
+
+        self.assertEqual(sonuc.durum, GONDERILDI)
+        self.assertEqual(len(cagrilar), 1)
+        self.assertIn("islem metni", cagrilar[0])
+        self.assertNotIn("gece uyarisi", cagrilar[0])
+        self.assertEqual(len(kuyrugu_oku(self.kuyruk)), 1)
+
     def test_ayni_sessiz_aralik_reddedilir(self):
         dosya = gecici_yaz(
             "sessiz_saatler: {baslangic: '01:00', bitis: '01:00'}\n",

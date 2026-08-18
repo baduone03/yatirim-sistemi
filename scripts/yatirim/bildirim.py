@@ -44,6 +44,7 @@ class BildirimAyarlari:
     saatlik_maks_mesaj: int = 5
     sessiz_baslangic: time = time(1, 0)
     sessiz_bitis: time = time(8, 0)
+    sessiz_istisna_tipler: frozenset[str] = frozenset({"islem"})
     takvim: Takvim = field(default_factory=Takvim)
 
     def yerel(self, an: datetime) -> time:
@@ -56,6 +57,21 @@ class BildirimAyarlari:
         if self.sessiz_baslangic <= self.sessiz_bitis:
             return self.sessiz_baslangic <= saat < self.sessiz_bitis
         return saat >= self.sessiz_baslangic or saat < self.sessiz_bitis
+
+    def biriktirilir_mi(self, tip: str, an: datetime) -> bool:
+        """Bu bildirim sessiz saate takilir mi.
+
+        Sessiz saatte olmak yetmez: istisna tipler gece de gider. Sebep
+        kriptonun 7/24 olmasi. 01:00-08:00 arasinda BIST ve Nasdaq kapali,
+        yani o saatte uretilebilen tek islem sinyali kriptodur - ve kripto
+        sinyalini sabaha biriktirmek onu ISLEM OLARAK degersiz kilar,
+        fiyat 8 saat sonra oradadir diye bir garanti yok.
+
+        Gece mesaj yagmuru riski yok: FAZ 4'un bekleme suresi sembol basina
+        20 saatte bir sinyalle siniriyor, gece acik olan iki kripto varligi
+        var. Yani teorik tavan gecede 2 mesaj.
+        """
+        return self.sessiz_mi(an) and tip not in self.sessiz_istisna_tipler
 
 
 @dataclass(frozen=True)
@@ -97,10 +113,14 @@ def ayarlari_oku(dosya: Path = AYAR_DOSYASI) -> BildirimAyarlari:
     ham = yaml.safe_load(dosya.read_text(encoding="utf-8")) or {}
     hiz = ham.get("hiz_siniri") or {}
     sessiz = ham.get("sessiz_saatler") or {}
+    istisna = sessiz.get("istisna_tipler")
     ayarlar = BildirimAyarlari(
         saatlik_maks_mesaj=int(hiz.get("saatlik_maks_mesaj", 5)),
         sessiz_baslangic=_saati_coz(sessiz.get("baslangic"), time(1, 0)),
         sessiz_bitis=_saati_coz(sessiz.get("bitis"), time(8, 0)),
+        sessiz_istisna_tipler=(frozenset(str(t) for t in istisna)
+                               if istisna is not None
+                               else frozenset({"islem"})),
         takvim=takvimi_coz(ham.get("takvim")),
     )
     if ayarlar.saatlik_maks_mesaj < 1:
