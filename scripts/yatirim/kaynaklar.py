@@ -280,7 +280,8 @@ class UcgenlemeAyarlari:
 
 def ucgenle(sembol: str, tl_fiyat: AnlikFiyat | None, usd_fiyat: float | None,
             kur: KurKotasyonu | None, ayarlar: UcgenlemeAyarlari,
-            simdi: datetime | None = None) -> Ucgenleme:
+            simdi: datetime | None = None,
+            kur_piyasasi_kapali: bool = False) -> Ucgenleme:
     """Uc kaynagi capraz kontrol eder.
 
     OLCULEMEDI ile DURDUR farkli seylerdir ve karistirilmamalidir:
@@ -308,6 +309,21 @@ def ucgenle(sembol: str, tl_fiyat: AnlikFiyat | None, usd_fiyat: float | None,
     if kur is None:
         return Ucgenleme(sembol, OLCULEMEDI, "USD/TRY kuru alinamadi",
                          tl_fiyat=tl_fiyat.deger)
+    if kur_piyasasi_kapali:
+        # HAFTA SONU TUZAGI. Forex Cuma 22:00 - Pazar 22:00 UTC arasi kapali;
+        # TCMB de is gunu disinda kur yayimlamaz. Yani hafta sonu kur DONMUS,
+        # kripto ise hareket ediyor. Bu durumda "beklenen TL" Cuma kuruyla
+        # hesaplanir ve BTCTurk'un canli TL fiyatiyla arasindaki fark TR primi
+        # DEGIL, kurun bayatligidir.
+        #
+        # Bu ayrim 7/24 calismanin on kosulu: hafta sonu farki gercek kopukluk
+        # sayilsaydi DURDUR cikar ve rapor hic uretilmezdi. OLCULEMEDI dogru
+        # cevap - bizim korlugumuz, piyasa bulgusu degil.
+        return Ucgenleme(
+            sembol, OLCULEMEDI,
+            "kur piyasasi kapali (hafta sonu) - TR primi olculemez, "
+            "kripto hareket ederken USD/TRY donmus",
+            tl_fiyat=tl_fiyat.deger)
 
     beklenen = usd_fiyat * kur.deger
     if beklenen <= 0:

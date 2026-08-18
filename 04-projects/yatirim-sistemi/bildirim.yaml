@@ -1,0 +1,58 @@
+# Telegram bildirim politikasi.
+#
+# Bu dosya SIKLIK artisinin bedelini oder. Gunde 20 bildirim alan biri
+# hicbirini okumaz; uyarilar gurultuye karisir ve sistem calisiyor gorunurken
+# fiilen ise yaramaz hale gelir. Iki fren var.
+
+hiz_siniri:
+  # Saatte bu sayidan fazla mesaj cikarsa fazlasi AYRI AYRI gonderilmez;
+  # bekleyenlerle birlestirilip TEK mesaj olarak yollanir.
+  #
+  # 5 sayisi keyfi degil: FAZ 4'un devre kesicisi gunde 6 sinyalde duruyor,
+  # yani normal bir gunde toplam mesaj sayisi zaten bunun civarinda. Saatlik
+  # 5, "normal gunun tamami tek saate sigsa bile gecer" demek - fren yalnizca
+  # gercekten anormal durumda devreye girer.
+  saatlik_maks_mesaj: 5
+
+sessiz_saatler:
+  # YEREL saat (TR, kalici UTC+3). Bu aralikta bildirim GONDERILMEZ,
+  # bildirim-kuyrugu.yaml icinde birikir ve bitis saatinden sonraki ilk
+  # kosuda tek mesaj olarak gider.
+  #
+  # Kripto 7/24 acik oldugu icin gece sinyali teknik olarak mumkun; ama gece
+  # 03:00'te gelen bir bildirim ya uykuyu bozar ya sabaha kadar okunmaz.
+  # Ikinci durumda biriktirmek zaten dogru davranis.
+  #
+  # Bitis 08:00 secildi: Pazartesi acilis brifingi TR 09:00'da, BIST 10:00'da
+  # aciliyor. Sessizlik 08:00'de bitmezse brifing hep birikmis gelir.
+  baslangic: "01:00"
+  bitis: "08:00"
+
+# Hangi saatte ne yapilir. TEK workflow var; hangi piyasanin acik oldugunu
+# script bu tabloya bakarak karar verir. Ayri workflow'lar olsaydi her biri
+# ayri checkout + pip install ederdi - Actions dakikasi ikiye katlanirdi.
+#
+# SAATLER YEREL (TR). Piyasa saatleri dis gercektir ama sabit degildir:
+# BIST seans saatleri gecmiste degisti. Bu yuzden kodda degil burada.
+takvim:
+  seanslar:
+    kripto:
+      gunler: her_gun          # 7/24 acik
+      baslangic: "00:00"
+      bitis: "23:59"
+    bist:
+      gunler: hafta_ici
+      baslangic: "10:00"
+      bitis: "18:00"
+    abd:
+      gunler: hafta_ici
+      baslangic: "16:30"
+      bitis: "23:00"
+
+  # Gun sonu ozeti bu saatten sonraki ilk kosuda gider (gunde bir kez).
+  gun_sonu_saati: "23:30"
+
+  # Pazartesi acilis brifingi: hafta sonu kripto hareketleri + BIST/Nasdaq
+  # icin gap riski. BIST 10:00'da aciliyor, brifing bir saat once.
+  brifing_gunu: 0              # 0 = Pazartesi (datetime.weekday)
+  brifing_saati: "09:00"

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import pandas as pd
+
 from config import Yapilandirma
 from fetch import FiyatVerisi
 
@@ -37,6 +39,30 @@ class SinifSapmasi:
     @property
     def sapma(self) -> float:
         return self.guncel_agirlik - self.hedef_agirlik
+
+
+@dataclass(frozen=True)
+class KurAyristirmasi:
+    """TL getirisinin kaci varliktan, kaci kurdan geldi.
+
+    Ayrim olmadan +%30 TL getirisi "iyi secim" gorunur; oysa kur %28 arttiysa
+    varlik dolar bazinda neredeyse hic kazandirmamistir. Yanlis dersi cikarip
+    ayni secimi tekrarlamanin en kolay yolu bu ikisini ayirmamak.
+    """
+
+    sembol: str
+    para_birimi: str
+    yerel_getiri: float           # varligin kendi para biriminde
+    kur_getirisi: float           # USD/TRY hareketi (TRY varlikta 0)
+
+    @property
+    def toplam_tl(self) -> float:
+        """CARPIMSAL: (1+yerel)(1+kur)-1.
+
+        Toplamsal yaklasim (yerel + kur) yuksek kur hareketinde ciddi sapar:
+        %20 yerel / %25 kur -> toplamsal %45 der, dogrusu %50.0.
+        """
+        return (1.0 + self.yerel_getiri) * (1.0 + self.kur_getirisi) - 1.0
 
 
 @dataclass(frozen=True)
@@ -171,6 +197,88 @@ def portfoyu_ledgerdan_hesapla(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi
         nakit_try=durum.nakit_try,
         fiyatlanamayan=sorted(fiyatlanamayan),
     )
+
+
+def _pencere_getirisi(seri, gun: int) -> float | None:
+    """Serinin son `gun` gozlemlik getirisi. Veri yetmezse None.
+
+    None ile 0.0 ayrimi burada da gecerli: veri yoksa "degismedi" demek,
+    olculemeyeni olculmus gostermektir.
+    """
+    if seri is None:
+        return None
+    temiz = seri.dropna()
+    if len(temiz) < 2:
+        return None
+    ilk = temiz.iloc[max(len(temiz) - gun - 1, 0)]
+    son = temiz.iloc[-1]
+    return float(son / ilk - 1.0) if ilk else None
+
+
+def kur_ayristir(fiyatlar: FiyatVerisi, varliklar: dict, semboller,
+                 gun: int) -> list[KurAyristirmasi]:
+    """Aciktaki pozisyonlar icin yerel/kur getirisi ayrimi.
+
+    Kur getirisi TRY varliklarda 0.0'dir - bu bir OLCUM, eksik veri degil:
+    TL hesaptan alinan TL hissede kur cevrimi yoktur.
+    """
+    ayrimlar = []
+    kur_getirisi = _pencere_getirisi(fiyatlar.kur_gecmis, gun)
+    for sembol in semboller:
+        varlik = varliklar.get(sembol)
+        if varlik is None or sembol not in fiyatlar.yerel_gecmis:
+            continue
+        yerel = _pencere_getirisi(fiyatlar.yerel_gecmis[sembol], gun)
+        if yerel is None:
+            continue
+        usd = varlik.kur == "USD"
+        if usd and kur_getirisi is None:
+            continue
+        ayrimlar.append(KurAyristirmasi(
+            sembol=sembol, para_birimi=varlik.kur, yerel_getiri=yerel,
+            kur_getirisi=kur_getirisi if usd else 0.0))
+    return ayrimlar
+
+
+def degisim_24s(portfoy: Portfoy, fiyatlar: FiyatVerisi) -> float | None:
+    """Portfoyun bir onceki gozleme gore TL degisimi. Veri yetmezse None.
+
+    Pozisyonlar SABIT tutulur, yalnizca fiyatlar geriye alinir - yani bu saf
+    fiyat etkisidir, alim/satim etkisi degil. Nakit iki tarafta da ayni oldugu
+    icin yuzdeyi sonumler; bu dogru davranis, portfoyun gercek degisimi bu.
+
+    Bir onceki GOZLEM, bir onceki takvim gunu degil: BIST Pazartesi raporunda
+    Cuma kapanisini kullanir, aradaki hafta sonunu "degisim yok" saymaz.
+    """
+    gecmis = fiyatlar.try_gecmis.ffill()
+    if len(gecmis) < 2:
+        return None
+    onceki = gecmis.iloc[-2]
+    deger = 0.0
+    for pozisyon in portfoy.pozisyonlar:
+        fiyat = onceki.get(pozisyon.sembol)
+        if fiyat is None or not pd.notna(fiyat):
+            return None          # tek eksik fiyat tum degisimi yanlis yapar
+        deger += float(fiyat) * pozisyon.adet
+    taban = deger + portfoy.nakit_try
+    return portfoy.toplam_deger_try / taban - 1.0 if taban else None
+
+
+def kur_maruziyeti(portfoy: Portfoy, varliklar: dict) -> float:
+    """USD cinsi varliklarin TL degeri / toplam portfoy.
+
+    Nakit TL kabul edilir. Bu oran, portfoyun kur hareketine ne kadar acik
+    oldugunu tek sayiyla verir: %60 maruziyet, kurdaki %10 dususun portfoyu
+    tek basina %6 dusurmesi demektir.
+    """
+    toplam = portfoy.toplam_deger_try
+    if toplam == 0:
+        return 0.0
+    usd_degeri = sum(
+        p.deger_try for p in portfoy.pozisyonlar
+        if (varliklar.get(p.sembol) is not None
+            and varliklar[p.sembol].kur == "USD"))
+    return usd_degeri / toplam
 
 
 def sinif_sapmalari(portfoy: Portfoy, hedef_dagilim: dict[str, float]) -> list[SinifSapmasi]:

@@ -15,7 +15,7 @@ import sys
 import tempfile
 import unittest
 import unittest.mock
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from config import (
     Ayarlar,
+    hafta_sonu_mu,
     BayatlikEsikleri,
     Bekleme,
     DevreKesici,
@@ -36,7 +37,12 @@ from config import (
     sablonu_reddet,
     yapilandirmayi_oku,
 )
-from fetch import FiyatVerisi, kripto_ucgenlemesi, kurumsal_olay_supheleri
+from fetch import (
+    FiyatVerisi,
+    _serileri_hazirla,
+    kripto_ucgenlemesi,
+    kurumsal_olay_supheleri,
+)
 from kaynaklar import (
     DURDUR,
     OLCULEMEDI,
@@ -64,18 +70,45 @@ from maliyet import (
     modeli_kur,
     reel_getiri,
 )
+from bildirim import (
+    ATLANDI,
+    BIRIKTIRILDI,
+    GONDERILDI,
+    Bildirim,
+    BildirimAyarlari,
+    ayarlari_oku,
+    bol,
+    kuyrugu_oku,
+    kuyrugu_yaz,
+    son_saatteki_gonderim,
+)
+from mesaj import (
+    Etki,
+    GunSonuOzeti,
+    IslemOnerisi,
+    Tetikleyici,
+    _islem_satirlari,
+    gun_sonu_mesaji,
+    islem_karari_mesaji,
+    kacis,
+    uyari_mesaji,
+    uyarilari_topla,
+)
 from notify import (
     TelegramHatasi,
-    _islem_satirlari,
-    _kacis,
     env_oku,
     idempotent_gonder,
-    ozet_mesaji,
+    kanaldan_gonder,
+    kuyrugu_bosalt,
 )
+from piyasa import BRIFING, GUN_SONU, TARAMA, takvimi_coz  # noqa: F401
 from portfolio import (
+    KurAyristirmasi,
     Portfoy,
     PozisyonDegeri,
     SinifSapmasi,
+    degisim_24s,
+    kur_maruziyeti,
     portfoyu_hesapla,
     portfoyu_ledgerdan_hesapla,
     sinif_sapmalari,
@@ -95,6 +128,7 @@ from sinyal import (
     BEKLEME,
     DEVRE_KESICI,
     EKSIK_MALIYET,
+    HAFTA_SONU,
     KIS,
     SEMBOL,
     SINIF,
@@ -555,7 +589,7 @@ class RiskTesti(unittest.TestCase):
 
 class BildirimTesti(unittest.TestCase):
     def test_html_kacisi(self):
-        self.assertEqual(_kacis("a & b < c > d"), "a &amp; b &lt; c &gt; d")
+        self.assertEqual(kacis("a & b < c > d"), "a &amp; b &lt; c &gt; d")
 
     def test_env_yorum_satirini_atlar(self):
         dosya = gecici_yaz(
@@ -642,9 +676,11 @@ class BildirimTesti(unittest.TestCase):
         sapmalar = sinif_sapmalari(portfoy, yapilandirma.hedef_dagilim)
         rapor = riski_hesapla(yapilandirma, fiyatlar, portfoy)
 
-        mesaj = ozet_mesaji(portfoy, sapmalar, rapor,
-                            karar_ver(sapmalar, rapor), durum, "Test")
-        self.assertIn("Test", mesaj)
+        mesaj = gun_sonu_mesaji(GunSonuOzeti(
+            portfoy=portfoy, risk=rapor, veri_zamani="2026-08-17",
+            uyarilar=uyarilari_topla(fiyatlar, portfoy,
+                                     karar_ver(sapmalar, rapor), None, None)))
+        self.assertIn("Gun sonu", mesaj)
         self.assertNotIn("<script", mesaj.lower())
 
 
@@ -1400,18 +1436,20 @@ class SinyalBastirmaTesti(unittest.TestCase):
         risk = self._risk()
         sapmalar = [SinifSapmasi("nasdaq", 0.80, 0.25)]
 
-        acik = ozet_mesaji(portfoy, sapmalar, risk, karar_ver(sapmalar, risk),
-                           None, "Test")
-        self.assertIn("Kisilmali", acik)
-        self.assertIn("Rebalancing", acik)
+        acik = karar_ver(sapmalar, risk)
+        self.assertTrue(acik.sinyaller(SEMBOL))
+        self.assertTrue(acik.sinyaller(SINIF))
 
-        kapali = ozet_mesaji(portfoy, sapmalar, risk,
-                             karar_ver(sapmalar, risk, maliyet=self.model),
-                             None, "Test", None, None, self.model)
-        self.assertNotIn("Kisilmali", kapali)
-        self.assertNotIn("Rebalancing", kapali)
-        self.assertIn("Eksik maliyet kalemi", kapali)
-        self.assertIn("temettu_verimi", kapali)
+        # Eksik maliyet modeliyle HICBIR sinyal uretilmemeli - islem karari
+        # mesaji sinyal listesinden uretildigi icin Telegram'a da hicbir sey
+        # gitmez. Bastirma tek noktada oldugu icin ikinci bir kontrol gereksiz.
+        kapali = karar_ver(sapmalar, risk, maliyet=self.model)
+        self.assertEqual(kapali.sinyaller(), [])
+
+        uyarilar = "\n".join(
+            uyarilari_topla(None, portfoy, kapali, self.model, None))
+        self.assertIn("Eksik maliyet kalemi", uyarilar)
+        self.assertIn("temettu_verimi", uyarilar)
 
     def test_telegram_ozeti_kalem_bazli_gruplar(self):
         """Gunluk mesaj her gun 11 ayni satir basmamali - okunmayan uyari
@@ -1660,9 +1698,12 @@ class DevreKesiciTesti(unittest.TestCase):
         self.assertEqual(_devre_kesici_bolumu(karar_ver(risk=self._riskler_n(2))), [])
 
         portfoy = Portfoy(pozisyonlar=[], nakit_try=1000.0, fiyatlanamayan=[])
-        mesaj = ozet_mesaji(portfoy, [], risk, karar, None, "Test")
+        uyarilar = uyarilari_topla(None, portfoy, karar, None, None)
+        self.assertIn("ANORMAL ISLEM YOGUNLUGU", uyarilar[0])
+        mesaj = gun_sonu_mesaji(GunSonuOzeti(
+            portfoy=portfoy, risk=risk, veri_zamani="2026-08-17",
+            uyarilar=uyarilar))
         self.assertIn("ANORMAL ISLEM YOGUNLUGU", mesaj)
-        self.assertNotIn("Esik asilmadi", mesaj)
 
 
 class IdempotencyTesti(unittest.TestCase):
@@ -1751,6 +1792,449 @@ class SinyalDurumuDosyasiTesti(unittest.TestCase):
         self.assertEqual(okunan.durum(SEMBOL, "A.IS").son_sinyal, "")
         self.assertTrue(okunan.durum(SEMBOL, "A.IS").acik)
         self.assertTrue(any("son_sinyal" in u for u in okunan.uyarilar))
+
+
+class HizSiniriTesti(unittest.TestCase):
+    """Saatlik tavan asilirsa mesajlar TEK ozete birlesir."""
+
+    def setUp(self):
+        dizin = Path(tempfile.mkdtemp())
+        self.log = dizin / "gonderilen.log"
+        self.kuyruk = dizin / "kuyruk.yaml"
+        self.ayarlar = BildirimAyarlari(saatlik_maks_mesaj=2)
+        self.zaman = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)  # TR 15:00
+
+    def _gonder(self, sira: int, simdi=None):
+        return kanaldan_gonder(
+            Bildirim("uyari", f"uyari:test:{sira}", f"mesaj {sira}"),
+            self.ayarlar, {}, self.log, self.kuyruk, simdi or self.zaman)
+
+    def test_hiz_siniri_toplama(self):
+        cagrilar = []
+        with unittest.mock.patch("notify.mesaj_gonder",
+                                 side_effect=lambda m, e=None: cagrilar.append(m)):
+            self.assertEqual(self._gonder(1).durum, GONDERILDI)
+            self.assertEqual(self._gonder(2).durum, GONDERILDI)
+            ucuncu = self._gonder(3)          # tavani asiyor -> toplu gider
+        self.assertEqual(ucuncu.durum, GONDERILDI)
+        self.assertEqual(len(cagrilar), 3)
+        self.assertIn("Hiz siniri", cagrilar[2])
+        self.assertIn("mesaj 3", cagrilar[2])
+        self.assertEqual(kuyrugu_oku(self.kuyruk), [])
+
+    def test_saatlik_pencere_kayar(self):
+        """Bir saat sonra sayac sifirlanir - sinir kalici sansur degil."""
+        with unittest.mock.patch("notify.mesaj_gonder"):
+            self._gonder(1)
+            self._gonder(2)
+            self.assertEqual(son_saatteki_gonderim(self.zaman, self.log), 2)
+            sonra = self.zaman + timedelta(hours=1, minutes=1)
+            self.assertEqual(son_saatteki_gonderim(sonra, self.log), 0)
+            self.assertEqual(self._gonder(3, sonra).durum, GONDERILDI)
+
+    def test_islem_anahtarlari_sayilmaz(self):
+        """Islem kararlari devre kesiciyle sinirli; hiz sinirini doldurup
+        gun sonu ozetini bastirmamalari gerekir."""
+        gonderildi_yaz(["islem:A:2026-08-17:12:kis"] * 9, self.zaman, self.log)
+        self.assertEqual(son_saatteki_gonderim(self.zaman, self.log), 0)
+
+    def test_kuyruktaki_anahtar_ikilenmez(self):
+        kuyrugu_yaz([Bildirim("uyari", "uyari:test:1", "mesaj 1")], self.kuyruk)
+        sessiz = BildirimAyarlari(sessiz_baslangic=time(0, 0),
+                                  sessiz_bitis=time(23, 59))
+        sonuc = kanaldan_gonder(Bildirim("uyari", "uyari:test:1", "mesaj 1"),
+                                sessiz, {}, self.log, self.kuyruk, self.zaman)
+        self.assertEqual(sonuc.durum, ATLANDI)
+        self.assertEqual(len(kuyrugu_oku(self.kuyruk)), 1)
+
+
+class SessizSaatTesti(unittest.TestCase):
+    """Gece bildirimi birikir, sabah tek mesaj olarak gider."""
+
+    def setUp(self):
+        dizin = Path(tempfile.mkdtemp())
+        self.log = dizin / "gonderilen.log"
+        self.kuyruk = dizin / "kuyruk.yaml"
+        self.ayarlar = BildirimAyarlari()          # 01:00-08:00 TR
+
+    def _an(self, tr_saat: int) -> datetime:
+        """TR saatini UTC damgaya cevirir (kalici UTC+3)."""
+        return datetime(2026, 8, 17, (tr_saat - 3) % 24, 0, tzinfo=timezone.utc)
+
+    def test_sessiz_saat_biriktirme(self):
+        cagrilar = []
+        with unittest.mock.patch("notify.mesaj_gonder",
+                                 side_effect=lambda m, e=None: cagrilar.append(m)):
+            gece = kanaldan_gonder(Bildirim("uyari", "uyari:gece", "gece uyarisi"),
+                                   self.ayarlar, {}, self.log, self.kuyruk,
+                                   self._an(3))
+            self.assertEqual(gece.durum, BIRIKTIRILDI)
+            self.assertEqual(cagrilar, [])
+            sonuc = kuyrugu_bosalt(self.ayarlar, {}, self.log, self.kuyruk,
+                                   self._an(9))
+        self.assertEqual(sonuc.durum, GONDERILDI)
+        self.assertEqual(len(cagrilar), 1)
+        self.assertIn("gece uyarisi", cagrilar[0])
+        self.assertEqual(kuyrugu_oku(self.kuyruk), [])
+
+    def test_sessiz_saatte_bosaltma_yapilmaz(self):
+        kuyrugu_yaz([Bildirim("uyari", "u:1", "m")], self.kuyruk)
+        with unittest.mock.patch("notify.mesaj_gonder") as sahte:
+            sonuc = kuyrugu_bosalt(self.ayarlar, {}, self.log, self.kuyruk,
+                                   self._an(4))
+        self.assertEqual(sonuc.durum, ATLANDI)
+        sahte.assert_not_called()
+        self.assertEqual(len(kuyrugu_oku(self.kuyruk)), 1)
+
+    def test_sessiz_sinir_saatleri(self):
+        self.assertFalse(self.ayarlar.sessiz_mi(self._an(0)))   # 00:00 acik
+        self.assertTrue(self.ayarlar.sessiz_mi(self._an(1)))    # 01:00 sessiz
+        self.assertTrue(self.ayarlar.sessiz_mi(self._an(7)))
+        self.assertFalse(self.ayarlar.sessiz_mi(self._an(8)))   # 08:00 acik
+
+    def test_gece_yarisini_asan_aralik(self):
+        gece = BildirimAyarlari(sessiz_baslangic=time(23, 0), sessiz_bitis=time(7, 0))
+        self.assertTrue(gece.sessiz_mi(self._an(23)))
+        self.assertTrue(gece.sessiz_mi(self._an(2)))
+        self.assertFalse(gece.sessiz_mi(self._an(12)))
+
+    def test_ayni_sessiz_aralik_reddedilir(self):
+        dosya = gecici_yaz(
+            "sessiz_saatler: {baslangic: '01:00', bitis: '01:00'}\n",
+            ad="bildirim.yaml")
+        with self.assertRaisesRegex(ValueError, "24 saat sessizlik"):
+            ayarlari_oku(dosya)
+
+
+class MesajBolmeTesti(unittest.TestCase):
+    """4096 asan mesaj bolunmezse Telegram REDDEDER - mesaj hic gitmez."""
+
+    def test_mesaj_4096_bolme(self):
+        satir = "- " + "x" * 78
+        uzun = "\n".join([satir] * 120)          # ~9600 karakter
+        parcalar = bol(uzun)
+        self.assertGreater(len(parcalar), 1)
+        for parca in parcalar:
+            self.assertLessEqual(len(parca), 4096)
+        self.assertEqual("".join(parcalar).count(satir), 120)
+        self.assertIn("(1/", parcalar[0])
+
+    def test_sinirin_altinda_bolunmez(self):
+        self.assertEqual(bol("kisa mesaj"), ["kisa mesaj"])
+
+    def test_satir_ortasindan_kesilmez(self):
+        """Tablo satirinin ortasindan kesmek mesaji okunmaz yapar."""
+        satirlar = [f"- sembol{i} 1.000 TL (10.0%) +1.5%" for i in range(200)]
+        for parca in bol("\n".join(satirlar)):
+            govde = parca.split("\n\n<i>(")[0]
+            for satir in govde.split("\n"):
+                if satir:
+                    self.assertIn(satir, satirlar)
+
+    def test_tek_dev_satir_kesilir(self):
+        """Gondermemektense kesmek yeglenir."""
+        parcalar = bol("y" * 9000)
+        self.assertGreater(len(parcalar), 1)
+        for parca in parcalar:
+            self.assertLessEqual(len(parca), 4096)
+
+
+class HtmlKacisTesti(unittest.TestCase):
+    """HTML parse modunda kacilmayan karakter mesaji BOZAR."""
+
+    def test_html_kacis_ampersand(self):
+        self.assertEqual(kacis("A&B"), "A&amp;B")
+        # Sira kritik: & ilk sirada olmali, yoksa &lt; icindeki & yeniden
+        # kacirilir ve okuyucu &amp;lt; gorur.
+        self.assertEqual(kacis("<b>"), "&lt;b&gt;")
+        self.assertEqual(kacis("a & <b> & c"), "a &amp; &lt;b&gt; &amp; c")
+
+    def test_kacis_iki_kez_cagrilmamali(self):
+        bir = kacis("A&B")
+        self.assertEqual(bir, "A&amp;B")
+        self.assertNotEqual(kacis(bir), bir)     # ikinci cagri BOZAR
+
+    def test_uyari_mesajinda_kacis(self):
+        sonuc = uyari_mesaji("veri", "fiyat < 0 & bayat")
+        self.assertIn("&lt; 0 &amp;", sonuc)
+        self.assertNotIn("< 0 &", sonuc)
+
+
+class VeriZamaniTesti(unittest.TestCase):
+    """Mesajda VERI zamani yazar, MESAJ zamani degil."""
+
+    def _islem(self):
+        return IslemOnerisi(sembol="QQQ", yon="SAT", adet=2.5, fiyat_try=1000.0,
+                            veri_zamani="2026-08-14", veri_kaynagi="yahoo")
+
+    def test_veri_zamani_mesajda(self):
+        """Mesaj 17'sinde gitse de fiyat 14'une aitse karar 14 verisiyle
+        verilmistir. Mesaj zamanini gostermek bayat veriyi guncel gibi sunar."""
+        metin = islem_karari_mesaji(
+            self._islem(), [Tetikleyici("Risk katkisi", 0.25, 0.20)],
+            [Etki("Agirlik", 0.30, 0.20)], 0.0318, 15.9)
+        self.assertIn("2026-08-14", metin)
+        self.assertIn("yahoo", metin)
+        self.assertNotIn(date.today().isoformat(), metin)
+
+    def test_tetikleyen_ve_etki_yazilir(self):
+        metin = islem_karari_mesaji(
+            self._islem(),
+            [Tetikleyici("Risk katkisi", 0.25, 0.20),
+             Tetikleyici("Beta", 1.90, 1.50, "sayi")],
+            [Etki("Agirlik", 0.30, 0.20)], 0.0318, 15.9)
+        self.assertIn("Risk katkisi 25.00% (esik 20.00%)", metin)
+        self.assertIn("Beta 1.90 (esik 1.50)", metin)
+        self.assertIn("30.00% → 20.00%", metin)
+        self.assertIn("3.18%", metin)
+
+    def test_eksik_maliyet_uyarisi(self):
+        """Gidis-donus olculemezse islem KARSIZ olabilir - bu yazilmali."""
+        metin = islem_karari_mesaji(self._islem(), [], [], None, None)
+        self.assertIn("OLCULEMEDI", metin)
+        self.assertIn("KARSIZ olabilir", metin)
+
+
+class HaftaSonuEsigiTesti(unittest.TestCase):
+    """Hafta sonu esigi genisler; arada kalan sinyal UYARI olur, islem olmaz."""
+
+    CUMA = datetime(2026, 8, 14, 12, 0, tzinfo=timezone.utc)
+    CUMARTESI = datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc)
+    GENIS = Esikler(rebalancing_sapma=0.03, risk_katkisi_ust=0.20,
+                    rebalancing_geri_donus=0.015, risk_katkisi_geri_donus=0.17,
+                    hafta_sonu_carpani=1.5)
+
+    def _risk(self, katki: float):
+        # agirlik 0.10 -> beta = katki/0.10, her durumda 1.50 uzerinde
+        return _riskler(VarlikRiski("BTC-USD", 0.6, -0.4, katki, 0.10))
+
+    def test_hafta_sonu_esik_genis(self):
+        """Katki %25: hafta ici sinyal (esik %20), hafta sonu yalnizca uyari
+        (genis esik %20 x 1.5 = %30)."""
+        hafta_ici = karar_ver(risk=self._risk(0.25), esikler=self.GENIS,
+                              simdi=self.CUMA)
+        self.assertTrue(hafta_ici.acik_mi(SEMBOL, "BTC-USD"))
+
+        hafta_sonu = karar_ver(risk=self._risk(0.25), esikler=self.GENIS,
+                               simdi=self.CUMARTESI)
+        self.assertFalse(hafta_sonu.acik_mi(SEMBOL, "BTC-USD"))
+        self.assertEqual(hafta_sonu.sonuc(SEMBOL, "BTC-USD").sebep, HAFTA_SONU)
+        self.assertEqual(len(hafta_sonu.hafta_sonu_uyarilari), 1)
+
+    def test_genis_esigi_asan_hafta_sonunda_da_gecer(self):
+        """Bilgi kesilmiyor, cita yukseliyor: %35 katki hafta sonu da sinyal."""
+        karar = karar_ver(risk=self._risk(0.35), esikler=self.GENIS,
+                          simdi=self.CUMARTESI)
+        self.assertTrue(karar.acik_mi(SEMBOL, "BTC-USD"))
+
+    def test_carpan_1_ise_hafta_sonu_ayrimi_yok(self):
+        karar = karar_ver(risk=self._risk(0.25), simdi=self.CUMARTESI)
+        self.assertTrue(karar.acik_mi(SEMBOL, "BTC-USD"))
+
+    def test_hafta_sonu_uyarisi_listeye_girer(self):
+        """Sinyal bastirilmadi, SINIFI dusuruldu - kaybolmamali."""
+        karar = karar_ver(risk=self._risk(0.25), esikler=self.GENIS,
+                          simdi=self.CUMARTESI)
+        uyarilar = "\n".join(uyarilari_topla(None, None, karar, None, None))
+        self.assertIn("BTC-USD", uyarilar)
+        self.assertIn("hafta sonu genis esigi", uyarilar)
+
+    def test_daralan_carpan_reddedilir(self):
+        dosya = gecici_yaz(
+            "ayarlar: {kur_sembolu: 'USDTRY=X', gecmis_gun: 365, islem_gunu_yil: 252}\n"
+            "esikler: {rebalancing_sapma: 0.03, rebalancing_geri_donus: 0.015,\n"
+            "          risk_katkisi_ust: 0.2, risk_katkisi_geri_donus: 0.17,\n"
+            "          hafta_sonu_carpani: 0.8}\n"
+            "hedef_dagilim: {bist: 1.0}\n"
+            "varliklar:\n  - {sembol: A.IS, ad: A, sinif: bist, kur: TRY}\n",
+            ad="varliklar.yaml")
+        with self.assertRaisesRegex(ValueError, "hafta_sonu_carpani"):
+            yapilandirmayi_oku(
+                varliklar_dosyasi=dosya,
+                portfoy_dosyasi=gecici_yaz("nakit_try: 0\npozisyonlar: []\n",
+                                           ad="portfoy.yaml"))
+
+
+class HaftaSonuUcgenlemeTesti(unittest.TestCase):
+    """7/24 calismanin on kosulu: hafta sonu kur donmus, kripto hareketli.
+
+    Forex Cuma 22:00 - Pazar 22:00 UTC arasi kapali, TCMB is gunu disinda kur
+    yayimlamaz. Bu yuzden hafta sonu "beklenen TL" Cuma kuruyla hesaplanir ve
+    BTCTurk'un canli fiyatiyla arasindaki fark TR primi DEGIL, kurun
+    bayatligidir. Gercek kopukluk sayilsaydi DURDUR cikar ve rapor hic
+    uretilmezdi - simulasyon hafta sonu tamamen susardi.
+    """
+
+    AYARLAR_U = UcgenlemeAyarlari(prim_esigi=0.03, durdurma_esigi=0.08)
+
+    def _ucgenle(self, tl: float, kapali: bool):
+        return ucgenle(
+            "BTC-USD",
+            AnlikFiyat("BTC-USD", tl,
+                       datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc),
+                       "btcturk"),
+            1000.0,
+            KurKotasyonu(40.0, date(2026, 8, 14), "yahoo (tcmb bayat)"),
+            self.AYARLAR_U,
+            datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc),
+            kapali)
+
+    def test_hafta_sonu_buyuk_sapma_durdurmaz(self):
+        """Beklenen 40.000, gercek 44.000 -> %10 sapma, durdurma esigi %8."""
+        hafta_ici = self._ucgenle(44_000.0, False)
+        self.assertEqual(hafta_ici.durum, DURDUR)      # eski davranis
+
+        hafta_sonu = self._ucgenle(44_000.0, True)
+        self.assertEqual(hafta_sonu.durum, OLCULEMEDI)
+        self.assertIn("kur piyasasi kapali", hafta_sonu.gerekce)
+
+    def test_hafta_sonu_degerleme_fiyati_korunur(self):
+        """Ucgenleme yapilamasa da BTCTurk TL fiyati elimizde - degerleme
+        durmaz, yalnizca capraz kontrol yapilmaz."""
+        sonuc = self._ucgenle(40_500.0, True)
+        self.assertAlmostEqual(sonuc.tl_fiyat, 40_500.0)
+
+    def test_hafta_ici_normal_calisir(self):
+        sonuc = self._ucgenle(40_100.0, False)
+        self.assertEqual(sonuc.durum, TAMAM)
+
+    def test_hafta_sonu_tespiti_tr_takvimiyle(self):
+        # Cuma TR 23:00 = UTC 20:00 -> hala hafta ici
+        self.assertFalse(hafta_sonu_mu(
+            datetime(2026, 8, 14, 20, 0, tzinfo=timezone.utc)))
+        # Cumartesi TR 01:00 = Cuma UTC 22:00 -> hafta sonu
+        self.assertTrue(hafta_sonu_mu(
+            datetime(2026, 8, 14, 22, 0, tzinfo=timezone.utc)))
+        # Pazartesi TR 01:00 = Pazar UTC 22:00 -> hafta ici
+        self.assertFalse(hafta_sonu_mu(
+            datetime(2026, 8, 16, 22, 0, tzinfo=timezone.utc)))
+
+
+class TakvimTesti(unittest.TestCase):
+    """Hangi kosu ne yapar, hangi seans acik."""
+
+    HAM = {
+        "seanslar": {
+            "kripto": {"gunler": "her_gun", "baslangic": "00:00", "bitis": "23:59"},
+            "bist": {"gunler": "hafta_ici", "baslangic": "10:00", "bitis": "18:00"},
+            "abd": {"gunler": "hafta_ici", "baslangic": "16:30", "bitis": "23:00"},
+        },
+        "gun_sonu_saati": "23:30",
+        "brifing_gunu": 0,
+        "brifing_saati": "09:00",
+    }
+
+    def setUp(self):
+        self.takvim = takvimi_coz(self.HAM)
+
+    def _an(self, gun: int, tr_saat: int, tr_dakika: int = 0) -> datetime:
+        """TR saatini UTC damgaya cevirir. 2026-08-17 Pazartesi."""
+        return (datetime(2026, 8, gun, tr_saat, tr_dakika, tzinfo=timezone.utc)
+                - timedelta(hours=3))
+
+    def test_bist_hafta_ici_saatleri(self):
+        self.assertIn("bist", self.takvim.acik_seanslar(self._an(17, 12)))
+        self.assertNotIn("bist", self.takvim.acik_seanslar(self._an(17, 9)))
+        self.assertNotIn("bist", self.takvim.acik_seanslar(self._an(17, 19)))
+
+    def test_kripto_hafta_sonu_da_acik(self):
+        self.assertEqual(self.takvim.acik_seanslar(self._an(15, 12)), ["kripto"])
+
+    def test_abd_seansi(self):
+        self.assertIn("abd", self.takvim.acik_seanslar(self._an(17, 17)))
+        self.assertNotIn("abd", self.takvim.acik_seanslar(self._an(17, 16)))
+
+    def test_gorev_gun_sonu(self):
+        self.assertEqual(self.takvim.gorev(self._an(17, 23, 35)), GUN_SONU)
+        self.assertEqual(self.takvim.gorev(self._an(17, 23, 0)), TARAMA)
+
+    def test_gorev_brifing_pazartesi(self):
+        self.assertEqual(self.takvim.gorev(self._an(17, 9, 20)), BRIFING)
+        # Cron gecikmesi brifingi dusurmemeli: bir saatlik pencere var
+        self.assertEqual(self.takvim.gorev(self._an(17, 9, 55)), BRIFING)
+        self.assertEqual(self.takvim.gorev(self._an(17, 10, 5)), TARAMA)
+        self.assertEqual(self.takvim.gorev(self._an(18, 9, 20)), TARAMA)  # Sali
+
+    def test_gecersiz_gunler_reddedilir(self):
+        with self.assertRaisesRegex(ValueError, "hafta_ici"):
+            takvimi_coz({"seanslar": {"bist": {"gunler": "salilar"}}})
+
+    def test_ters_seans_saatleri_reddedilir(self):
+        with self.assertRaisesRegex(ValueError, "baslangic"):
+            takvimi_coz({"seanslar": {
+                "bist": {"baslangic": "18:00", "bitis": "10:00"}}})
+
+
+class KurAyristirmaTesti(unittest.TestCase):
+    """USD getirisi ile kur getirisi CARPIMSAL birlesir."""
+
+    def test_kur_ayristirma_carpimsal(self):
+        ayrim = KurAyristirmasi("QQQ", "USD", 0.20, 0.25)
+        # Toplamsal %45 der; dogrusu 1.20 x 1.25 - 1 = %50
+        self.assertAlmostEqual(ayrim.toplam_tl, 0.50)
+        self.assertNotAlmostEqual(ayrim.toplam_tl, 0.45)
+
+    def test_try_varlikta_kur_getirisi_sifir(self):
+        self.assertAlmostEqual(
+            KurAyristirmasi("THYAO.IS", "TRY", 0.10, 0.0).toplam_tl, 0.10)
+
+    def test_kur_maruziyeti(self):
+        varliklar = {"QQQ": Varlik("QQQ", "QQQ", "nasdaq", "USD"),
+                     "THYAO.IS": Varlik("THYAO.IS", "THY", "bist", "TRY")}
+        portfoy = Portfoy(
+            pozisyonlar=[PozisyonDegeri("QQQ", "QQQ", "nasdaq", 1, 5000, 6000),
+                         PozisyonDegeri("THYAO.IS", "THY", "bist", 1, 2000, 2000)],
+            nakit_try=2000.0, fiyatlanamayan=[])
+        self.assertAlmostEqual(kur_maruziyeti(portfoy, varliklar), 0.60)
+
+    def test_yerel_seri_geri_bolunerek_uretilmez(self):
+        """Kur serisi ffill'li, varlik serisi degil.
+
+        try_gecmis / kur ile yerel seriyi turetmek, BIST'in kapali oldugu gunde
+        kurun tasidigi Cuma degerini yerel seriye yansitirdi ve carpimsal
+        ayristirma tutmazdi.
+        """
+        # Gercek hafta sonu senaryosu: 15 Agustos Cumartesi. BIST kapali (NaN),
+        # kripto acik. Satir dusmez cunku kriptonun verisi var.
+        gunler = pd.to_datetime(["2026-08-13", "2026-08-14", "2026-08-15"])
+        kapanis = pd.DataFrame({"QQQ": [100.0, 110.0, np.nan],
+                                "BTC-USD": [1000.0, 1010.0, 1030.0],
+                                "USDTRY=X": [40.0, 41.0, 42.0]}, index=gunler)
+        yapilandirma = Yapilandirma(
+            ayarlar=AYARLAR, esikler=ESIKLER,
+            hedef_dagilim={"nasdaq": 0.5, "kripto": 0.5},
+            varliklar={"QQQ": Varlik("QQQ", "QQQ", "nasdaq", "USD"),
+                       "BTC-USD": Varlik("BTC-USD", "BTC", "kripto", "USD")},
+            nakit_try=0.0)
+        tl, yerel, kur = _serileri_hazirla(kapanis, yapilandirma)
+        self.assertEqual(len(tl), 3)
+        self.assertAlmostEqual(yerel["QQQ"].iloc[0], 100.0)
+        self.assertAlmostEqual(yerel["QQQ"].iloc[1], 110.0)
+        # Kapali gun yerel seride NaN KALIR - ffill edilseydi Cumartesi icin
+        # yapay sifir-getirili gun uretilir ve volatilite dusuk cikardi.
+        self.assertTrue(pd.isna(yerel["QQQ"].iloc[2]))
+        self.assertAlmostEqual(tl["QQQ"].iloc[1], 4510.0)
+        self.assertAlmostEqual(kur.iloc[2], 42.0)      # kur ffill'li ve tam
+        # Kriptonun Cumartesi hareketi kaybolmaz: 1030 x 42 = 43.260
+        self.assertAlmostEqual(tl["BTC-USD"].iloc[2], 43_260.0)
+
+    def test_24s_degisim_onceki_gozleme_gore(self):
+        gunler = pd.to_datetime(["2026-08-13", "2026-08-14"])
+        fiyatlar = FiyatVerisi(
+            try_gecmis=pd.DataFrame({"A.IS": [100.0, 110.0]}, index=gunler),
+            usdtry=40.0, eksik_semboller=[])
+        portfoy = Portfoy(
+            pozisyonlar=[PozisyonDegeri("A.IS", "A", "bist", 10, 900, 1100)],
+            nakit_try=0.0, fiyatlanamayan=[])
+        self.assertAlmostEqual(degisim_24s(portfoy, fiyatlar), 0.10)
+
+    def test_tek_gozlemde_olculemez(self):
+        fiyatlar = FiyatVerisi(
+            try_gecmis=pd.DataFrame({"A.IS": [100.0]},
+                                    index=pd.to_datetime(["2026-08-14"])),
+            usdtry=40.0, eksik_semboller=[])
+        self.assertIsNone(degisim_24s(
+            Portfoy(pozisyonlar=[], nakit_try=100.0, fiyatlanamayan=[]), fiyatlar))
 
 
 if __name__ == "__main__":

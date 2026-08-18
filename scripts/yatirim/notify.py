@@ -16,16 +16,35 @@ from pathlib import Path
 
 import requests
 
-from config import PROJE_DIZINI
-from maliyet import donem_orani
-from portfolio import Portfoy, SinifSapmasi
+from bildirim import (
+    ATLANDI,
+    BIRIKTIRILDI,
+    GONDERILDI,
+    KUYRUK_DOSYASI,
+    Bildirim,
+    BildirimAyarlari,
+    GonderimSonucu,
+    birlestir,
+    bol,
+    kuyrugu_oku,
+    kuyrugu_yaz,
+    son_saatteki_gonderim,
+)
+from config import PROJE_DIZINI, TR_OFSET
+from mesaj import (
+    Etki,
+    GunSonuOzeti,
+    IslemOnerisi,
+    Tetikleyici,
+    gun_sonu_mesaji,
+    islem_karari_mesaji,
+    uyari_mesaji,
+)
 from sinyal import (
     GONDERILEN_LOG,
-    SEMBOL,
-    SINIF,
-    Karar,
     gonderildi_yaz,
     gonderilen_anahtarlar,
+    islem_anahtari,
     simdi_utc,
 )
 
@@ -36,11 +55,6 @@ ZAMAN_ASIMI = 15
 
 class TelegramHatasi(RuntimeError):
     pass
-
-
-def _kacis(metin: str) -> str:
-    """Telegram HTML parse modu icin: yalnizca bu uc karakter kacirilir."""
-    return metin.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 ORTAM_ANAHTARLARI = ("TELEGRAM_BOT_TOKEN", "TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID")
@@ -141,220 +155,146 @@ def idempotent_gonder(metin: str, anahtar: str, ek_anahtarlar: list[str] | None 
     if anahtar in gonderilen_anahtarlar(log):
         return False
     simdi = simdi or simdi_utc()
-    mesaj_gonder(metin, env)
+    for parca in bol(metin):
+        mesaj_gonder(parca, env)
     gonderildi_yaz([anahtar, *(ek_anahtarlar or [])], simdi, log)
     return True
 
 
-def _tl(deger: float) -> str:
-    return f"{deger:,.0f} TL".replace(",", ".")
+# --- Bildirim kanali: hiz siniri + sessiz saatler ---------------------------
+#
+# Her gonderim buradan gecer. Dogrudan `mesaj_gonder` cagirmak frenleri atlar;
+# tek istisna rapor URETILEMEDIGINDE giden hata mesajlaridir (main.py) - onlar
+# hiz sinirina takilmamali, cunku sessiz kalmak en kotu secenek.
 
 
-def _islem_satirlari(durum, tarih: str) -> list[str]:
-    """O gun yapilan alim/satimlari mesaja ekler.
+def _kuyrugu_gonder(bekleyenler: list[Bildirim], baslik: str, ayarlar,
+                    env, log: Path, kuyruk: Path,
+                    simdi: datetime) -> GonderimSonucu:
+    """Biriken bildirimleri TEK mesajda gonderir."""
+    if not bekleyenler:
+        return GonderimSonucu(ATLANDI)
+    anahtar = f"toplu:{simdi.date().isoformat()}:{simdi.strftime('%H%M')}"
+    idempotent_gonder(birlestir(bekleyenler, baslik),
+                      anahtar, [b.anahtar for b in bekleyenler], env, log, simdi)
+    kuyrugu_yaz([], kuyruk)
+    return GonderimSonucu(GONDERILDI, len(bekleyenler))
 
-    Islem yoksa bos doner - "bugun islem yok" demek gurultu, esik
-    asilmadigini zaten ozet satiri soyluyor.
+
+def kuyrugu_bosalt(ayarlar: BildirimAyarlari, env: dict | None = None,
+                   log: Path = GONDERILEN_LOG, kuyruk: Path = KUYRUK_DOSYASI,
+                   simdi: datetime | None = None) -> GonderimSonucu:
+    """Sessiz saat bittiyse veya hiz siniri bosaldiysa kuyrugu gonderir.
+
+    Her kosunun BASINDA cagrilir. Cagrilmazsa gece biriken bildirimler diskte
+    kalir ve hicbir zaman gonderilmez - sessizce kaybolan uyari, hic uretilmemis
+    uyaridan kotudur cunku sistem calisiyor sanilir.
     """
-    bugunku = [i for i in durum.islemler if i.tarih == tarih]
-    if not bugunku:
-        return []
-
-    satirlar = ["", "<b>Bugunku islemler</b>"]
-    for islem in bugunku:
-        simge = "🟩 ALDIM" if islem.yon == "AL" else "🟥 SATTIM"
-        satirlar.append(
-            f"{simge}  <b>{_kacis(islem.sembol)}</b>  {islem.adet:g} adet"
-        )
-        satirlar.append(
-            f"     {_tl(islem.fiyat_try)} x {islem.adet:g} = {_tl(islem.tutar_try)}"
-        )
-        if islem.gerekce:
-            satirlar.append(f"     <i>{_kacis(islem.gerekce)}</i>")
-    return satirlar
+    simdi = simdi or simdi_utc()
+    bekleyenler = kuyrugu_oku(kuyruk)
+    if not bekleyenler or ayarlar.sessiz_mi(simdi):
+        return GonderimSonucu(ATLANDI, kuyruk=bekleyenler)
+    return _kuyrugu_gonder(bekleyenler, "🔔 Biriken bildirimler", ayarlar,
+                           env, log, kuyruk, simdi)
 
 
-def ucgenleme_durdurma_mesaji(durduranlar, baslik: str) -> str:
-    """Rapor URETILMEDIGINDE gonderilen mesaj.
+def kanaldan_gonder(bildirim: Bildirim, ayarlar: BildirimAyarlari,
+                    env: dict | None = None, log: Path = GONDERILEN_LOG,
+                    kuyruk: Path = KUYRUK_DOSYASI,
+                    simdi: datetime | None = None) -> GonderimSonucu:
+    """Tek gonderim kapisi: idempotency -> sessiz saat -> hiz siniri -> gonder.
 
-    Rapor yoksa sessiz kalmak en kotu secenek: kimse bir seyin durdugunu
-    bilmez ve bayat raporu guncel sanir.
+    Sira onemli. Idempotency ilk sirada cunku zaten gonderilmis bir mesaji
+    kuyruga almak onu ikinci kez gonderir. Sessiz saat hiz sinirindan once
+    cunku gece hicbir sey gitmeyecekse sayaci mesgul etmenin anlami yok.
     """
-    satirlar = [f"<b>🛑 {_kacis(baslik)} - RAPOR URETILMEDI</b>", ""]
-    for sonuc in sorted(durduranlar, key=lambda u: u.sembol):
-        satirlar.append(f"• {_kacis(sonuc.sembol)}: {_kacis(sonuc.gerekce)}")
-        if sonuc.tl_fiyat is not None and sonuc.beklenen_tl is not None:
-            satirlar.append(
-                f"  BTCTurk {sonuc.tl_fiyat:,.0f} TL / beklenen "
-                f"{sonuc.beklenen_tl:,.0f} TL (kur: {_kacis(sonuc.kur_kaynagi)})")
-    satirlar += [
-        "",
-        "Uc kaynak da taze ama birbirini tutmuyor. Once kaynaklari kontrol et; "
-        "gercek bir kopukluksa esigi degil pozisyonu gozden gecir.",
-    ]
-    return "\n".join(satirlar)
+    simdi = simdi or simdi_utc()
+    if bildirim.anahtar in gonderilen_anahtarlar(log):
+        return GonderimSonucu(ATLANDI)
+
+    bekleyenler = kuyrugu_oku(kuyruk)
+    if bildirim.anahtar in {b.anahtar for b in bekleyenler}:
+        return GonderimSonucu(ATLANDI, kuyruk=bekleyenler)
+
+    damgali = bildirim if bildirim.olusma else Bildirim(
+        bildirim.tip, bildirim.anahtar, bildirim.metin,
+        simdi.isoformat(timespec="seconds"))
+
+    if ayarlar.sessiz_mi(simdi):
+        yeni = [*bekleyenler, damgali]
+        kuyrugu_yaz(yeni, kuyruk)
+        return GonderimSonucu(BIRIKTIRILDI, kuyruk=yeni)
+
+    if son_saatteki_gonderim(simdi, log) >= ayarlar.saatlik_maks_mesaj:
+        # Hiz siniri asildi: mesaji ayri gondermek yerine biriktir ve
+        # bekleyenlerle BIRLIKTE tek mesaj olarak yolla. Tek tek gondermek
+        # sinirin varlik sebebini ortadan kaldirirdi.
+        return _kuyrugu_gonder([*bekleyenler, damgali], "🔔 Hiz siniri - toplu ozet",
+                               ayarlar, env, log, kuyruk, simdi)
+
+    idempotent_gonder(damgali.metin, damgali.anahtar, None, env, log, simdi)
+    return GonderimSonucu(GONDERILDI, 1)
 
 
-def _asiri_getiri_satiri(getiri: float, durum, maliyet) -> list[str]:
-    """Risksiz getiriye gore fazla/eksik.
+# --- 5.1: gonderim giris noktalari -----------------------------------------
+#
+# Uc fonksiyon, uc mesaj turu. Hepsi kanaldan gecer; sablon uretimi mesaj.py'da.
 
-    Brut getiriyi tek basina gostermek yaniltir: %1 kazanan bir portfoy, ayni
-    donemde mevduat %0.5 verdiyse iyi, %2 verdiyse kotudur.
+
+def gonder_islem_karari(islem: IslemOnerisi, tetikleyen: list[Tetikleyici],
+                        etki: list[Etki], gidis_donus: float | None,
+                        komisyon_try: float | None,
+                        uyarilar: list[str] | None = None,
+                        ayarlar: BildirimAyarlari | None = None,
+                        env: dict | None = None,
+                        simdi: datetime | None = None) -> GonderimSonucu:
+    """Tek islem karari bildirimi.
+
+    Idempotency anahtari SAAT icerir: siklik artinca ayni gun ayni sembolde
+    iki farkli karar cikabilir, ama ayni saat icinde ayni karar iki kez
+    gitmemeli.
     """
-    if maliyet is None or durum is None or not durum.baslangic_tarihi:
-        return []
-    if maliyet.tl_risksiz_yillik is None:
-        return []
-    try:
-        gun = (date.today() - date.fromisoformat(durum.baslangic_tarihi)).days
-    except ValueError:
-        return []
-    if gun <= 0:
-        return []
-    risksiz = donem_orani(maliyet.tl_risksiz_yillik, gun)
-    isaret = "🟢" if getiri >= risksiz else "🔴"
-    return [f"{isaret} Asiri getiri {(getiri - risksiz) * 100:+.2f}% "
-            f"(risksiz {risksiz * 100:.2f}%, {gun} gun)"]
+    simdi = simdi or simdi_utc()
+    return kanaldan_gonder(
+        Bildirim(
+            tip="islem",
+            anahtar=islem_anahtari(islem.sembol, islem.yon.lower(), simdi),
+            metin=islem_karari_mesaji(islem, tetikleyen, etki, gidis_donus,
+                                      komisyon_try, uyarilar),
+        ),
+        ayarlar or BildirimAyarlari(), env, simdi=simdi)
 
 
-def hurdle_eksik_mesaji(baslik: str, seri: str) -> str:
-    """Hurdle rate yoksa rapor uretilmez - sessiz kalmak en kotu secenek."""
-    return "\n".join([
-        f"<b>🛑 {_kacis(baslik)} - RAPOR URETILMEDI</b>",
-        "",
-        "TL risksiz getiri (hurdle rate) yok.",
-        f"Canli seri: {_kacis(seri) or '(tanimsiz)'}",
-        "Yedek: varliklar.yaml -> maliyet.firsat.tl_risksiz_yillik",
-        "",
-        "Bu deger olmadan getiri sifira gore olculur ve risksiz getirinin "
-        "altinda kalan her portfoy 'basarili' gorunur.",
-    ])
+def gonder_gun_sonu(ozet: GunSonuOzeti, ayarlar: BildirimAyarlari | None = None,
+                    env: dict | None = None, simdi: datetime | None = None,
+                    gun: str = "") -> GonderimSonucu:
+    """Gunluk kapanis ozeti veya acilis brifingi. Her biri gunde bir tane.
 
-
-def _devre_kesici_satirlari(karar: Karar) -> list[str]:
-    """Tavan asildiginda mesajin BASINA gelir.
-
-    Sinyaller zaten bastirildi; okuyanin gormesi gereken sey islem listesi
-    degil, listenin neden bos oldugu.
+    `gun` TR gunudur ve disaridan gelir: UTC gunune baglansaydi TR 00:00-03:00
+    arasindaki kosu bir onceki gunun anahtarini kullanir ve ozet atlanirdi.
     """
-    if not karar.devre_kesildi:
-        return []
-    return [
-        "",
-        "<b>🛑 ANORMAL ISLEM YOGUNLUGU</b>",
-        f"Bugun {karar.gunluk_sayi} sinyal olustu, tavan {karar.gunluk_maks}.",
-        "Sinyal uretimi DURDURULDU - bugun islem yok.",
-        "Bu genellikle portfoyun degil VERININ bozuk oldugunu gosterir "
-        "(bayat fiyat, kayitli olmayan bedelsiz, yanlis kur). Raporu ac.",
-    ]
+    simdi = simdi or simdi_utc()
+    gun = gun or (simdi + TR_OFSET).date().isoformat()
+    tur = "brifing" if "brifing" in ozet.baslik.lower() else "gunsonu"
+    return kanaldan_gonder(
+        Bildirim(tip=tur, anahtar=f"{tur}:{gun}", metin=gun_sonu_mesaji(ozet)),
+        ayarlar or BildirimAyarlari(), env, simdi=simdi)
 
 
-def ozet_mesaji(portfoy: Portfoy, sapmalar: list[SinifSapmasi], risk,
-                karar: Karar, durum=None, baslik: str = "Yatirim", fiyatlar=None,
-                bayatlik=None, maliyet=None) -> str:
-    """Rapordan kisa Telegram ozeti uretir - detay markdown raporda kalir."""
-    if durum:
-        taban = durum.baslangic_nakit_try
-        net = portfoy.toplam_deger_try - taban
-    else:
-        taban = portfoy.toplam_maliyet_try
-        net = portfoy.toplam_deger_try - taban
-    getiri = net / taban if taban else 0.0
-    isaret = "🟢" if net >= 0 else "🔴"
+def gonder_uyari(tip: str, mesaj: str, ayarlar: BildirimAyarlari | None = None,
+                 env: dict | None = None,
+                 simdi: datetime | None = None) -> GonderimSonucu:
+    """Veri/sistem uyarisi.
 
-    satirlar = [
-        f"<b>{_kacis(baslik)}</b>",
-        f"{isaret} {_tl(portfoy.toplam_deger_try)}  ({getiri * 100:+.1f}%)",
-        f"Net: {_tl(net)} | Nakit: {_tl(portfoy.nakit_try)}",
-        "",
-        f"Volatilite {risk.portfoy_volatilitesi * 100:.1f}%"
-        f" | Drawdown {risk.portfoy_max_drawdown * 100:.1f}%",
-    ]
-    satirlar += _asiri_getiri_satiri(getiri, durum, maliyet)
-    satirlar += _devre_kesici_satirlari(karar)
-
-    if durum:
-        satirlar += _islem_satirlari(durum, date.today().isoformat())
-
-    ucgenleme = fiyatlar.ucgenleme if fiyatlar is not None else None
-    if ucgenleme is not None and ucgenleme.primliler:
-        satirlar += ["", "<b>TR primi</b>"]
-        for sonuc in sorted(ucgenleme.primliler, key=lambda u: u.sembol):
-            satirlar.append(
-                f"• {_kacis(sonuc.sembol)}: {sonuc.tr_primi * 100:+.2f}% "
-                f"(kur: {_kacis(sonuc.kur_kaynagi)})")
-    if ucgenleme is not None and ucgenleme.dogrulanmayanlar:
-        satirlar += ["", "<b>⚠️ Dogrulanmamis kripto fiyati</b>"]
-        for sonuc in sorted(ucgenleme.dogrulanmayanlar, key=lambda u: u.sembol):
-            satirlar.append(f"• {_kacis(sonuc.sembol)}: {_kacis(sonuc.gerekce)}")
-
-    # Kurumsal olay suphesi en agir uyari: rakamlar yanlis olabilir ve sebebi
-    # veri eksikligi degil, kayitli olmayan bir bedelsiz/split olabilir.
-    supheliler = fiyatlar.kurumsal_olay_supheleri if fiyatlar is not None else {}
-    if supheliler:
-        satirlar += ["", "<b>🛑 Olasi kurumsal olay</b>"]
-        for sembol, gerekce in sorted(supheliler.items()):
-            satirlar.append(f"• {_kacis(sembol)}: {_kacis(gerekce)}")
-        satirlar.append("Degerleme durduruldu. Bedelsiz/split ise olay defterine yaz.")
-
-    # Fiyatlanamayan pozisyon varsa sapma hesabi eksik veri uzerinden yapilmis
-    # demektir; tavsiyeyi guvenilir gibi gondermek yanlis islem yaptirir.
-    if portfoy.fiyatlanamayan:
-        satirlar += [
-            "",
-            "<b>⚠️ Eksik veri</b>",
-            f"Fiyatlanamayan pozisyon: {_kacis(', '.join(portfoy.fiyatlanamayan))}",
-            "Rebalancing tavsiyesi bu yuzden guvenilmez.",
-        ]
-
-    # Eksik maliyet kalemi olan varlik icin sinyal URETILMEZ. Bastirmayi
-    # Telegram'da da uygulamak sart: rapor bastiriyor ama mesaj bastirmiyorsa
-    # Dodo mesaja bakip islem yapar ve tum kural bosa duser.
-    engellenenler = maliyet.engellenenler if maliyet is not None else {}
-    if engellenenler:
-        satirlar += [
-            "",
-            f"<b>🛑 Eksik maliyet kalemi — {len(engellenenler)} varlikta "
-            "sinyal yok</b>",
-        ]
-        for kalem, semboller in maliyet.eksik_kalem_ozeti.items():
-            satirlar.append(
-                f"• <code>{_kacis(kalem)}</code> — {len(semboller)} varlik")
-        satirlar.append("Degerler: varliklar.yaml -> maliyet")
-
-    # Esik testi BURADA YAPILMAZ. Rapor ile mesaj ayri ayri olcseydi biri
-    # bastirirken digeri sinyal gosterirdi; karar sinyal.py'da bir kere olculur.
-    acik_siniflar = {s.ad for s in karar.sinyaller(SINIF)}
-    sapanlar = [s for s in sapmalar if s.sinif in acik_siniflar]
-    if sapanlar:
-        satirlar += ["", "<b>Rebalancing uyarisi</b>"]
-        for sapma in sapanlar:
-            yon = "fazla" if sapma.sapma > 0 else "eksik"
-            satirlar.append(
-                f"• {_kacis(sapma.sinif)}: {sapma.guncel_agirlik * 100:.1f}%"
-                f" (hedef {sapma.hedef_agirlik * 100:.0f}%) — "
-                f"{abs(sapma.sapma) * 100:.1f} puan {yon}"
-            )
-
-    acik_semboller = {s.ad for s in karar.sinyaller(SEMBOL)}
-    yogun = [r for r in risk.varlik_riskleri if r.sembol in acik_semboller]
-    if yogun:
-        satirlar += ["", "<b>Kisilmali</b>"]
-        for varlik_riski in yogun:
-            satirlar.append(
-                f"• {_kacis(varlik_riski.sembol)}: katki "
-                f"{varlik_riski.risk_katkisi * 100:.1f}%, "
-                f"beta {varlik_riski.beta:.2f}"
-            )
-
-    if not sapanlar and not yogun and not engellenenler and not karar.devre_kesildi:
-        satirlar += ["", "Esik asilmadi — islem gerekmiyor."]
-
-    # Veri sorunu sessiz kalmamali: bayat fiyat yanlis degerleme demek.
-    bayatlar = fiyatlar.bayat_semboller(bayatlik) if fiyatlar is not None else {}
-    if bayatlar:
-        satirlar += ["", "<b>⚠️ Bayat fiyat verisi</b>"]
-        for sembol, gecikme in sorted(bayatlar.items()):
-            satirlar.append(f"• {_kacis(sembol)}: {gecikme} gundur guncellenmedi")
-
-    return "\n".join(satirlar)
+    Anahtar SAAT bazli: ayni uyari saatte bir tekrarlanabilir ama saat icinde
+    tekrarlanmaz. Tarih bazli olsaydi sabah cozulen bir sorun aksam yeniden
+    ortaya ciktiginda haber verilmezdi.
+    """
+    simdi = simdi or simdi_utc()
+    ozet = mesaj[:60].replace(" ", "-").replace(":", "")
+    return kanaldan_gonder(
+        Bildirim(tip=tip,
+                 anahtar=f"uyari:{tip}:{simdi.date().isoformat()}:"
+                         f"{simdi.hour:02d}:{ozet}",
+                 metin=uyari_mesaji(tip, mesaj)),
+        ayarlar or BildirimAyarlari(), env, simdi=simdi)

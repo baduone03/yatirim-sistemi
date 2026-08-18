@@ -15,37 +15,58 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from bildirim import ayarlari_oku  # noqa: E402
 from config import (  # noqa: E402
     PROJE_DIZINI,
     RAPOR_DIZINI,
+    TR_OFSET,
     sablonu_reddet,
     yapilandirmayi_oku,
 )
 from fetch import fiyatlari_getir, maliyet_modelini_coz  # noqa: E402
 from kurumsal_olay import bilinen_olay_anahtarlari, olaylari_oku  # noqa: E402
 from ledger import durumu_hesapla, islemleri_oku  # noqa: E402
+from maliyet import donem_orani  # noqa: E402
+from mesaj import (  # noqa: E402
+    Etki,
+    GunSonuOzeti,
+    IslemOnerisi,
+    Tetikleyici,
+    hurdle_eksik_mesaji,
+    ucgenleme_durdurma_mesaji,
+    uyarilari_topla,
+)
 from notify import (  # noqa: E402
     TelegramHatasi,
     env_oku,
-    hurdle_eksik_mesaji,
-    idempotent_gonder,
+    gonder_gun_sonu,
+    gonder_islem_karari,
+    gonder_uyari,
+    kuyrugu_bosalt,
     mesaj_gonder,
-    ozet_mesaji,
-    ucgenleme_durdurma_mesaji,
 )
+from piyasa import BRIFING, TARAMA  # noqa: E402
 from portfolio import (  # noqa: E402
+    degisim_24s,
+    kur_ayristir,
+    kur_maruziyeti,
     portfoyu_hesapla,
     portfoyu_ledgerdan_hesapla,
     sinif_sapmalari,
 )
-from report import OZET_BASLANGIC, OZET_BITIS, rapor_olustur, sistem_ozeti  # noqa: E402
+from report import (  # noqa: E402
+    OZET_BASLANGIC,
+    OZET_BITIS,
+    donem_gunu,
+    rapor_olustur,
+    sistem_ozeti,
+)
 from risk import riski_hesapla  # noqa: E402
 from sinyal import (  # noqa: E402
+    SEMBOL,
     gecmisi_oku,
     gecmisi_yaz,
-    karar_anahtarlari,
     kararlari_uret,
-    ozet_anahtari,
     simdi_utc,
 )
 
@@ -76,14 +97,114 @@ def _sistem_ozetini_guncelle(ozet: str) -> None:
     SISTEM_DOSYASI.write_text(desen.sub(lambda _: ozet, icerik), encoding="utf-8")
 
 
-def _durumu_yukle(sim: bool, olaylar, nakit_getirisi_yillik: float | None):
+def _durumu_yukle(sim: bool, olaylar, nakit_getirisi_yillik: float | None,
+                  bugun: str):
     if not sim:
         return None
     islemler, baslangic_nakit, komisyon, baslangic = islemleri_oku(SIM_DEFTERI)
     return durumu_hesapla(islemler, baslangic_nakit, komisyon, olaylar,
                           nakit_getirisi_yillik=nakit_getirisi_yillik,
-                          baslangic_tarihi=baslangic,
-                          bugun=date.today().isoformat())
+                          baslangic_tarihi=baslangic, bugun=bugun)
+
+
+def _islem_onerileri(karar, fiyatlar, portfoy, risk, yapilandirma, maliyet,
+                     ayarlar, ortam, simdi) -> int:
+    """Acik her sinyal icin ayri islem karari bildirimi. Doner: giden sayisi.
+
+    Sinyal yoksa HICBIR mesaj gitmez - "bugun islem yok" demek gurultudur,
+    gun sonu ozeti zaten portfoyun durumunu soyluyor.
+    """
+    son_fiyatlar = fiyatlar.son_fiyatlar
+    agirliklar = {p.sembol: p.deger_try / portfoy.toplam_deger_try
+                  for p in portfoy.pozisyonlar} if portfoy.toplam_deger_try else {}
+    riskler = {r.sembol: r for r in risk.varlik_riskleri}
+    giden = 0
+    for sonuc in karar.sinyaller(SEMBOL):
+        fiyat = son_fiyatlar.get(sonuc.ad)
+        varlik_riski = riskler.get(sonuc.ad)
+        if fiyat is None or varlik_riski is None:
+            continue
+        # Kisma miktari: agirligi hedef katkiya indirecek tutar. Kaba ama
+        # somut - "azalt" demek ne kadar azaltacagini soylemiyorsa emir degil.
+        hedef_agirlik = (yapilandirma.esikler.risk_katkisi_ust
+                         / varlik_riski.beta if varlik_riski.beta else 0.0)
+        azalt_try = max(
+            (agirliklar.get(sonuc.ad, 0.0) - hedef_agirlik)
+            * portfoy.toplam_deger_try, 0.0)
+        islem = IslemOnerisi(
+            sembol=sonuc.ad, yon="SAT", adet=azalt_try / fiyat,
+            fiyat_try=fiyat, veri_zamani=fiyatlar.son_tarih,
+            veri_kaynagi=_veri_kaynagi(fiyatlar, sonuc.ad))
+        gidis_donus = maliyet.gidis_donus(sonuc.ad, azalt_try, fiyatlar.usdtry)
+        sonuc_gonderim = gonder_islem_karari(
+            islem,
+            [Tetikleyici("Risk katkisi", varlik_riski.risk_katkisi,
+                         yapilandirma.esikler.risk_katkisi_ust),
+             Tetikleyici("Beta", varlik_riski.beta,
+                         yapilandirma.esikler.risk_beta_ust, "sayi")],
+            [Etki("Agirlik", agirliklar.get(sonuc.ad, 0.0), hedef_agirlik),
+             Etki("Risk katkisi", varlik_riski.risk_katkisi,
+                  yapilandirma.esikler.risk_katkisi_ust)],
+            gidis_donus,
+            azalt_try * gidis_donus / 2 if gidis_donus is not None else None,
+            ayarlar=ayarlar, env=ortam, simdi=simdi)
+        print(f"  islem karari {sonuc.ad}: {sonuc_gonderim.durum}")
+        giden += 1
+    return giden
+
+
+def _veri_kaynagi(fiyatlar, sembol: str) -> str:
+    """Fiyatin nereden geldigi. Kripto BTCTurk'ten ezilmis olabilir."""
+    if sembol in {s.sembol for s in fiyatlar.ucgenleme.sonuclar}:
+        return "btcturk/yahoo (ucgenlenmis)"
+    return "yahoo (gunluk kapanis)"
+
+
+def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
+                         maliyet, ayarlar, ortam, simdi, gorev, rapor_adi) -> None:
+    """Gorev tipine gore bildirim gonderir.
+
+    TARAMA: yalnizca islem kararlari. Her tarama kosusunda tam ozet gondermek
+    gunde 12 ayni mesaj demek - okunmaz.
+    GUN_SONU / BRIFING: portfoy durumu + tum uyarilar.
+    """
+    uyarilar = uyarilari_topla(fiyatlar, portfoy, karar, maliyet,
+                              yapilandirma.bayatlik)
+    giden = _islem_onerileri(karar, fiyatlar, portfoy, risk, yapilandirma,
+                             maliyet, ayarlar, ortam, simdi)
+
+    if gorev == TARAMA:
+        # Uyarilar gun sonunda toplu gidiyor; tarama kosusunda yalnizca
+        # ACIL olanlar (devre kesici) ayri mesaj hak eder.
+        if karar.devre_kesildi:
+            gonder_uyari("devre", uyarilar[0], ayarlar, ortam, simdi)
+        print(f"Tarama: {giden} islem karari gonderildi.")
+        return
+
+    gun = donem_gunu(yapilandirma, durum)
+    risksiz = (donem_orani(maliyet.tl_risksiz_yillik, gun)
+               if maliyet.tl_risksiz_yillik is not None and gun > 0 else None)
+    taban = durum.baslangic_nakit_try if durum else portfoy.toplam_maliyet_try
+    getiri = (portfoy.toplam_deger_try - taban) / taban if taban else None
+    ozet = GunSonuOzeti(
+        portfoy=portfoy,
+        risk=risk,
+        veri_zamani=fiyatlar.son_tarih,
+        degisim_24s=degisim_24s(portfoy, fiyatlar),
+        asiri_getiri=(getiri - risksiz
+                      if getiri is not None and risksiz is not None else None),
+        risksiz=risksiz,
+        donem_gun=gun,
+        komisyon_try=durum.toplam_komisyon_try if durum else None,
+        kur_maruziyeti=kur_maruziyeti(portfoy, yapilandirma.varliklar),
+        ayrimlar=kur_ayristir(fiyatlar, yapilandirma.varliklar,
+                              [p.sembol for p in portfoy.pozisyonlar], gun),
+        uyarilar=uyarilar,
+        baslik=("🌅 Pazartesi acilis brifingi" if gorev == BRIFING
+                else "🌙 Gun sonu"),
+    )
+    sonuc = gonder_gun_sonu(ozet, ayarlar, ortam, simdi, gun=rapor_adi)
+    print(f"{ozet.baslik}: {sonuc.durum} ({giden} islem karari da gonderildi)")
 
 
 def main() -> int:
@@ -101,8 +222,31 @@ def main() -> int:
         sablonu_reddet(yapilandirma)
     olaylar = olaylari_oku(SIM_OLAY_DEFTERI)
     ortam = env_oku()
-    rapor_adi = date.today().isoformat()
+
+    # Bildirim politikasi ve takvim. Gorev tipi saate gore belirlenir: TEK
+    # workflow calisir, ne yapacagini script secer.
+    simdi = simdi_utc()
+    # "Gun" TR gunudur, UTC gunu DEGIL. Actions UTC'de calisiyor; date.today()
+    # kullanilsaydi TR 00:00-03:00 arasindaki kosular bir onceki gunun rapor
+    # dosyasina yazar, gunluk sinyal sayaci TR 03:00'te sifirlanirdi. Ayrica
+    # yerel makine TR saatinde, Actions UTC'de calistigi icin ayni gun iki
+    # farkli isim uretirdi.
+    rapor_adi = (simdi + TR_OFSET).date().isoformat()
     baslik = f"{'Simulasyon' if argumanlar.sim else 'Portfoy'} {rapor_adi}"
+    bildirim_ayarlari = ayarlari_oku()
+    gorev = bildirim_ayarlari.takvim.gorev(simdi)
+    acik = bildirim_ayarlari.takvim.acik_seanslar(simdi)
+    print(f"Gorev: {gorev} | acik seans: {', '.join(acik) or 'yok'}")
+
+    # Sessiz saatte biriken bildirimler her kosunun BASINDA bosaltilir.
+    # Bosaltilmazsa gece biriken uyarilar diskte kalir ve hic gonderilmez.
+    if argumanlar.telegram:
+        try:
+            bosaltma = kuyrugu_bosalt(bildirim_ayarlari, ortam, simdi=simdi)
+            if bosaltma.gonderilen:
+                print(f"Biriken {bosaltma.gonderilen} bildirim gonderildi.")
+        except TelegramHatasi as hata:
+            print(f"UYARI - biriken bildirimler gonderilemedi: {hata}")
 
     # Hurdle rate ZORUNLU: yoksa getiri sifira gore olculur ve her pozitif
     # sonuc "basari" gorunur. Once canli TCMB, olmazsa varliklar.yaml yedegi.
@@ -123,7 +267,8 @@ def main() -> int:
     for uyari in maliyet.uyarilar:
         print(f"UYARI - {uyari}")
 
-    durum = _durumu_yukle(argumanlar.sim, olaylar, maliyet.tl_risksiz_yillik)
+    durum = _durumu_yukle(argumanlar.sim, olaylar,
+                      maliyet.tl_risksiz_yillik, rapor_adi)
 
     print(f"{len(yapilandirma.fiyat_sembolleri)} sembol icin fiyat cekiliyor...")
     # Deftere yazilmis olaylar otomatik tespiti tetiklemez - yoksa kayitli bir
@@ -155,29 +300,32 @@ def main() -> int:
     risk = riski_hesapla(yapilandirma, fiyatlar, portfoy)
 
     # Sinyal karari TEK noktada verilir; rapor ve Telegram yalnizca render eder.
-    simdi = simdi_utc()
     karar = kararlari_uret(sapmalar, risk, yapilandirma.esikler,
                            yapilandirma.bekleme, yapilandirma.devre_kesici,
                            gecmisi_oku(), rapor_adi, maliyet, simdi)
     for uyari in karar.uyarilar:
         print(f"UYARI - {uyari}")
 
-    rapor_dizini = SIM_RAPOR_DIZINI if durum else RAPOR_DIZINI
-    rapor_dizini.mkdir(parents=True, exist_ok=True)
-    rapor_dosyasi = rapor_dizini / f"{rapor_adi}.md"
-    rapor_dosyasi.write_text(
-        rapor_olustur(yapilandirma, fiyatlar, portfoy, sapmalar, risk, karar,
-                      durum, maliyet),
-        encoding="utf-8",
-    )
-    # Latch/bekleme/sayac hafizasi rapor yazildiktan SONRA kalicilasir: rapor
-    # uretilemezse sinyal "uretilmis" sayilmamali.
+    # Rapor YALNIZCA gun sonu/brifing kosusunda yazilir. Tarama kosusu gunde 12
+    # kez calisiyor ve rapor dosyasi tarihe gore adlandirildigi icin her kosu
+    # aynı dosyayi yeniden yazardi: 12 anlamsiz commit, hepsi bir sonrakinin
+    # ustune. Taramanin isi sinyal tespiti, rapor uretimi degil.
+    if gorev != TARAMA:
+        rapor_dizini = SIM_RAPOR_DIZINI if durum else RAPOR_DIZINI
+        rapor_dizini.mkdir(parents=True, exist_ok=True)
+        rapor_dosyasi = rapor_dizini / f"{rapor_adi}.md"
+        rapor_dosyasi.write_text(
+            rapor_olustur(yapilandirma, fiyatlar, portfoy, sapmalar, risk, karar,
+                          durum, maliyet),
+            encoding="utf-8",
+        )
+        if not durum:
+            _sistem_ozetini_guncelle(sistem_ozeti(portfoy, risk, rapor_adi))
+        print(f"Rapor yazildi: {rapor_dosyasi}")
+
+    # Latch/bekleme/sayac hafizasi her kosuda kalicilasir - tarama kosusunda
+    # rapor yazilmasa da sinyal uretildi ve bekleme saati islemeye basladi.
     gecmisi_yaz(karar.gecmis)
-
-    if not durum:
-        _sistem_ozetini_guncelle(sistem_ozeti(portfoy, risk, rapor_adi))
-
-    print(f"Rapor yazildi: {rapor_dosyasi}")
     if karar.devre_kesildi:
         print(f"UYARI - devre kesici: {karar.gunluk_sayi} sinyal olustu "
               f"(tavan {karar.gunluk_maks}), sinyal uretimi durduruldu.")
@@ -187,19 +335,10 @@ def main() -> int:
         print(f"UYARI - olasi kurumsal olay, degerleme durduruldu: {sembol} ({gerekce})")
 
     if argumanlar.telegram:
-        anahtar = ozet_anahtari(rapor_adi)
         try:
-            gonderildi = idempotent_gonder(
-                ozet_mesaji(portfoy, sapmalar, risk, karar, durum, baslik,
-                            fiyatlar, yapilandirma.bayatlik, maliyet),
-                anahtar, karar_anahtarlari(karar, simdi), ortam, simdi=simdi)
-            if gonderildi:
-                print("Telegram ozeti gonderildi.")
-            else:
-                # Sessizce atlamak yanlis olur: kosuyu elle tekrarlayan kisi
-                # mesaji bekler ve gelmeyince sistemi bozuk sanir.
-                print(f"Telegram ozeti ATLANDI - '{anahtar}' zaten gonderilmis.")
-                print("  Yeniden gondermek icin bu satiri gonderilen.log'dan sil.")
+            _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar,
+                                 durum, maliyet, bildirim_ayarlari, ortam,
+                                 simdi, gorev, rapor_adi)
         except TelegramHatasi as hata:
             # Rapor diske yazildi ve GECERLI - kaybolmadi.
             # Yine de exit 1 doneriyoruz: bu sistemin cikti kanali Telegram,

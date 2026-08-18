@@ -8,7 +8,13 @@ from datetime import date
 import pandas as pd
 import yfinance as yf
 
-from config import BayatlikEsikleri, KurumsalOlayAyarlari, Yapilandirma
+from config import (
+    BayatlikEsikleri,
+    KurumsalOlayAyarlari,
+    Yapilandirma,
+    hafta_sonu_mu,
+    simdi_utc,
+)
 from kaynaklar import (
     KaynakHatasi,
     KurKotasyonu,
@@ -38,6 +44,10 @@ class FiyatVerisi:
     sinif_haritasi: dict[str, str] = field(default_factory=dict)
     kurumsal_olay_supheleri: dict[str, str] = field(default_factory=dict)
     ucgenleme: UcgenlemeSonucu = field(default_factory=UcgenlemeSonucu)
+    # Kur ayristirmasi icin: varligin kendi para birimindeki seri + kur serisi.
+    # try_gecmis'ten geri bolunerek turetilemez, bkz. _serileri_hazirla.
+    yerel_gecmis: pd.DataFrame = field(default_factory=pd.DataFrame)
+    kur_gecmis: pd.Series = field(default_factory=pd.Series)
 
     @property
     def son_fiyatlar(self) -> dict[str, float]:
@@ -208,17 +218,23 @@ def kurumsal_olay_supheleri(kapanis: pd.DataFrame, hacim: pd.DataFrame,
     return supheliler
 
 
-def _tl_bazina_cevir(kapanis: pd.DataFrame, yapilandirma: Yapilandirma) -> pd.DataFrame:
-    """Fiyatlari TL'ye cevirir.
+def _serileri_hazirla(kapanis: pd.DataFrame, yapilandirma: Yapilandirma
+                      ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series]:
+    """Uc seri dondurur: TL, varligin KENDI para birimi, USD/TRY kuru.
 
     Yalnizca KUR serisi ffill edilir (carpan olarak her gun gerekli).
     Varlik serileri ffill EDILMEZ: BIST hafta sonu kapali, kripto acik.
     Kapali gunu doldurmak yapay sifir-getirili gun uretir ve volatiliteyi
     sistematik olarak dusuk gosterir. Bosluklar NaN kalir; degerleme
     son_fiyatlar icinde ayrica ffill'lenir.
+
+    Yerel seri, TL serisinden GERI BOLUNEREK uretilmez. Kur serisi ffill'li,
+    varlik serisi degil; bolme islemi ffill artifaktlarini yerel seriye tasir
+    ve kur ayristirmasi ((1+yerel)(1+kur)-1) toplam TL getirisini tutmaz.
+    Ikisi de ham `kapanis`tan bagimsiz kurulur.
     """
     kur_serisi = kapanis[yapilandirma.ayarlar.kur_sembolu].ffill()
-    sutunlar = {}
+    yerel, tl = {}, {}
     for sembol, varlik in yapilandirma.varliklar.items():
         # Hepsi NaN olan sembol tamamen DISARIDA birakilir. Sutun olarak
         # kalirsa ortak takvim kesisimini bosaltip tum risk hesabini cokertir;
@@ -226,10 +242,14 @@ def _tl_bazina_cevir(kapanis: pd.DataFrame, yapilandirma: Yapilandirma) -> pd.Da
         if sembol not in kapanis or kapanis[sembol].isna().all():
             continue
         seri = kapanis[sembol] * varlik.carpan
-        sutunlar[sembol] = seri * kur_serisi if varlik.kur == "USD" else seri
-    if not sutunlar:
+        yerel[sembol] = seri
+        tl[sembol] = seri * kur_serisi if varlik.kur == "USD" else seri
+    if not tl:
         raise RuntimeError("Hicbir varlik icin fiyat verisi alinamadi")
-    return pd.DataFrame(sutunlar).dropna(how="all")
+    try_gecmis = pd.DataFrame(tl).dropna(how="all")
+    return (try_gecmis,
+            pd.DataFrame(yerel).reindex(try_gecmis.index),
+            kur_serisi.reindex(try_gecmis.index))
 
 
 def _kur_kotasyonu(kaynaklar, env, yahoo_usdtry: float, getir,
@@ -298,9 +318,16 @@ def kripto_ucgenlemesi(yapilandirma: Yapilandirma, yahoo_usdtry: float,
         btcturk_bayatlik_dakika=kaynaklar.btcturk_bayatlik_dakika,
         tcmb_bayatlik_gun=kaynaklar.tcmb_bayatlik_gun,
     )
+    # Hafta sonu kur piyasasi kapali - degerleme bundan etkilenmez (BTCTurk TL
+    # fiyati dogrudan alinir), yalnizca CAPRAZ KONTROL yapilamaz.
+    kapali = hafta_sonu_mu(simdi or simdi_utc())
+    if kapali:
+        uyarilar.append(
+            "Hafta sonu: USD/TRY donmus, kripto ucgenlemesi yapilamadi. "
+            "Degerleme BTCTurk TL fiyatindan devam ediyor.")
     sonuclar = {
         sembol: ucgenle(sembol, tl_fiyatlar.get(sembol), usd_fiyatlar.get(sembol),
-                        kur, ayarlar, simdi)
+                        kur, ayarlar, simdi, kapali)
         for sembol in sorted(kaynaklar.btcturk_ciftleri)
     }
     return UcgenlemeSonucu(sonuclar=sonuclar, uyarilar=uyarilar)
@@ -367,11 +394,14 @@ def fiyatlari_getir(yapilandirma: Yapilandirma,
     )
 
     yahoo_usdtry = float(kapanis[kur_sembolu].ffill().iloc[-1])
+    try_gecmis, yerel_gecmis, kur_gecmis = _serileri_hazirla(kapanis, yapilandirma)
     return FiyatVerisi(
-        try_gecmis=_tl_bazina_cevir(kapanis, yapilandirma),
+        try_gecmis=try_gecmis,
         usdtry=yahoo_usdtry,
         eksik_semboller=eksik,
         sinif_haritasi=yapilandirma.sinif_haritasi,
         kurumsal_olay_supheleri=supheliler,
         ucgenleme=kripto_ucgenlemesi(yapilandirma, yahoo_usdtry, env, getir),
+        yerel_gecmis=yerel_gecmis,
+        kur_gecmis=kur_gecmis,
     )

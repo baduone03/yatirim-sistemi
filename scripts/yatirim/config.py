@@ -3,13 +3,36 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import yaml
 
 from maliyet import MaliyetModeli, modeli_kur
 
+# Turkiye kalici UTC+3, yaz saati uygulamasi yok. Zaman damgalari UTC tutulur
+# ama "hafta sonu" ve "sessiz saat" YEREL kavramlardir: UTC uzerinden
+# hesaplanirsa Cumartesi TR 02:00 hala Cuma sayilir.
+TR_OFSET = timedelta(hours=3)
+
 PROJE_DIZINI = Path(__file__).resolve().parents[2] / "04-projects" / "yatirim-sistemi"
+
+
+def simdi_utc() -> datetime:
+    """Tum zaman damgalari UTC.
+
+    Actions UTC'de, yerel kosu TR saatinde calisir. Naive `datetime.now()`
+    kullanilsaydi yerel kosu 20:00 yazar, ardindan gelen Actions kosusu 16:00
+    yazardi - gecen sure NEGATIF cikar ve bekleme suresi anlamini yitirirdi.
+    """
+    return datetime.now(timezone.utc)
+
+
+def hafta_sonu_mu(an: datetime) -> bool:
+    """UTC damgadan TR takvimine gore hafta sonu mu."""
+    return (an + TR_OFSET).weekday() >= 5
+
+
 VARLIKLAR_DOSYASI = PROJE_DIZINI / "varliklar.yaml"
 PORTFOY_DOSYASI = PROJE_DIZINI / "portfoy.yaml"
 RAPOR_DIZINI = PROJE_DIZINI / "raporlar"
@@ -57,20 +80,26 @@ class Esikler:
     risk_beta_ust: float = 1.50
     rebalancing_geri_donus: float = 0.0
     risk_katkisi_geri_donus: float = 0.0
+    hafta_sonu_carpani: float = 1.0
 
-    def sapma_asildi(self, sapma: float, acik: bool = False) -> bool:
+    def _carpan(self, hafta_sonu: bool) -> float:
+        return self.hafta_sonu_carpani if hafta_sonu else 1.0
+
+    def sapma_asildi(self, sapma: float, acik: bool = False,
+                     hafta_sonu: bool = False) -> bool:
         """Rebalancing sapmasi bandi. Esige esitken latch ACIK kalir."""
-        return abs(sapma) >= (self.rebalancing_geri_donus if acik
-                              else self.rebalancing_sapma)
+        taban = self.rebalancing_geri_donus if acik else self.rebalancing_sapma
+        return abs(sapma) >= taban * self._carpan(hafta_sonu)
 
-    def kisilmali(self, varlik_riski, acik: bool = False) -> bool:
+    def kisilmali(self, varlik_riski, acik: bool = False,
+                  hafta_sonu: bool = False) -> bool:
         """Kisma karari: katki VE beta birlikte tavani asmali.
 
         Bant yalnizca katkiya uygulanir - beta = katki/agirlik oldugu icin
         katki bandi betanin salinimini da buyuk olcude sonumler.
         """
-        esik = self.risk_katkisi_geri_donus if acik else self.risk_katkisi_ust
-        return (varlik_riski.risk_katkisi > esik
+        taban = self.risk_katkisi_geri_donus if acik else self.risk_katkisi_ust
+        return (varlik_riski.risk_katkisi > taban * self._carpan(hafta_sonu)
                 and varlik_riski.beta > self.risk_beta_ust)
 
 
@@ -248,7 +277,13 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
         # bir bant olusmaz.
         rebalancing_geri_donus=float(esik_ham.get("rebalancing_geri_donus", 0.025)),
         risk_katkisi_geri_donus=float(esik_ham.get("risk_katkisi_geri_donus", 0.22)),
+        hafta_sonu_carpani=float(esik_ham.get("hafta_sonu_carpani", 1.0)),
     )
+    if esikler.hafta_sonu_carpani < 1:
+        raise ValueError(
+            "esikler.hafta_sonu_carpani 1'den kucuk olamaz, "
+            f"{esikler.hafta_sonu_carpani} geldi. 1'in altinda hafta sonu esigi "
+            "DARALIR - ince likiditede tam ters davranis.")
     for ad, deger in (("rebalancing_sapma", esikler.rebalancing_sapma),
                       ("risk_katkisi_ust", esikler.risk_katkisi_ust)):
         if not 0 < deger < 1:

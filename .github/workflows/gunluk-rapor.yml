@@ -1,9 +1,32 @@
-name: Gunluk Yatirim Raporu
+name: Yatirim Takibi
+
+# TEK workflow. Hangi piyasanin acik oldugunu ve bu kosunun ne yapacagini
+# (tarama / gun sonu / brifing) script belirler - bkz. scripts/yatirim/piyasa.py
+# ve 04-projects/yatirim-sistemi/bildirim.yaml -> takvim.
+#
+# Ayri workflow'lar (kripto/BIST/ABD) her biri ayri checkout + pip install
+# ederdi; Actions dakika butcesi ikiye katlanirdi.
+#
+# DAKIKA BUTCESI (private repo, GitHub Free = 2000 dk/ay, her kosu yukari
+# yuvarlanir):
+#   2 saatlik grid  12/gun x 30.4 = 365 kosu
+#   gun sonu         1/gun        =  30 kosu
+#   brifing          1/hafta      =   4 kosu
+#   ~399 kosu x ~2 dk             = ~800 dk/ay = butcenin %40'i
+#
+# 1 saatlik gride cikarilirsa ~1530 dk (%77) - kosu suresi 3 dakikaya cikarsa
+# butce asilir. 30 dakikalik grid ~2980 dk (%149), MUMKUN DEGIL.
+#
+# Sikligi artirmanin tek faydasi ilk hareketi ne kadar gec duydugundur:
+# bekleme suresi (FAZ 4) zaten sembol basina gunde ~1 sinyalle siniriyor,
+# yani daha sik taramak sinyal SAYISINI artirmaz.
 
 on:
   schedule:
-    # 16:00 UTC = 19:00 TR, hafta ici. Turkiye kalici UTC+3, yaz saati yok.
-    - cron: '0 16 * * 1-5'
+    # Saatler UTC. Turkiye kalici UTC+3, yaz saati yok.
+    - cron: '0 */2 * * *'     # 2 saatte bir, 7 gun - piyasa taramasi
+    - cron: '30 20 * * *'     # 23:30 TR - gun sonu ozeti
+    - cron: '0 6 * * 1'       # 09:00 TR Pazartesi - acilis brifingi
   workflow_dispatch:          # Actions sekmesinden elle tetiklenebilir
 
 permissions:
@@ -52,7 +75,16 @@ jobs:
       # Vault denetimi TAM vault gerektirir -> yerel haftalik gorevle calisir
       # (IkinciBeyin-VaultDenetim). Bkz. scripts/vault/gozden_gecir.py
 
-      - name: Raporu repoya commit et
+      - name: Durumu ve raporu repoya commit et
+        # Yalnizca rapor degil: sinyal-durumu.yaml (histerezis latch'i, bekleme
+        # saati, gunluk sayac), gonderilen.log (idempotency) ve
+        # bildirim-kuyrugu.yaml (sessiz saatte biriken bildirimler) da commit
+        # EDILMEK ZORUNDA. Actions her kosuda temiz checkout aliyor; commit
+        # edilmezse latch her kosuda kapali baslar, ayni mesaj tekrar gider ve
+        # gece biriken uyarilar kaybolur.
+        #
+        # `git pull --rebase` sart: 2 saatlik gridde iki kosu arasinda yerel
+        # bir push olmus olabilir.
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -60,7 +92,8 @@ jobs:
           if git diff --staged --quiet; then
             echo "Degisiklik yok, commit atlanti."
           else
-            git commit -m "chore: gunluk simulasyon raporu $(date -u +%Y-%m-%d)"
+            git commit -m "chore: yatirim takibi $(date -u +'%Y-%m-%d %H:%M') UTC"
+            git pull --rebase --autostash
             git push
           fi
 

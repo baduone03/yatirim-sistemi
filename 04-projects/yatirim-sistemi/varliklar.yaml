@@ -45,6 +45,21 @@ esikler:
   risk_katkisi_geri_donus: 0.17
   risk_beta_ust: 1.50
 
+  # HAFTA SONU: tum esikler bu carpanla genisler (Cumartesi-Pazar, TR takvimi).
+  #
+  # Sebep kripto likiditesinin ince olmasi: ayni buyuklukteki emir hafta sonu
+  # daha cok fiyat oynatir, yani hafta sonu gorulen sapma hafta ici kadar
+  # guvenilir bir sinyal degil.
+  #
+  # Genisletme TUM siniflara uygulanir ama pratikte yalnizca kriptoyu isirir:
+  # BIST ve Nasdaq kapali oldugu icin hafta sonu tum siniflarin agirligini
+  # oynatan tek sey kriptonun kendisidir.
+  #
+  # Normal esigi asip genis esigi ASMAYAN sinyal kaybolmaz - islem onerisi
+  # yerine UYARI olarak gelir. Yani hafta sonu bilgi kesilmez, otomatik islem
+  # icin cita yukselir.
+  hafta_sonu_carpani: 1.5
+
 # Ayni sembolde iki sinyal arasindaki asgari sure.
 #
 # Sure son URETILEN sinyalden olculur (sinyal-durumu.yaml), islem defterinden

@@ -19,12 +19,12 @@ baslar ve latch hicbir zaman "acik" durumunu hatirlamaz.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 import yaml
 
-from config import PROJE_DIZINI
+from config import PROJE_DIZINI, hafta_sonu_mu, simdi_utc  # noqa: F401
 
 DURUM_DOSYASI = PROJE_DIZINI / "sinyal-durumu.yaml"
 GONDERILEN_LOG = PROJE_DIZINI / "gonderilen.log"
@@ -41,16 +41,7 @@ DENGEDE = "dengede"
 EKSIK_MALIYET = "SINYAL YOK (eksik maliyet)"
 BEKLEME = "BEKLEME"
 DEVRE_KESICI = "DEVRE KESICI"
-
-
-def simdi_utc() -> datetime:
-    """Gecen sure hesaplari UTC uzerinden yapilir.
-
-    Actions UTC'de, yerel kosu TR saatinde calisir. Naive `datetime.now()`
-    kullanilsaydi yerel kosu 20:00 yazar, ardindan gelen Actions kosusu 16:00
-    yazardi - gecen sure NEGATIF cikar ve bekleme suresi anlamini yitirirdi.
-    """
-    return datetime.now(timezone.utc)
+HAFTA_SONU = "HAFTA SONU (yalnizca uyari)"
 
 
 @dataclass(frozen=True)
@@ -137,6 +128,15 @@ class Karar:
     def sebepli(self, sebep: str) -> list[SinyalSonucu]:
         return [s for s in self.sonuclar.values() if s.sebep == sebep]
 
+    @property
+    def hafta_sonu_uyarilari(self) -> list[SinyalSonucu]:
+        """Esigi asti ama hafta sonu genis esigini asmadi.
+
+        Bunlar bastirilmis sinyal DEGIL, sinifi dusurulmus sinyaldir: islem
+        onerisi olarak gitmez, uyari olarak gider.
+        """
+        return self.sebepli(HAFTA_SONU)
+
 
 def _kalan_saat(durum: SinyalDurumu, simdi: datetime, bekleme_saat: float) -> float:
     """Bekleme suresinden kalan saat. 0 = bekleme yok."""
@@ -147,8 +147,26 @@ def _kalan_saat(durum: SinyalDurumu, simdi: datetime, bekleme_saat: float) -> fl
     return max(bekleme_saat - gecen, 0.0)
 
 
-def _sinif_sonucu(sapma, esikler, maliyet, gecmis, simdi, bekleme_saat
-                  ) -> tuple[SinyalSonucu, SinyalDurumu]:
+def _kapilar(tur: str, ad: str, yon: str, onceki: SinyalDurumu, gecti_genis: bool,
+             maliyet, sinyal_acik, simdi, bekleme_saat) -> SinyalSonucu:
+    """Esik asildiktan SONRAKI kapilar. Sira: hafta sonu -> maliyet -> bekleme.
+
+    Hafta sonu ilk sirada cunku digerlerinden farkli bir sey soyluyor: bu bir
+    bastirma degil, sinyalin SINIFININ dusurulmesi. Ince likiditede islem
+    onerisi vermek yerine uyari veriyoruz.
+    """
+    if not gecti_genis:
+        return SinyalSonucu(tur, ad, yon, HAFTA_SONU)
+    if maliyet is not None and not sinyal_acik():
+        return SinyalSonucu(tur, ad, yon, EKSIK_MALIYET)
+    kalan = _kalan_saat(onceki, simdi, bekleme_saat)
+    if kalan > 0:
+        return SinyalSonucu(tur, ad, yon, BEKLEME, kalan)
+    return SinyalSonucu(tur, ad, yon)
+
+
+def _sinif_sonucu(sapma, esikler, maliyet, gecmis, simdi, bekleme_saat,
+                  hafta_sonu: bool) -> tuple[SinyalSonucu, SinyalDurumu]:
     onceki = gecmis.durum(SINIF, sapma.sinif)
     yon = AZALT if sapma.sapma > 0 else ARTIR
     # Ters yon geri donus esigini KULLANMAZ: +2 puandan -2 puana gecen bir
@@ -159,16 +177,14 @@ def _sinif_sonucu(sapma, esikler, maliyet, gecmis, simdi, bekleme_saat
                 replace(onceki, acik=False, yon=""))
 
     yeni = replace(onceki, acik=True, yon=yon)
-    if maliyet is not None and not maliyet.sinif_sinyali_acik(sapma.sinif):
-        return SinyalSonucu(SINIF, sapma.sinif, yon, EKSIK_MALIYET), yeni
-    kalan = _kalan_saat(onceki, simdi, bekleme_saat)
-    if kalan > 0:
-        return SinyalSonucu(SINIF, sapma.sinif, yon, BEKLEME, kalan), yeni
-    return SinyalSonucu(SINIF, sapma.sinif, yon), yeni
+    genis = esikler.sapma_asildi(sapma.sapma, latch, hafta_sonu)
+    return _kapilar(SINIF, sapma.sinif, yon, onceki, genis, maliyet,
+                    lambda: maliyet.sinif_sinyali_acik(sapma.sinif),
+                    simdi, bekleme_saat), yeni
 
 
-def _sembol_sonucu(varlik_riski, esikler, maliyet, gecmis, simdi, bekleme_saat
-                   ) -> tuple[SinyalSonucu, SinyalDurumu]:
+def _sembol_sonucu(varlik_riski, esikler, maliyet, gecmis, simdi, bekleme_saat,
+                   hafta_sonu: bool) -> tuple[SinyalSonucu, SinyalDurumu]:
     sembol = varlik_riski.sembol
     onceki = gecmis.durum(SEMBOL, sembol)
     if not esikler.kisilmali(varlik_riski, onceki.acik):
@@ -176,12 +192,10 @@ def _sembol_sonucu(varlik_riski, esikler, maliyet, gecmis, simdi, bekleme_saat
                 replace(onceki, acik=False, yon=""))
 
     yeni = replace(onceki, acik=True, yon=KIS)
-    if maliyet is not None and not maliyet.sinyal_acik(sembol):
-        return SinyalSonucu(SEMBOL, sembol, KIS, EKSIK_MALIYET), yeni
-    kalan = _kalan_saat(onceki, simdi, bekleme_saat)
-    if kalan > 0:
-        return SinyalSonucu(SEMBOL, sembol, KIS, BEKLEME, kalan), yeni
-    return SinyalSonucu(SEMBOL, sembol, KIS), yeni
+    genis = esikler.kisilmali(varlik_riski, onceki.acik, hafta_sonu)
+    return _kapilar(SEMBOL, sembol, KIS, onceki, genis, maliyet,
+                    lambda: maliyet.sinyal_acik(sembol),
+                    simdi, bekleme_saat), yeni
 
 
 def kararlari_uret(sapmalar, risk, esikler, bekleme, devre_kesici,
@@ -194,6 +208,11 @@ def kararlari_uret(sapmalar, risk, esikler, bekleme, devre_kesici,
     burada esik BIR kere olculur, iki renderer yalnizca sonucu okur.
     """
     simdi = simdi or simdi_utc()
+    # Hafta sonu esigi GENISLER. Kripto 7/24 acik ama likiditesi ince; ustelik
+    # BIST ve Nasdaq kapali oldugu icin hafta sonunda tum siniflarin agirligini
+    # tek basina kripto oynatir. Yani genisletme her sinifa uygulanir ama
+    # pratikte yalnizca kriptoyu isirir.
+    hafta_sonu = hafta_sonu_mu(simdi)
     sonuclar: dict[tuple[str, str], SinyalSonucu] = {}
     # Mevcut gecmisin UZERINE yazilir, sifirdan kurulmaz: veri boslugu yuzunden
     # bir kosuda risk raporuna girmeyen sembolun latch'i ve bekleme saati
@@ -204,13 +223,13 @@ def kararlari_uret(sapmalar, risk, esikler, bekleme, devre_kesici,
 
     for sapma in sapmalar:
         sonuc, durum = _sinif_sonucu(sapma, esikler, maliyet, gecmis, simdi,
-                                     bekleme.ayni_sembol_saat)
+                                     bekleme.ayni_sembol_saat, hafta_sonu)
         sonuclar[(SINIF, sapma.sinif)] = sonuc
         yeni_siniflar[sapma.sinif] = durum
 
     for varlik_riski in risk.varlik_riskleri:
         sonuc, durum = _sembol_sonucu(varlik_riski, esikler, maliyet, gecmis,
-                                      simdi, bekleme.ayni_sembol_saat)
+                                      simdi, bekleme.ayni_sembol_saat, hafta_sonu)
         sonuclar[(SEMBOL, varlik_riski.sembol)] = sonuc
         yeni_semboller[varlik_riski.sembol] = durum
 
@@ -332,16 +351,29 @@ def karar_anahtarlari(karar: Karar, simdi: datetime) -> list[str]:
     return [islem_anahtari(s.ad, s.yon, simdi) for s in karar.sinyaller()]
 
 
-def gonderilen_anahtarlar(dosya: Path = GONDERILEN_LOG) -> set[str]:
-    """Log satiri: '<gonderim zamani> <anahtar>'. Anahtar son alandir."""
+def gonderim_kayitlari(dosya: Path = GONDERILEN_LOG) -> list[tuple[datetime, str]]:
+    """Log satiri: '<gonderim zamani> <anahtar>'. Anahtar son alandir.
+
+    Cozulemeyen zaman damgasi olan satir ATLANIR - anahtari da sayilmaz;
+    idempotency'de bozuk satiri "gonderilmemis" saymak en fazla bir mesaji
+    tekrarlar, hiz siniri hesabinda ise sayiyi eksik gosterirdi.
+    """
     if not dosya.exists():
-        return set()
-    anahtarlar = set()
+        return []
+    kayitlar = []
     for satir in dosya.read_text(encoding="utf-8").splitlines():
         alanlar = satir.split()
-        if len(alanlar) >= 2 and not satir.lstrip().startswith("#"):
-            anahtarlar.add(alanlar[-1])
-    return anahtarlar
+        if len(alanlar) < 2 or satir.lstrip().startswith("#"):
+            continue
+        try:
+            kayitlar.append((datetime.fromisoformat(alanlar[0]), alanlar[-1]))
+        except ValueError:
+            continue
+    return kayitlar
+
+
+def gonderilen_anahtarlar(dosya: Path = GONDERILEN_LOG) -> set[str]:
+    return {anahtar for _, anahtar in gonderim_kayitlari(dosya)}
 
 
 def gonderildi_yaz(anahtarlar: list[str], simdi: datetime,
