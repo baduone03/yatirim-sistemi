@@ -25,6 +25,7 @@ from pathlib import Path
 import yaml
 
 from config import PROJE_DIZINI, hafta_sonu_mu, simdi_utc  # noqa: F401
+from duyarlilik import SEBEP_EKONOMIK, SEBEP_PARAMETRE, SEBEP_TASIMA
 
 DURUM_DOSYASI = PROJE_DIZINI / "sinyal-durumu.yaml"
 GONDERILEN_LOG = PROJE_DIZINI / "gonderilen.log"
@@ -41,6 +42,16 @@ DENGEDE = "dengede"
 EKSIK_MALIYET = "SINYAL YOK (eksik maliyet)"
 PARAMETRE_BELIRSIZLIGI = "PARAMETRE BELIRSIZLIGI"
 MALIYET_YUTUYOR = "MALIYET YUTUYOR"
+TASIMA_BELIRSIZLIGI = "TASIMA MALIYETI BELIRSIZLIGI"
+
+# Duyarlilik modulu KOD dondurur, etiketi bu tablo secer. Eskiden sebep
+# etiket metninde "belirsizligi" arayarak bulunuyordu; ucuncu bir sebep
+# eklendiginde o eslestirme sessizce yanlis etiket uretti.
+SEBEP_ETIKETLERI = {
+    SEBEP_PARAMETRE: PARAMETRE_BELIRSIZLIGI,
+    SEBEP_TASIMA: TASIMA_BELIRSIZLIGI,
+    SEBEP_EKONOMIK: MALIYET_YUTUYOR,
+}
 BEKLEME = "BEKLEME"
 DEVRE_KESICI = "DEVRE KESICI"
 HAFTA_SONU = "HAFTA SONU (yalnizca uyari)"
@@ -154,7 +165,8 @@ def _kalan_saat(durum: SinyalDurumu, simdi: datetime, bekleme_saat: float) -> fl
 
 def _kapilar(tur: str, ad: str, yon: str, onceki: SinyalDurumu, gecti_genis: bool,
              maliyet, sinyal_acik, simdi, bekleme_saat,
-             duyarlilik=None, dayanikli=None, belirsizlik="") -> SinyalSonucu:
+             duyarlilik=None, dayanikli=None, belirsizlik="",
+             sebep_kodu="") -> SinyalSonucu:
     """Esik asildiktan SONRAKI kapilar.
 
     Sira: hafta sonu -> eksik maliyet -> parametre belirsizligi -> bekleme.
@@ -174,13 +186,16 @@ def _kapilar(tur: str, ad: str, yon: str, onceki: SinyalDurumu, gecti_genis: boo
     if maliyet is not None and not sinyal_acik():
         return SinyalSonucu(tur, ad, yon, EKSIK_MALIYET)
     if duyarlilik is not None and not dayanikli():
-        # Iki ayri sebep: karar senaryolar arasi DEGISIYORSA olculecek bir
-        # parametre var; DEGISMIYORSA maliyet gercekten sapmadan buyuk ve
-        # olculecek bir sey yok. Ikisini tek etikete toplamak, olculemez bir
-        # durumu "su sayiyi olc" onerisiyle karistirirdi.
-        sebep = (PARAMETRE_BELIRSIZLIGI if "belirsizligi" in belirsizlik
-                 else MALIYET_YUTUYOR)
-        return SinyalSonucu(tur, ad, yon, sebep, detay=belirsizlik)
+        # Uc ayri sebep, uc ayri yapilacak is:
+        #   PARAMETRE  - islem maliyeti senaryolar arasi karari ceviriyor -> OLC
+        #   TASIMA     - basabas suresi planlanani asabiliyor -> OLC veya sureyi uzat
+        #   EKONOMIK   - maliyet kesin olarak sapmadan buyuk -> BUYUT veya CIK
+        # Tek etikete toplamak, olculemez bir durumu "su sayiyi olc" onerisiyle
+        # karistirirdi.
+        return SinyalSonucu(tur, ad, yon,
+                            SEBEP_ETIKETLERI.get(sebep_kodu(),
+                                                 PARAMETRE_BELIRSIZLIGI),
+                            detay=belirsizlik)
     kalan = _kalan_saat(onceki, simdi, bekleme_saat)
     if kalan > 0:
         return SinyalSonucu(tur, ad, yon, BEKLEME, kalan)
@@ -205,7 +220,8 @@ def _sinif_sonucu(sapma, esikler, maliyet, gecmis, simdi, bekleme_saat,
                     lambda: maliyet.sinif_sinyali_acik(sapma.sinif),
                     simdi, bekleme_saat, duyarlilik,
                     lambda: duyarlilik.sinif_sinyali_acik_mi(sapma.sinif),
-                    duyarlilik.sinif_etiketi(sapma.sinif) if duyarlilik else ""), yeni
+                    duyarlilik.sinif_etiketi(sapma.sinif) if duyarlilik else "",
+                    lambda: duyarlilik.sinif_sebep_kodu(sapma.sinif)), yeni
 
 
 def _sembol_sonucu(varlik_riski, esikler, maliyet, gecmis, simdi, bekleme_saat,
@@ -223,7 +239,8 @@ def _sembol_sonucu(varlik_riski, esikler, maliyet, gecmis, simdi, bekleme_saat,
                     lambda: maliyet.sinyal_acik(sembol),
                     simdi, bekleme_saat, duyarlilik,
                     lambda: duyarlilik.sinyal_acik_mi(sembol),
-                    duyarlilik.etiket(sembol) if duyarlilik else ""), yeni
+                    duyarlilik.etiket(sembol) if duyarlilik else "",
+                    lambda: duyarlilik.sebep_kodu(sembol)), yeni
 
 
 def kararlari_uret(sapmalar, risk, esikler, bekleme, devre_kesici,

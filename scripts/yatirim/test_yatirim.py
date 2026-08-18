@@ -41,11 +41,20 @@ from config import (
 )
 import copy
 import math
+from unittest import mock
+
+import duyarlilik as duyarlilik_modulu
+import fetch
 
 from duyarlilik import (
+    BOYUT_ALANLARI,
     GERCEK,
     HEDEF,
+    SEBEP_TASIMA,
+    TUTMA_MANTIKLI,
+    TUTMA_UZUN,
     YEDEK,
+    kapsam_denetimi,
     ISLEM_MANTIKLI,
     MALIYET_YUTUYOR as KARAR_MALIYET_YUTUYOR,
     duyarliligi_olc,
@@ -75,7 +84,12 @@ from kaynaklar import (
 from kurumsal_olay import KurumsalOlay, olaylari_oku
 from ledger import durumu_hesapla, islemleri_oku
 from maliyet import (
+    BLOKE_EDEBILEN_ALANLAR,
+    TAHMINLI_ISLEM_ALANLARI,
+    TAHMINLI_TASIMA_ALANLARI,
+    YAPISAL_ALANLAR,
     Tahmin,
+    TasimaKalemleri,
     IslemProfili,
     MaliyetDagilimi,
     MaliyetKalemi,
@@ -129,7 +143,9 @@ from portfolio import (
     sinif_sapmalari,
 )
 from rapor_maliyet import (
+    basabas_bolumu,
     duyarlilik_bolumu,
+    kapsam_dokumu_bolumu,
     ekonomik_olmayanlar_bolumu,
     maliyet_kalemleri,
 )
@@ -152,6 +168,7 @@ from sinyal import (
     ARTIR,
     MALIYET_YUTUYOR,
     PARAMETRE_BELIRSIZLIGI,
+    TASIMA_BELIRSIZLIGI,
     AZALT,
     BEKLEME,
     DEVRE_KESICI,
@@ -3131,6 +3148,259 @@ class TumVarliklarOlculebilirTesti(unittest.TestCase):
         for sembol in yapilandirma.varliklar:
             self.assertIsNotNone(
                 yapilandirma.maliyet.gidis_donus(sembol, 10_000, 41.0), sembol)
+
+
+
+class TemettuIsaretiTesti(unittest.TestCase):
+    """Temettu bir GELIR; maliyet tarafinda yalnizca STOPAJI vardir.
+
+    Getiri serisi `auto_adjust=True` ile cekiliyor, yani BRUT temettu fiyat
+    serisinde zaten var. Yatirimcinin eline gecen `verim * (1 - stopaj)`;
+    brut-dahil seriden dusulecek fark `verim*stopaj`, yani sadece vergi.
+    """
+
+    def _tasima(self, verim, stopaj, gider=0.0):
+        return TasimaKalemleri(sembol="X", gider_orani_yillik=gider,
+                               temettu_verimi=verim, temettu_stopaji=stopaj)
+
+    def test_temettu_isaret_dogru(self):
+        verim, stopaj = 0.05, 0.15
+        tasima = self._tasima(verim, stopaj)
+
+        # 1) Maliyete giren tek terim STOPAJDIR - verimin kendisi degil.
+        self.assertAlmostEqual(tasima.yillik, verim * stopaj)
+        self.assertNotAlmostEqual(tasima.yillik, verim)
+        self.assertNotAlmostEqual(tasima.yillik, -verim)
+
+        # 2) Ozdeslik: brut seri +verim iceriyor, net eline gecen
+        #    verim*(1-stopaj). Aradaki fark tam olarak maliyet terimi.
+        net_katki = verim * (1 - stopaj)
+        self.assertAlmostEqual(verim - tasima.yillik, net_katki)
+
+        # 3) Stopaj SIFIRSA maliyet de sifir - temettu almak bedava degil,
+        #    bedeli yalnizca vergidir.
+        self.assertAlmostEqual(self._tasima(verim, 0.0).yillik, 0.0)
+
+        # 4) Verim ARTINCA maliyet ARTAR (daha cok temettu, daha cok stopaj).
+        self.assertGreater(self._tasima(0.10, stopaj).yillik,
+                           self._tasima(0.02, stopaj).yillik)
+
+        # 5) Stopaj ARTINCA maliyet ARTAR.
+        self.assertGreater(self._tasima(verim, 0.30).yillik,
+                           self._tasima(verim, 0.10).yillik)
+
+    def test_maliyet_isareti_pozitif(self):
+        """Tasima maliyeti negatif olamaz - negatif maliyet gelir demektir."""
+        for verim in (0.0, 0.03, 0.15):
+            for stopaj in (0.0, 0.15, 0.30):
+                self.assertGreaterEqual(self._tasima(verim, stopaj).yillik, 0.0)
+
+    def test_auto_adjust_acik_kalmali(self):
+        """Formul `auto_adjust=True` varsayimina DAYANIYOR.
+
+        Kapatilirsa brut temettu seride olmaz ve yalnizca stopaji dusmek
+        temettuyu tamamen yok sayar. Bu test o baglantiyi kilitliyor.
+        """
+        kaynak = Path(fetch.__file__).read_text(encoding="utf-8")
+        self.assertIn("auto_adjust=True", kaynak)
+        self.assertNotIn("auto_adjust=False", kaynak)
+
+
+class KapsamDenetimiTesti(unittest.TestCase):
+    """Bloke edebilen her parametreyi bir duyarlilik boyutu kapsamak ZORUNDA."""
+
+    def test_bloke_eden_parametre_duyarlilikta_kapsaniyor(self):
+        ihlaller = kapsam_denetimi()
+        self.assertEqual(ihlaller, [], "\n".join(ihlaller))
+
+    def test_kapsam_boyutlari_bloke_eden_alanlari_ortuyor(self):
+        """Kural acik yazilsin: kapsanan + yapisal = bloke edebilen."""
+        kapsanan = set().union(*BOYUT_ALANLARI.values())
+        self.assertEqual(set(BLOKE_EDEBILEN_ALANLAR),
+                         kapsanan | set(YAPISAL_ALANLAR))
+
+    def test_yapisal_alan_tahminle_doldurulamaz(self):
+        """`kur_cevrimi` bool - uc senaryosu olamaz, yani sinyali tahminle acamaz.
+
+        Kapsam disinda kalmasinin gerekcesi bu. Aralik alabilseydi kural
+        ihlali olurdu.
+        """
+        for alan in YAPISAL_ALANLAR:
+            self.assertNotIn(alan, TAHMINLI_ISLEM_ALANLARI)
+            self.assertNotIn(alan, TAHMINLI_TASIMA_ALANLARI)
+
+    def test_yeni_bloke_eden_alan_kapsanmadan_eklenemez(self):
+        """Denetim gercekten ISLIYOR mu - sahte bir alan ekleyip dogrula."""
+        with mock.patch.object(duyarlilik_modulu, "BLOKE_EDEBILEN_ALANLAR",
+                               (*BLOKE_EDEBILEN_ALANLAR, "yeni_gizli_alan")):
+            ihlaller = kapsam_denetimi()
+        self.assertEqual(len(ihlaller), 1)
+        self.assertIn("yeni_gizli_alan", ihlaller[0])
+
+
+class BasabasDuyarliligiTesti(unittest.TestCase):
+    """Ikinci boyut: tasima parametreleri basabas suresini nasil oynatiyor."""
+
+    SINIFLAR = {"A.IS": "bist"}
+    ESIK = 0.03
+
+    def _ham(self, verim, stopaj=(0.10, 0.15, 0.20), planlanan=1.0,
+             beklenen=0.65):
+        def tahmin(ucer):
+            return {"tahmin": True, "iyimser": ucer[0], "temel": ucer[1],
+                    "kotumser": ucer[2]}
+        return {
+            "maliyet": {
+                "sinif_profili": {"bist": "bist"},
+                "islem": {"bist": {"komisyon_tip": "oransal",
+                                   "komisyon_oran": 0.0015,
+                                   "kur_cevrimi": False,
+                                   "menkul_spread": 0.001}},
+                "tasima": {"A.IS": {"gider_orani_yillik": 0.0,
+                                    "temettu_verimi": tahmin(verim),
+                                    "temettu_stopaji": tahmin(stopaj)}},
+                "firsat": {"tl_risksiz_yillik": 0.48},
+                "tutma": {"bist": {"planlanan_yil": planlanan,
+                                   "beklenen_getiri_yillik": beklenen}},
+            },
+        }
+
+    def _rapor(self, **kwargs):
+        model = modeli_kur(self._ham(**kwargs), self.SINIFLAR)
+        return duyarliligi_olc(model, self.ESIK, {"A.IS": 10_000.0}, 41.0)
+
+    def test_basabas_uc_senaryoda_da_kisaysa_sinyal(self):
+        varlik = self._rapor(verim=(0.0, 0.02, 0.04)).varliklar["A.IS"]
+        self.assertTrue(varlik.tutma_olculdu)
+        self.assertTrue(varlik.tutma_dayanikli)
+        self.assertTrue(varlik.sinyal_acik)
+        self.assertEqual(varlik.etiket, "karar dayanikli")
+        self.assertEqual(set(varlik.tutma_kararlari.values()), {TUTMA_MANTIKLI})
+
+    def test_basabas_bir_senaryoda_asarsa_bastiriliyor(self):
+        """Beklenen getiri risksize cok yakin -> kotumser temettu payda'yi
+        negatife itiyor ve basabas SONSUZ oluyor."""
+        rapor = self._rapor(verim=(0.0, 0.02, 0.30), beklenen=0.50)
+        varlik = rapor.varliklar["A.IS"]
+
+        self.assertTrue(varlik.tutma_olculdu)
+        self.assertFalse(varlik.tutma_dayanikli)
+        self.assertFalse(varlik.sinyal_acik)
+        self.assertIn(TUTMA_UZUN, varlik.tutma_kararlari.values())
+        self.assertIn("tasima maliyeti belirsizligi", varlik.etiket)
+        self.assertIn("temettu_verimi", varlik.tasima_belirsiz_parametreler)
+        self.assertIn("temettu_verimi", rapor.tasima_belirsizleri)
+
+        # Islem boyutu SORUNSUZ - iki boyut birbirinden bagimsiz.
+        self.assertTrue(varlik.dayanikli)
+        self.assertEqual(varlik.kararlar.get("temel"), ISLEM_MANTIKLI)
+
+    def test_bastirma_sebebi_tasima_olarak_isaretlenir(self):
+        rapor = self._rapor(verim=(0.0, 0.02, 0.30), beklenen=0.50)
+        self.assertEqual(rapor.sebep_kodu("A.IS"), SEBEP_TASIMA)
+
+        karar = karar_ver(risk=_riskler(VarlikRiski("A.IS", 0.3, -0.2, 0.9, 0.5)),
+                          duyarlilik=rapor)
+        sonuc = karar.sonuc(SEMBOL, "A.IS")
+        self.assertFalse(sonuc.acik)
+        self.assertEqual(sonuc.sebep, TASIMA_BELIRSIZLIGI)
+        self.assertIn("temettu_verimi", sonuc.etiket)
+
+    def test_tutma_varsayimi_yoksa_boyut_kosmaz(self):
+        ham = self._ham(verim=(0.0, 0.02, 0.04))
+        del ham["maliyet"]["tutma"]
+        rapor = duyarliligi_olc(modeli_kur(ham, self.SINIFLAR), self.ESIK,
+                                {"A.IS": 10_000.0}, 41.0)
+        varlik = rapor.varliklar["A.IS"]
+
+        self.assertFalse(varlik.tutma_olculdu)
+        # Kosulmamis bir testi gecmis saymamak icin sinyal ACIK kalir ama
+        # tasima tahminleri KAPSAM DISI isaretlenir ve acilim dogrulanmamis olur.
+        self.assertIn("temettu_verimi", varlik.kapsam_disi_parametreler)
+        self.assertTrue(varlik.dogrulanmamis_acilim)
+        self.assertIn("A.IS", rapor.dogrulanmamis_acilimlar)
+
+    def test_payda_negatifse_basabas_sonsuz(self):
+        """Beklenen getiri risksizin ALTINDA - varlik maliyetini hic cikarmaz."""
+        model = modeli_kur(self._ham(verim=(0.0, 0.0, 0.0), beklenen=0.30),
+                           self.SINIFLAR)
+        self.assertEqual(model.basabas_yil("A.IS", 10_000.0, 41.0), math.inf)
+
+    def test_rapor_basabas_bolumunu_yazar(self):
+        metin = " ".join(basabas_bolumu(self._rapor(verim=(0.0, 0.02, 0.04))))
+        self.assertIn("Basabas tutma suresi", metin)
+        self.assertIn("A.IS", metin)
+        self.assertIn("BEYANDIR", metin)
+
+
+class KapsamDokumuRaporuTesti(unittest.TestCase):
+    def _rapor(self, tutma=True):
+        ham = {
+            "maliyet": {
+                "sinif_profili": {"bist": "bist"},
+                "islem": {"bist": {"komisyon_tip": "oransal",
+                                   "komisyon_oran": 0.0015,
+                                   "kur_cevrimi": False, "menkul_spread": 0.001}},
+                "tasima": {"A.IS": {
+                    "gider_orani_yillik": 0.0,
+                    "temettu_verimi": {"tahmin": True, "iyimser": 0.0,
+                                       "temel": 0.02, "kotumser": 0.04},
+                    "temettu_stopaji": 0.15}},
+                "firsat": {"tl_risksiz_yillik": 0.48},
+            },
+        }
+        if tutma:
+            ham["maliyet"]["tutma"] = {
+                "bist": {"planlanan_yil": 1.0, "beklenen_getiri_yillik": 0.65}}
+        return duyarliligi_olc(modeli_kur(ham, {"A.IS": "bist"}), 0.03,
+                               {"A.IS": 10_000.0}, 41.0)
+
+    def test_blokaji_kaldiran_parametreler_listelenir(self):
+        varlik = self._rapor().varliklar["A.IS"]
+        self.assertEqual(varlik.blokaji_kaldiran, ["temettu_verimi"])
+        self.assertEqual(varlik.kapsam_ici_parametreler, ["temettu_verimi"])
+        self.assertFalse(varlik.dogrulanmamis_acilim)
+
+    def test_kapsam_disi_acilim_isaretlenir(self):
+        varlik = self._rapor(tutma=False).varliklar["A.IS"]
+        self.assertEqual(varlik.kapsam_disi_parametreler, ["temettu_verimi"])
+        self.assertEqual(varlik.kapsam_ici_parametreler, [])
+        self.assertTrue(varlik.dogrulanmamis_acilim)
+
+    def test_rapor_dogrulanmamis_acilimi_yazar(self):
+        metin = " ".join(kapsam_dokumu_bolumu(self._rapor(tutma=False)))
+        self.assertIn("DOGRULANMAMIS ACILIM", metin)
+        self.assertIn("temettu_verimi", metin)
+
+    def test_kapsam_tamsa_isaret_yok(self):
+        metin = " ".join(kapsam_dokumu_bolumu(self._rapor()))
+        self.assertIn("Tahmin kapsam dokumu", metin)
+        self.assertNotIn("DOGRULANMAMIS ACILIM", metin)
+
+
+class GercekYapilandirmaKapsamTesti(unittest.TestCase):
+    """Gercek varliklar.yaml'da dogrulanmamis acilim OLMAMALI."""
+
+    def test_hicbir_varlikta_dogrulanmamis_acilim_yok(self):
+        yapilandirma = yapilandirmayi_oku()
+        portfoy = Portfoy(pozisyonlar=[], nakit_try=20_000.0, fiyatlanamayan=[])
+        rapor = duyarliligi_olc(
+            yapilandirma.maliyet, yapilandirma.esikler.rebalancing_sapma,
+            referans_pozisyonlar(portfoy, yapilandirma.hedef_dagilim,
+                                 yapilandirma.sinif_haritasi,
+                                 yapilandirma.maliyet.referans_pozisyon_try),
+            41.0)
+        acilimlar = rapor.dogrulanmamis_acilimlar
+        self.assertEqual(acilimlar, {},
+                         f"sinanmamis tahminle acilan varlik: {sorted(acilimlar)}")
+        self.assertEqual(rapor.kapsam_disi_tahminler, {})
+
+    def test_her_sinif_icin_tutma_varsayimi_var(self):
+        """Eksik sinif, o sinifin tum varliklarini sessizce kapsam disi birakir."""
+        yapilandirma = yapilandirmayi_oku()
+        siniflar = {v.sinif for v in yapilandirma.varliklar.values()}
+        eksik = sorted(siniflar - set(yapilandirma.maliyet.tutma))
+        self.assertEqual(eksik, [], f"maliyet.tutma eksik sinif: {eksik}")
 
 
 if __name__ == "__main__":

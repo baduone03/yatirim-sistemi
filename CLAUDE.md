@@ -252,13 +252,37 @@ Bu vault'ta her token para. Ciktilari su kurallara gore uret:
   `taban` = pozisyondan BAGIMSIZ kisim (oransal komisyon + 2*kur spread +
   kambiyo vergisi + 2*menkul spread). Taban esigi asiyorsa `math.inf` doner -
   hicbir buyukluk yetmez, o varliktan cikmaktan baska secenek yok.
-- **duyarlilik testi TASIMA kalemlerini KAPSAMAZ**: karar olcutu
-  `gidis_donus`, o da yalnizca ISLEM maliyetini kullanir. Gider orani, temettu
-  verimi ve stopaj varligi TUTMANIN bedelidir, ALIP SATMANIN degil - uc
-  senaryoda kosulsalar da karari degistiremezler ve "hicbiri karari
-  cevirmiyor" satirina duserler. Bu, TEST EDILDIKLERI anlamina GELMEZ.
-  `DuyarlilikRaporu.kapsam_disi_tahminler` onlari ayri listeler. Ayrim onemli:
-  BIST'in blokajini tam da bu sinanmamis temettu tahminleri kaldirdi.
+- **duyarlilik IKI BOYUTLU**: (1) islem maliyeti - `gidis_donus` sapma
+  esigini asiyor mu; (2) tasima maliyeti - `basabas_yil` planlanan tutma
+  suresini asiyor mu. Ayri sorular: dusuk islem maliyetli ama getirisi risksiz
+  orani zor asan bir varlik birinciyi gecer, ikinciyi gecemez. Ikisi de
+  gecmeden sinyal acilmaz (`VarlikDuyarliligi.sinyal_acik`).
+- **KAPSAM KURALI, kodla zorlanir**: bloke edebilen (yani `null` birakilinca
+  sinyali kapatan) her alan bir duyarlilik boyutu tarafindan kapsanmak
+  ZORUNDA. `duyarlilik.kapsam_denetimi()` ihlalleri dondurur ve
+  `test_bloke_eden_parametre_duyarlilikta_kapsaniyor` bos olmasini sart kosar.
+  Sebep: tahminle doldurulan bir alan sinyali ACABILIR; acilisi saglayan
+  sayinin SINANMAMIS olmasi `null` disiplinini tumuyle bosa dusurur.
+  Tek istisna `YAPISAL_ALANLAR` (`kur_cevrimi`) - bool, uc senaryosu olamaz,
+  yani tahminle doldurulamaz.
+- **kosulmamis boyut GECMIS SAYILMAZ**: `tutma_dayanikli`, `tutma_kararlari`
+  bossa False doner. `maliyet.tutma` eksikse basabas boyutu kosmaz, tasima
+  tahminleri KAPSAM DISI kalir ve varlik "DOGRULANMAMIS ACILIM" isaretlenir.
+- **temettu ISARETI**: maliyet terimi `verim * stopaj`, verimin KENDISI degil.
+  Seri `auto_adjust=True` ile cekiliyor, yani BRUT temettu fiyatta ZATEN var;
+  net eline gecen `verim*(1-stopaj)`, aradaki fark tam olarak stopaj.
+  Verimi maliyet yazmak temettuyu IKI KEZ duser, geliri ayrica eklemek IKI KEZ
+  sayar. `auto_adjust` kapatilirsa formul sessizce yanlislasir -
+  `test_temettu_isaret_dogru` o baglantiyi kilitliyor.
+- **`maliyet.tutma.beklenen_getiri_yillik` TAHMIN DEGIL BEYAN**: sistem fiyat
+  tahmini uretmez. Basabas paydasi ASIRI getiridir (`beklenen - tasima -
+  risksiz`); TL risksiz %48 civarinda oldugu icin beklenen getiri bunun
+  altindaysa payda negatif olur ve basabas SONSUZ cikar. Bu hata degil, dogru
+  cevap - mevduattan az kazandiran varlik islem maliyetini hic geri odemez.
+- **sebep KODLA tasinir, metinle degil**: `duyarlilik` sebep kodu dondurur,
+  `sinyal.SEBEP_ETIKETLERI` etikete cevirir. Eskiden sebep, etiket metninde
+  "belirsizligi" aranarak bulunuyordu; ucuncu sebep eklendiginde o eslestirme
+  sessizce yanlis etiket uretti.
 - **`null` kalem KALMADI, hepsi tahmin**: 12 varligin tamami olculebilir.
   `TumVarliklarOlculebilirTesti` bunu kilitliyor - yeni varlik eklenip maliyet
   kalemi doldurulmazsa test patlar. Sessizce bloklu kalan varlik raporda tek

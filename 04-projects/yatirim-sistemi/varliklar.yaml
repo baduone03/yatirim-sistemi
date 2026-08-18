@@ -483,6 +483,29 @@ maliyet:
       gider_orani_yillik: 0.0
       temettu_verimi: 0.0          # endeks, satin alinmaz (izleme: true)
 
+  # Tutma plani - basabas tutma suresi hesabinin girdileri. Sinif bazli.
+  #
+  #   T = gidis_donus / (beklenen_getiri - yillik_tasima - tl_risksiz)
+  #
+  # `beklenen_getiri_yillik` BIR TAHMIN DEGIL, SENIN BEYANIN. Sistem fiyat
+  # tahmini uretmez; bu sayi "bu varligi bu getiriyi bekleyerek tutuyorum"
+  # demenin yazili karsiligidir. Yanlissa basabas suresi yanlis cikar - ama
+  # varsayim GORUNUR olur, kafadaki ornuk bir beklentiyle islem yapilmaz.
+  #
+  # DIKKAT: payda ASIRI getiridir. TL risksiz oran %48 civarinda; beklenen
+  # getiri bunun altindaysa payda negatif olur ve basabas suresi SONSUZ
+  # cikar - yani o varlik islem maliyetini hicbir surede cikarmaz. Bu bir
+  # hata degil, dogru cevap: mevduattan az kazandiran varlikta islem yapmak
+  # maliyeti hic geri odemez.
+  #
+  # CLAUDE TAHMINI - Dodo deger vermedi. Asagidaki sayilar TL bazli nominal
+  # beklentidir (kur etkisi dahil) ve OLCUM DEGIL. Kendi beklentini yaz.
+  tutma:
+    bist:   {planlanan_yil: 1.0, beklenen_getiri_yillik: 0.65}
+    nasdaq: {planlanan_yil: 3.0, beklenen_getiri_yillik: 0.55}
+    kripto: {planlanan_yil: 1.0, beklenen_getiri_yillik: 0.80}
+    maden:  {planlanan_yil: 5.0, beklenen_getiri_yillik: 0.55}
+
   # Firsat maliyeti - hurdle rate. ZORUNLU.
   # Deger yoksa (ne canli ne yedek) RAPOR URETILMEZ: sifira gore olculen
   # her pozitif getiri "basari" gorunur, oysa gercek soru "bu pozisyon

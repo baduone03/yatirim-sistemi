@@ -132,7 +132,8 @@ def duyarlilik_bolumu(rapor: DuyarlilikRaporu,
             "o sayiyi olcmek islem kararini degistirmez.",
             "",
         ]
-        return satirlar + _kapsam_disi_satirlari(rapor)
+        return (satirlar + _kapsam_disi_satirlari(rapor)
+                + kapsam_dokumu_bolumu(rapor))
 
     satirlar += [
         "### OLCULMESI GEREKEN PARAMETRELER",
@@ -154,7 +155,8 @@ def duyarlilik_bolumu(rapor: DuyarlilikRaporu,
         "girildiginde aralik tek sayiya iner ve varlik kendiliginden acilir.",
         "",
     ]
-    return satirlar + _kapsam_disi_satirlari(rapor)
+    return (satirlar + _kapsam_disi_satirlari(rapor)
+            + kapsam_dokumu_bolumu(rapor))
 
 
 def _kapsam_disi_satirlari(rapor: DuyarlilikRaporu) -> list[str]:
@@ -256,6 +258,106 @@ def _minimum(deger: float | None) -> str:
     if deger <= 0:
         return "sinir yok"
     return tl(deger)
+
+
+
+def kapsam_dokumu_bolumu(rapor: DuyarlilikRaporu) -> list[str]:
+    """Varlik basina: hangi tahmin sinandi, hangisi sinanmadi, blokaji ne kaldirdi.
+
+    Bu tablo olmadan "karar dayanikli" satiri, hangi varsayimlarin sinandigini
+    gizler. Bir varligin sinyali sinanmamis bir tahminle acilmissa bunu
+    goren tek yer burasidir.
+    """
+    if not rapor.varliklar:
+        return []
+    satirlar = [
+        "### Tahmin kapsam dokumu",
+        "",
+        "`Blokaji kaldiran`: bu alan `null` olsaydi varlik sinyal uretemezdi; "
+        "tahmin oldugu icin uretiyor. `Kapsam ici` olanlar duyarlilik "
+        "testinden gecti, `kapsam disi` olanlar HIC SINANMADI.",
+        "",
+        "| Varlik | Kapsam ici (sinandi) | Kapsam disi (sinanmadi) | Durum |",
+        "|---|---|---|---|",
+    ]
+    for sembol, varlik in sorted(rapor.varliklar.items()):
+        if not varlik.blokaji_kaldiran:
+            continue
+        isaret = "**DOGRULANMAMIS ACILIM**" if varlik.dogrulanmamis_acilim else "ok"
+        satirlar.append(
+            f"| `{sembol}` | "
+            + (", ".join(f"`{p}`" for p in varlik.kapsam_ici_parametreler) or "-")
+            + " | "
+            + (", ".join(f"`{p}`" for p in varlik.kapsam_disi_parametreler) or "-")
+            + f" | {isaret} |")
+    satirlar.append("")
+
+    if rapor.dogrulanmamis_acilimlar:
+        satirlar += [
+            "> **DOGRULANMAMIS ACILIM**: bu varliklarin sinyalini, hicbir "
+            "duyarlilik boyutundan gecmemis bir tahmin aciyor. `null` "
+            "disiplininin amaci tam da bunu onlemekti - ya parametreyi olc "
+            "ya da onu kapsayan boyutu calistir "
+            "(`maliyet.tutma` eksikse basabas boyutu kosmaz).",
+            "",
+        ]
+    return satirlar
+
+
+def basabas_bolumu(rapor: DuyarlilikRaporu) -> list[str]:
+    """Ikinci duyarlilik boyutu: basabas tutma suresi.
+
+    Birinci boyut "islem maliyeti sapmayi yutuyor mu" diye sorar; bu boyut
+    "bu varlik planladigim surede o maliyeti CIKARIYOR mu" diye sorar.
+    Ikisi farkli sorular: dusuk islem maliyetli ama getirisi risksiz orani
+    zor asan bir varlik birinciyi gecer, ikinciyi gecemez.
+    """
+    olculenler = {s: v for s, v in sorted(rapor.varliklar.items())
+                  if v.tutma_olculdu}
+    if not olculenler:
+        return []
+    satirlar = [
+        "## Basabas tutma suresi (tasima duyarliligi)",
+        "",
+        "T = gidis-donus / (beklenen getiri - yillik tasima - TL risksiz). "
+        "Payda ASIRI getiridir: getirinin risksiz orani asan kismi. Islem "
+        "maliyeti yalnizca o fazladan geri odenir.",
+        "",
+        "> `beklenen getiri` bir TAHMIN DEGIL, `varliklar.yaml -> maliyet.tutma` "
+        "icindeki BEYANDIR. Sistem fiyat tahmini uretmez.",
+        "",
+        "| Varlik | Planlanan | T iyimser | T temel | T kotumser | Sonuc |",
+        "|---|---:|---:|---:|---:|---|",
+    ]
+    for sembol, varlik in olculenler.items():
+        sureler = " | ".join(_sure(varlik.basabas.get(ad)) for ad in SENARYOLAR)
+        sonuc = ("gecti" if varlik.tutma_dayanikli
+                 else "tasima maliyeti belirsizligi: "
+                      + ", ".join(varlik.tasima_belirsiz_parametreler))
+        satirlar.append(
+            f"| `{sembol}` | {varlik.planlanan_yil:.1f} yil | {sureler} | {sonuc} |")
+    satirlar.append("")
+
+    belirsizler = rapor.tasima_belirsizleri
+    if belirsizler:
+        satirlar += [
+            "> Bir senaryoda bile planlanan sureyi asan varlikta sinyal "
+            "BASTIRILIR. \"Muhtemelen cikarir\" diye almak, maliyeti kesin "
+            "olarak odemek demektir. Cozum: parametreyi olc ya da "
+            "`maliyet.tutma` icindeki planlanan sureyi gercekci hale getir.",
+            "",
+        ]
+    return satirlar
+
+
+def _sure(yil: float | None) -> str:
+    if yil is None:
+        return "-"
+    if not math.isfinite(yil):
+        return "hicbir zaman"
+    if yil < 1:
+        return f"{yil * 365:.0f} gun"
+    return f"{yil:.2f} yil"
 
 
 def maliyet_kalemleri(portfoy: Portfoy, durum, maliyet: MaliyetModeli,

@@ -510,6 +510,14 @@ class KomutGovdesiTesti(unittest.TestCase):
             self.assertIn("Ekonomik olmayan pozisyonlar", cevap)
             self.assertIn("ya buyut ya cik", cevap)
 
+
+    def test_param_kapsam_dokumunu_yazar(self):
+        """"Karar dayanikli" tek basina hangi varsayimin sinandigini gizler."""
+        cevap = self._cevap("/param")
+        self.assertIn("Tahmin kapsami", cevap)
+        self.assertIn("blokaji kaldiran", cevap)
+        self.assertIn("SINANMADI", cevap)
+
     def test_veri_bir_kez_yuklenir(self):
         """Iki komut ayni kosuda gelirse Yahoo'ya iki kez gidilmemeli."""
         sayac = []

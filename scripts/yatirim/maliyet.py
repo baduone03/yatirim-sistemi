@@ -87,11 +87,21 @@ def _senaryo_sec(senaryo: str, yalniz: str, alan: str) -> str:
 # Islem maliyeti (gidis-donus, bir kez)
 # --------------------------------------------------------------------------
 
+# Bir alan `null` birakildiginda o varligin sinyalini KAPATIYORSA "bloke
+# edebilen" alandir. Duyarlilik testinin bu alanlarin HEPSINI kapsamasi
+# zorunlu - kapsanmayan bir alan, sinanmamis bir tahminle sinyal acabilir.
+# Tek istisna YAPISAL alanlar: bool bir alan (kur_cevrimi) aralik alamaz,
+# uc senaryosu olamaz. Bkz. duyarlilik.kapsam_denetimi.
+YAPISAL_ALANLAR = ("kur_cevrimi",)
+
 TAHMINLI_ISLEM_ALANLARI = ("komisyon_oran", "komisyon_usd",
                            "kur_spread_tek_yon", "kambiyo_vergisi",
                            "menkul_spread")
 TAHMINLI_TASIMA_ALANLARI = ("gider_orani_yillik", "temettu_verimi",
                             "temettu_stopaji")
+BLOKE_EDEBILEN_ALANLAR = (TAHMINLI_ISLEM_ALANLARI
+                          + TAHMINLI_TASIMA_ALANLARI
+                          + YAPISAL_ALANLAR)
 
 
 @dataclass(frozen=True)
@@ -257,7 +267,19 @@ class TasimaKalemleri:
 
     @property
     def yillik(self) -> float | None:
-        """h = gider_orani + temettu_verimi * stopaj_orani
+        """Tasima maliyeti: h = gider_orani + temettu_verimi * stopaj_orani
+
+        ISARET - burada temettunun KENDISI degil, YALNIZCA STOPAJI maliyettir.
+
+        Temettu bir GELIRDIR. Getiri serisi `auto_adjust=True` ile cekiliyor,
+        yani BRUT temettu fiyat serisinde ZATEN var. Yatirimcinin eline gecen
+        net tutar `verim * (1 - stopaj)`; brut-dahil seriden dusulecek fark
+        `verim - verim*(1-stopaj) = verim*stopaj` yani sadece kesilen vergi.
+
+        Verimi bastan maliyet yazmak temettuyu IKI KEZ dusurur (bir kez seride
+        yok sayarak, bir kez maliyet olarak). Geliri ayrica EKLEMEK ise iki kez
+        SAYAR. Ikisi de `auto_adjust` ayarina bagli; o `False` yapilirsa bu
+        formul sessizce yanlislasir - bkz. test_temettu_isaret_dogru.
 
         Tahminli kalem TEMEL senaryoya indirgenir. Ham `Tahmin` nesnesiyle
         carpma yapmak TypeError verirdi; sessizce None donmek ise olculmus
@@ -273,6 +295,22 @@ class TasimaKalemleri:
 # --------------------------------------------------------------------------
 # Varlik basina birlesik durum
 # --------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class TutmaVarsayimi:
+    """Sinif bazli tutma plani ve getiri BEYANI.
+
+    `beklenen_getiri_yillik` bir TAHMIN DEGIL, BEYANDIR: sistem fiyat tahmini
+    uretmez, uretmeyecek. Bu sayi "bu varligi bu getiriyi bekleyerek
+    tutuyorum" demenin karsiligidir ve basabas hesabinin paydasidir. Yanlissa
+    basabas suresi yanlis cikar - ama en azindan varsayim GORUNUR olur;
+    kafadaki ornuk bir beklentiyle islem yapmak yerine yazili bir sayiyla
+    yapilir.
+    """
+
+    planlanan_yil: float
+    beklenen_getiri_yillik: float
+
 
 @dataclass(frozen=True)
 class VarlikMaliyeti:
@@ -322,6 +360,7 @@ class MaliyetModeli:
     enflasyon_bayatlik_gun: int = 45
     nakit_stopaji: float | None = None
     referans_pozisyon_try: float = 3000.0   # tutulmayan varlikta sabit komisyon payi
+    tutma: dict[str, TutmaVarsayimi] = field(default_factory=dict)
     uyarilar: list[str] = field(default_factory=list)
 
     def senaryoyla(self, senaryo: str, yalniz: str = "") -> MaliyetModeli:
@@ -418,6 +457,40 @@ class MaliyetModeli:
         varlik = self.varliklar.get(sembol)
         return None if varlik is None else varlik.tasima.yillik
 
+    def basabas_yil(self, sembol: str, pozisyon_try: float, usdtry: float,
+                    senaryo: str = TEMEL) -> float | None:
+        """Gidis-donus maliyetini cikaran tutma suresi (yil).
+
+            T = gidis_donus / (beklenen_getiri - yillik_tasima - tl_risksiz)
+
+        Payda ASIRI getiridir: risksiz orani ve tasimayi asan kisim. Islem
+        maliyeti yalnizca bu fazladan odenir; getirinin risksize esit olan
+        kismi zaten mevduatta da kazanilirdi.
+
+        Doner:
+          None      - eksik kalem, tutma varsayimi yok veya hurdle rate yok
+          math.inf  - payda <= 0: bu varlik maliyetini HICBIR SUREDE cikarmaz
+          sayi      - yil cinsinden basabas suresi
+        """
+        varlik = self.varliklar.get(sembol)
+        tutma = self.tutma.get(varlik.sinif) if varlik else None
+        if tutma is None or self.tl_risksiz_yillik is None:
+            return None
+        model = self.senaryoyla(senaryo)
+        gidis_donus = model.gidis_donus(sembol, pozisyon_try, usdtry)
+        tasima = model.yillik_tasima(sembol)
+        if gidis_donus is None or tasima is None:
+            return None
+        payda = tutma.beklenen_getiri_yillik - tasima - self.tl_risksiz_yillik
+        if payda <= 0:
+            return math.inf
+        return gidis_donus / payda
+
+    def planlanan_yil(self, sembol: str) -> float | None:
+        varlik = self.varliklar.get(sembol)
+        tutma = self.tutma.get(varlik.sinif) if varlik else None
+        return None if tutma is None else tutma.planlanan_yil
+
     def minimum_pozisyon(self, sembol: str, esik: float, usdtry: float,
                          senaryo: str = TEMEL) -> float | None:
         varlik = self.varliklar.get(sembol)
@@ -484,6 +557,13 @@ def modeli_kur(ham: dict, sinif_haritasi: dict[str, str]) -> MaliyetModeli:
         nakit_stopaji=_sayi(nakit_ham.get("stopaj")),
         referans_pozisyon_try=float(
             (maliyet_ham.get("duyarlilik") or {}).get("referans_pozisyon_try", 3000.0)),
+        tutma={
+            sinif: TutmaVarsayimi(
+                planlanan_yil=float(kayit["planlanan_yil"]),
+                beklenen_getiri_yillik=float(kayit["beklenen_getiri_yillik"]),
+            )
+            for sinif, kayit in (maliyet_ham.get("tutma") or {}).items()
+        },
     )
 
 

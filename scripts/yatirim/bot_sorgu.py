@@ -434,15 +434,34 @@ def komut_param(baglam: Baglam, arguman: str) -> str:
                     f"{kacis(sembol)}: {tl(varlik.pozisyon_try)} - maliyet "
                     "tabani esigin ustunde, buyutmek ise yaramaz")
 
-    kapsam_disi = duyarlilik.kapsam_disi_tahminler
-    if kapsam_disi:
-        # "Karari cevirmiyor" bu kalemler icin "test edildi" DEMEK DEGIL -
-        # karar olcutune hic girmiyorlar. Yazilmazsa sinanmamis tahmin
-        # sinanmis gibi gorunur.
-        satirlar += ["", "<b>Duyarlilik testinin KAPSAMADIGI tahminler</b>",
-                     "Tasima maliyeti - net getiriyi etkiler, islem kapisini etkilemez:"]
-        satirlar += [f"- {kacis(parametre)}: {len(semboller)} varlik"
-                     for parametre, semboller in sorted(kapsam_disi.items())]
+    tasima_belirsizleri = duyarlilik.tasima_belirsizleri
+    if tasima_belirsizleri:
+        satirlar += ["", "<b>Tasima maliyeti belirsizligi</b>",
+                     "Basabas suresi bir senaryoda planlanani asiyor:"]
+        satirlar += [f"- {kacis(parametre)}: {kacis(', '.join(semboller))}"
+                     for parametre, semboller in sorted(tasima_belirsizleri.items())]
+
+    # Varlik basina kapsam dokumu. "Karar dayanikli" satiri tek basina
+    # hangi varsayimlarin SINANDIGINI gizler; sinanmamis bir tahminle acilan
+    # sinyali goren tek yer bu liste.
+    satirlar += ["", "<b>Tahmin kapsami (varlik basina)</b>"]
+    for sembol, varlik in sorted(duyarlilik.varliklar.items()):
+        if not varlik.blokaji_kaldiran:
+            continue
+        isaret = " DOGRULANMAMIS ACILIM" if varlik.dogrulanmamis_acilim else ""
+        satirlar.append(
+            f"{kacis(sembol)}:{isaret}"
+            f"\n  blokaji kaldiran: {kacis(', '.join(varlik.blokaji_kaldiran))}"
+            f"\n  sinandi: {kacis(', '.join(varlik.kapsam_ici_parametreler)) or '-'}"
+            f"\n  SINANMADI: "
+            f"{kacis(', '.join(varlik.kapsam_disi_parametreler)) or '-'}")
+
+    if duyarlilik.dogrulanmamis_acilimlar:
+        satirlar += [
+            "",
+            "UYARI - DOGRULANMAMIS ACILIM: bu varliklarin sinyalini hicbir "
+            "duyarlilik boyutundan gecmemis bir tahmin aciyor. Ya parametreyi "
+            "olc ya da onu kapsayan boyutu calistir."]
 
     engellenen = veri.maliyet.eksik_kalem_ozeti
     if engellenen:
