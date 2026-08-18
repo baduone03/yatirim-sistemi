@@ -54,6 +54,7 @@ from portfolio import (  # noqa: E402
     portfoyu_ledgerdan_hesapla,
     sinif_sapmalari,
 )
+from duyarlilik import duyarliligi_olc  # noqa: E402
 from report import (  # noqa: E402
     OZET_BASLANGIC,
     OZET_BITIS,
@@ -161,7 +162,8 @@ def _veri_kaynagi(fiyatlar, sembol: str) -> str:
 
 
 def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
-                         maliyet, ayarlar, ortam, simdi, gorev, rapor_adi) -> None:
+                         maliyet, ayarlar, ortam, simdi, gorev, rapor_adi,
+                         duyarlilik=None) -> None:
     """Gorev tipine gore bildirim gonderir.
 
     TARAMA: yalnizca islem kararlari. Her tarama kosusunda tam ozet gondermek
@@ -169,7 +171,7 @@ def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
     GUN_SONU / BRIFING: portfoy durumu + tum uyarilar.
     """
     uyarilar = uyarilari_topla(fiyatlar, portfoy, karar, maliyet,
-                              yapilandirma.bayatlik)
+                              yapilandirma.bayatlik, risk, duyarlilik)
     giden = _islem_onerileri(karar, fiyatlar, portfoy, risk, yapilandirma,
                              maliyet, ayarlar, ortam, simdi)
 
@@ -297,12 +299,20 @@ def main() -> int:
         else portfoyu_hesapla(yapilandirma, fiyatlar)
     )
     sapmalar = sinif_sapmalari(portfoy, yapilandirma.hedef_dagilim)
-    risk = riski_hesapla(yapilandirma, fiyatlar, portfoy)
+    risk = riski_hesapla(yapilandirma, fiyatlar, portfoy, olaylar)
+
+    # Maliyet duyarliligi: tahminli kalemler karari ceviriyor mu?
+    # Ceviriyorsa sinyal bastirilir ve raporda hangi parametrenin
+    # olculmesi gerektigi yazar.
+    duyarlilik = duyarliligi_olc(
+        maliyet, yapilandirma.esikler.rebalancing_sapma,
+        {p.sembol: p.deger_try for p in portfoy.pozisyonlar}, fiyatlar.usdtry)
 
     # Sinyal karari TEK noktada verilir; rapor ve Telegram yalnizca render eder.
     karar = kararlari_uret(sapmalar, risk, yapilandirma.esikler,
                            yapilandirma.bekleme, yapilandirma.devre_kesici,
-                           gecmisi_oku(), rapor_adi, maliyet, simdi)
+                           gecmisi_oku(), rapor_adi, maliyet, simdi,
+                           duyarlilik)
     for uyari in karar.uyarilar:
         print(f"UYARI - {uyari}")
 
@@ -316,7 +326,7 @@ def main() -> int:
         rapor_dosyasi = rapor_dizini / f"{rapor_adi}.md"
         rapor_dosyasi.write_text(
             rapor_olustur(yapilandirma, fiyatlar, portfoy, sapmalar, risk, karar,
-                          durum, maliyet),
+                          durum, maliyet, duyarlilik),
             encoding="utf-8",
         )
         if not durum:
@@ -338,7 +348,7 @@ def main() -> int:
         try:
             _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar,
                                  durum, maliyet, bildirim_ayarlari, ortam,
-                                 simdi, gorev, rapor_adi)
+                                 simdi, gorev, rapor_adi, duyarlilik)
         except TelegramHatasi as hata:
             # Rapor diske yazildi ve GECERLI - kaybolmadi.
             # Yine de exit 1 doneriyoruz: bu sistemin cikti kanali Telegram,

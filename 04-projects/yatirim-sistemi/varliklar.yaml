@@ -111,6 +111,15 @@ kurumsal_olay:
   hacim_carpani: 1.5       # hacim medyanin bu kati ustundeyse GERCEK hareket
   hacim_penceresi: 20      # medyan hacim kac gunden hesaplanir
   tarama_gunu: 5           # yalnizca son N gun taranir, tarihi olaylar degil
+  # Supheli sembol RISK hesabinda ne olsun:
+  #   disla  - seri hic girmesin (varsayilan)
+  #   duzelt - kurumsal-olaylar.yaml'daki oranla geri-duzeltilsin; defterde
+  #            oran YOKSA yine dislanir (uydurma oran, sisirilmis
+  #            volatiliteden kotudur)
+  risk_modu: disla
+  gozlem_dusus_esigi: 0.20 # dislama veri setinin bu kadarindan fazlasini
+                           # goturuyorsa "volatilite tahmini guvenilirligi
+                           # dustu" uyarisi basilir
 
 # Dis veri kaynaklari ve ucgenleme.
 #
@@ -193,15 +202,38 @@ maliyet:
       komisyon_tip: sabit
       komisyon_usd: 1.5            # DOGRULANACAK (resmi ucret tarifesi)
       kur_cevrimi: true
-      kur_spread_tek_yon: null     # BILINMIYOR - en buyuk bosluk, Bolum 7/2
-      kambiyo_vergisi: null        # BILINMIYOR - mevzuat kontrolu gerek
+      kur_spread_tek_yon:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # TEK YON - gidis-donus hesabinda 2 ile carpilir
+        iyimser: 0.0015
+        temel: 0.004
+        kotumser: 0.009
+      kambiyo_vergisi:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        iyimser: 0.0
+        temel: 0.002
+        kotumser: 0.01
       menkul_spread: 0.00002       # QQQ/SPY, yuksek likidite
 
     kripto_btcturk:
       komisyon_tip: oransal
-      komisyon_oran: null          # BILINMIYOR - BTCTurk kademeli tarife
+      komisyon_oran:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # BTCTurk kademeli tarife
+        iyimser: 0.0
+        temel: 0.0015
+        kotumser: 0.0035
       kur_cevrimi: false           # TRY cifti dogrudan alinir (BTCTRY)
-      menkul_spread: null          # BILINMIYOR - emir defteri derinligi
+      menkul_spread:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # CLAUDE EKLEDI - Dodo aralik vermedi; emir defteri derinligi
+        iyimser: 0.0005
+        temel: 0.002
+        kotumser: 0.005
 
     emtia_bilinmiyor:
       # GC=F/SI=F bir vadeli sozlesme fiyatidir; gram altin fiilen hangi
@@ -233,16 +265,49 @@ maliyet:
       temettu_stopaji: null
     QQQ:
       gider_orani_yillik: 0.0020   # Invesco QQQ gider orani %0.20
-      temettu_verimi: null         # DOGRULANACAK (fon kunyesi)
-      temettu_stopaji: null        # DOGRULANACAK (CVOA + ABD stopaji)
+      temettu_verimi:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        iyimser: 0.008
+        temel: 0.012
+        kotumser: 0.016
+      temettu_stopaji:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # CLAUDE EKLEDI - Dodo aralik vermedi (CVOA + ABD stopaji)
+        iyimser: 0.1
+        temel: 0.15
+        kotumser: 0.3
     AAPL:
       gider_orani_yillik: 0.0
-      temettu_verimi: null
-      temettu_stopaji: null
+      temettu_verimi:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        iyimser: 0.008
+        temel: 0.012
+        kotumser: 0.016
+      temettu_stopaji:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # CLAUDE EKLEDI - Dodo aralik vermedi (CVOA + ABD stopaji)
+        iyimser: 0.1
+        temel: 0.15
+        kotumser: 0.3
     NVDA:
       gider_orani_yillik: 0.0
-      temettu_verimi: null
-      temettu_stopaji: null
+      temettu_verimi:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        iyimser: 0.008
+        temel: 0.012
+        kotumser: 0.016
+      temettu_stopaji:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # CLAUDE EKLEDI - Dodo aralik vermedi (CVOA + ABD stopaji)
+        iyimser: 0.1
+        temel: 0.15
+        kotumser: 0.3
     BTC-USD:
       gider_orani_yillik: 0.0
       temettu_verimi: 0.0          # kripto temettu odemez - yapisal sifir

@@ -137,6 +137,11 @@ class BayatlikEsikleri:
         return self.sinif_bazli.get(sinif, self.varsayilan)
 
 
+RISK_DISLA = "disla"
+RISK_DUZELT = "duzelt"
+RISK_MODLARI = (RISK_DISLA, RISK_DUZELT)
+
+
 @dataclass(frozen=True)
 class KurumsalOlayAyarlari:
     """Kayitli olmayan bedelsiz/split suphesinin tespit parametreleri."""
@@ -145,6 +150,14 @@ class KurumsalOlayAyarlari:
     hacim_carpani: float = 1.5
     hacim_penceresi: int = 20
     tarama_gunu: int = 5
+    # Supheli sembolun RISK hesabinda ne olacagi:
+    #   disla  - seri hic girmez (varsayilan, tek guvenli davranis)
+    #   duzelt - defterdeki oranla geri-duzeltilir; defterde oran YOKSA yine
+    #            dislanir. Uydurulmus oran, sisirilmis volatiliteden kotudur.
+    risk_modu: str = RISK_DISLA
+    # Dislama veri setinin bu oranindan fazlasini goturuyorsa volatilite
+    # tahmini artik guvenilir degil - rapor bunu yazar.
+    gozlem_dusus_esigi: float = 0.20
 
 
 @dataclass(frozen=True)
@@ -344,7 +357,17 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
         hacim_carpani=float(olay_ham.get("hacim_carpani", 1.5)),
         hacim_penceresi=int(olay_ham.get("hacim_penceresi", 20)),
         tarama_gunu=int(olay_ham.get("tarama_gunu", 5)),
+        risk_modu=str(olay_ham.get("risk_modu", RISK_DISLA)).lower(),
+        gozlem_dusus_esigi=float(olay_ham.get("gozlem_dusus_esigi", 0.20)),
     )
+    if kurumsal_olay.risk_modu not in RISK_MODLARI:
+        raise ValueError(
+            f"kurumsal_olay.risk_modu {' | '.join(RISK_MODLARI)} olmali, "
+            f"'{kurumsal_olay.risk_modu}' geldi")
+    if not 0 < kurumsal_olay.gozlem_dusus_esigi < 1:
+        raise ValueError(
+            "kurumsal_olay.gozlem_dusus_esigi 0 ile 1 arasinda olmali, "
+            f"{kurumsal_olay.gozlem_dusus_esigi} geldi")
     if not 0 < kurumsal_olay.getiri_esigi < 1:
         raise ValueError(
             "kurumsal_olay.getiri_esigi 0 ile 1 arasinda olmali, "

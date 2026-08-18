@@ -39,6 +39,8 @@ KIS = "kis"
 # Bastirma sebepleri. Bos sebep = sinyal acik.
 DENGEDE = "dengede"
 EKSIK_MALIYET = "SINYAL YOK (eksik maliyet)"
+PARAMETRE_BELIRSIZLIGI = "PARAMETRE BELIRSIZLIGI"
+MALIYET_YUTUYOR = "MALIYET YUTUYOR"
 BEKLEME = "BEKLEME"
 DEVRE_KESICI = "DEVRE KESICI"
 HAFTA_SONU = "HAFTA SONU (yalnizca uyari)"
@@ -53,6 +55,7 @@ class SinyalSonucu:
     yon: str = ""
     sebep: str = ""
     kalan_saat: float = 0.0        # BEKLEME ise kalan sure
+    detay: str = ""                # belirsizlikte sorumlu parametreler
 
     @property
     def acik(self) -> bool:
@@ -62,6 +65,8 @@ class SinyalSonucu:
     def etiket(self) -> str:
         if self.sebep == BEKLEME:
             return f"{BEKLEME} ({self.kalan_saat:.0f} saat)"
+        if self.sebep and self.detay:
+            return f"{self.sebep}: {self.detay}"
         return self.sebep
 
 
@@ -148,17 +153,34 @@ def _kalan_saat(durum: SinyalDurumu, simdi: datetime, bekleme_saat: float) -> fl
 
 
 def _kapilar(tur: str, ad: str, yon: str, onceki: SinyalDurumu, gecti_genis: bool,
-             maliyet, sinyal_acik, simdi, bekleme_saat) -> SinyalSonucu:
-    """Esik asildiktan SONRAKI kapilar. Sira: hafta sonu -> maliyet -> bekleme.
+             maliyet, sinyal_acik, simdi, bekleme_saat,
+             duyarlilik=None, dayanikli=None, belirsizlik="") -> SinyalSonucu:
+    """Esik asildiktan SONRAKI kapilar.
+
+    Sira: hafta sonu -> eksik maliyet -> parametre belirsizligi -> bekleme.
 
     Hafta sonu ilk sirada cunku digerlerinden farkli bir sey soyluyor: bu bir
     bastirma degil, sinyalin SINIFININ dusurulmesi. Ince likiditede islem
     onerisi vermek yerine uyari veriyoruz.
+
+    Eksik maliyet, parametre belirsizliginden ONCE gelir: ikisi de maliyetin
+    bilinmedigini soyler ama eksik kalem hakkinda hicbir sey soylenemez,
+    tahminli kalem hakkinda "su parametreyi olc" denebilir. Once daha karanlik
+    olani raporlanir; aksi halde olculebilir bir oneri, olculemez bir boslugu
+    gizler.
     """
     if not gecti_genis:
         return SinyalSonucu(tur, ad, yon, HAFTA_SONU)
     if maliyet is not None and not sinyal_acik():
         return SinyalSonucu(tur, ad, yon, EKSIK_MALIYET)
+    if duyarlilik is not None and not dayanikli():
+        # Iki ayri sebep: karar senaryolar arasi DEGISIYORSA olculecek bir
+        # parametre var; DEGISMIYORSA maliyet gercekten sapmadan buyuk ve
+        # olculecek bir sey yok. Ikisini tek etikete toplamak, olculemez bir
+        # durumu "su sayiyi olc" onerisiyle karistirirdi.
+        sebep = (PARAMETRE_BELIRSIZLIGI if "belirsizligi" in belirsizlik
+                 else MALIYET_YUTUYOR)
+        return SinyalSonucu(tur, ad, yon, sebep, detay=belirsizlik)
     kalan = _kalan_saat(onceki, simdi, bekleme_saat)
     if kalan > 0:
         return SinyalSonucu(tur, ad, yon, BEKLEME, kalan)
@@ -166,7 +188,8 @@ def _kapilar(tur: str, ad: str, yon: str, onceki: SinyalDurumu, gecti_genis: boo
 
 
 def _sinif_sonucu(sapma, esikler, maliyet, gecmis, simdi, bekleme_saat,
-                  hafta_sonu: bool) -> tuple[SinyalSonucu, SinyalDurumu]:
+                  hafta_sonu: bool, duyarlilik=None
+                  ) -> tuple[SinyalSonucu, SinyalDurumu]:
     onceki = gecmis.durum(SINIF, sapma.sinif)
     yon = AZALT if sapma.sapma > 0 else ARTIR
     # Ters yon geri donus esigini KULLANMAZ: +2 puandan -2 puana gecen bir
@@ -180,11 +203,14 @@ def _sinif_sonucu(sapma, esikler, maliyet, gecmis, simdi, bekleme_saat,
     genis = esikler.sapma_asildi(sapma.sapma, latch, hafta_sonu)
     return _kapilar(SINIF, sapma.sinif, yon, onceki, genis, maliyet,
                     lambda: maliyet.sinif_sinyali_acik(sapma.sinif),
-                    simdi, bekleme_saat), yeni
+                    simdi, bekleme_saat, duyarlilik,
+                    lambda: duyarlilik.sinif_sinyali_acik_mi(sapma.sinif),
+                    duyarlilik.sinif_etiketi(sapma.sinif) if duyarlilik else ""), yeni
 
 
 def _sembol_sonucu(varlik_riski, esikler, maliyet, gecmis, simdi, bekleme_saat,
-                   hafta_sonu: bool) -> tuple[SinyalSonucu, SinyalDurumu]:
+                   hafta_sonu: bool, duyarlilik=None
+                   ) -> tuple[SinyalSonucu, SinyalDurumu]:
     sembol = varlik_riski.sembol
     onceki = gecmis.durum(SEMBOL, sembol)
     if not esikler.kisilmali(varlik_riski, onceki.acik):
@@ -195,12 +221,14 @@ def _sembol_sonucu(varlik_riski, esikler, maliyet, gecmis, simdi, bekleme_saat,
     genis = esikler.kisilmali(varlik_riski, onceki.acik, hafta_sonu)
     return _kapilar(SEMBOL, sembol, KIS, onceki, genis, maliyet,
                     lambda: maliyet.sinyal_acik(sembol),
-                    simdi, bekleme_saat), yeni
+                    simdi, bekleme_saat, duyarlilik,
+                    lambda: duyarlilik.sinyal_acik_mi(sembol),
+                    duyarlilik.etiket(sembol) if duyarlilik else ""), yeni
 
 
 def kararlari_uret(sapmalar, risk, esikler, bekleme, devre_kesici,
                    gecmis: SinyalGecmisi, bugun: str, maliyet=None,
-                   simdi: datetime | None = None) -> Karar:
+                   simdi: datetime | None = None, duyarlilik=None) -> Karar:
     """Tek karar noktasi.
 
     Esik testi iki yerde (rapor + Telegram) ayri ayri yapilsaydi biri
@@ -223,13 +251,15 @@ def kararlari_uret(sapmalar, risk, esikler, bekleme, devre_kesici,
 
     for sapma in sapmalar:
         sonuc, durum = _sinif_sonucu(sapma, esikler, maliyet, gecmis, simdi,
-                                     bekleme.ayni_sembol_saat, hafta_sonu)
+                                     bekleme.ayni_sembol_saat, hafta_sonu,
+                                     duyarlilik)
         sonuclar[(SINIF, sapma.sinif)] = sonuc
         yeni_siniflar[sapma.sinif] = durum
 
     for varlik_riski in risk.varlik_riskleri:
         sonuc, durum = _sembol_sonucu(varlik_riski, esikler, maliyet, gecmis,
-                                      simdi, bekleme.ayni_sembol_saat, hafta_sonu)
+                                      simdi, bekleme.ayni_sembol_saat, hafta_sonu,
+                                      duyarlilik)
         sonuclar[(SEMBOL, varlik_riski.sembol)] = sonuc
         yeni_semboller[varlik_riski.sembol] = durum
 

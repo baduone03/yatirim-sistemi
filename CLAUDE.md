@@ -189,6 +189,60 @@ Bu vault'ta her token para. Ciktilari su kurallara gore uret:
 - **bayat fiyat**: `son_fiyatlar` ffill yapar, delist/veri kesintisi sessizce eski fiyatla degerleme yapardi. `FiyatVerisi.bayat_semboller()` 7 gunden eski veriyi raporda ve Telegram'da isaretler. Degerlemeyi bozmaz, yalnizca gorunur kilar.
 - **kurumsal olay maliyet kurali (EN KRITIK)**: bedelsiz/split'te `adet *= oran` ama **TOPLAM MALIYET DEGISMEZ**. Cebinden para cikmadi. Toplam maliyeti orana BOLMEK, olmayan kar uydurur: 1000 TL'lik 10 lot, 2.0 bedelsizden sonra 20 lottur ve maliyeti hala 1000 TL'dir; 500'e dusurursen %100 sahte kar cikar. Birim maliyet `toplam/adet`ten turetilir ve zaten dogru sekilde yariya iner.
 - **kurumsal olay zaman cizgisi**: olaylar islemlerle TARIH SIRASINDA harmanlanir (`ledger._zaman_cizgisi`), topluca uygulanmaz. Toplu carpim, olaydan SONRA alinan lotlari da carpar - 4:1 split'ten sonra alinan 10 lot 40 gorunur. Ayni tarihte olay islemden ONCE gelir (ex-tarih mantigi).
+- **supheli sembol RISK hesabina da girmez**: kurumsal olay suphesi hem
+  degerlemeyi durdurur hem sembolu getiri matrisinden cikarir
+  (`risk._risk_gecmisi`). Fiyata guvenmeyip o fiyattan turetilen volatiliteye
+  guvenmek tutarsiz. Tum semboller supheliyse risk hesabi sebebini yazan
+  hatayla durur, bos matrisle devam etmez.
+- **`risk_modu: disla | duzelt`** (`varliklar.yaml -> kurumsal_olay`): `disla`
+  varsayilan. `duzelt` defterdeki TUM olaylari geri-duzeltme olarak uygular
+  (`_seriyi_duzelt`: ex-tarihten ONCEKI fiyatlar orana BOLUNUR), sonra hala
+  supheli olani dislar. Supheli sembol tam da olay defterde OLMADIGI icin
+  supheli sayilir, yani ona uygulanacak oran yoktur - `duzelt` modunun asil
+  isi, deftere YAZILMIS olayin seride biraktigi sicramayi temizlemek.
+- **fiyat serisi duzeltmesi ile adet/maliyet muhasebesi AYRI**: `ledger`
+  tarafinda toplam maliyet DEGISMEZ; `risk._seriyi_duzelt` ise olcek birligi
+  icin fiyati boler. Ikisini ayni kural sanip maliyeti de bolmek sahte kar
+  uydurur.
+- **gozlem dususu GUN degil HUCRE sayar**: ortak takvim bir KESISIM oldugu
+  icin sembol cikarmak gun sayisini dusurmez, ARTIRIR. Kaybedilen sey kapsam;
+  olcu gun x sembol (`risk._gozlem_dususu`). Esik `kurumsal_olay.gozlem_dusus_esigi`.
+- **tahmin `null` DEGILDIR**: `null` "hicbir sey soyleyemem" demek ve sinyali
+  tamamen kapatir; uc senaryolu `tahmin` blogu "olcmedim ama sinirlarini
+  biliyorum" demek. Blokta `tahmin: true` ZORUNLU - olmadan sozluk reddedilir,
+  yoksa yanlislikla yazilmis bir blok olculmus sayi gibi davranirdi.
+- **dayaniklilik != islem yap**: karar uc senaryoda da AYNI cikabilir ama o
+  ortak karar "maliyet sapmayi yutuyor" olabilir. `VarlikDuyarliligi.dayanikli`
+  kararin GUVENILIR oldugunu, `sinyal_acik` YAPILMASI gerektigini soyler.
+  Yalnizca dayanikliliga bakan kapi, maliyeti kesinlikle sapmadan buyuk olan
+  varlikta islem onerir.
+- **duyarlilik karar olcutu**: gidis-donus maliyeti < `esikler.rebalancing_sapma`.
+  Ikisi de portfoy orani cinsinden, dogrudan karsilastirilabilir. Maliyet
+  sinirin ustundeyse islem duzelttigi sapmadan fazlasini goturur.
+- **sabit komisyon kucuk pozisyonu bogar**: 2 x 1.5 USD x 41 TL / 3.000 TL =
+  %4.1. ABD varliklari referans pozisyonda esigi ASAR ve "maliyet yutuyor"
+  cikar; 12.000 TL'de `kur_spread_tek_yon` belirleyici parametre olur. Yani
+  duyarlilik sonucu POZISYON BUYUKLUGUNE bagli - `maliyet.duyarlilik.
+  referans_pozisyon_try` degistirilirse sonuc degisir.
+- **sorgu botu SALT OKUNUR**: `bot_sorgu.py` `gecmisi_yaz` CAGIRMAZ. Cagirsaydi
+  soru sormak latch'i ilerletir ve kimse islem yapmadan bekleme suresi baslardi.
+  Yazdigi tek dosya `simulasyon/bot_offset.txt`.
+- **`TELEGRAM_IZINLI_CHAT_ID` bos = bot SUSAR**: "ayar yoksa herkese acik"
+  degil. Ayrica anahtarin `notify.ORTAM_ANAHTARLARI` icinde olmasi SART -
+  Actions'ta .env yok, secret ortamdan okunur; listede olmayan anahtar orada
+  sessizce bos kalir ve bot hicbir mesaja cevap vermez.
+- **bot offset izinsiz mesajda DA ilerler**: ilerlemeseydi tek bir yabanci
+  mesaj `getUpdates` kuyrugunu kalici olarak tikar ve sahibinin komutlari hic
+  islenmezdi. Cevap gitmez, offset gecer.
+- **bot araligi YAML'da, cron SABIT**: Actions zamanlamasi YAML okuyamaz.
+  `bot-sorgu.yml` 30 dakikada bir tetikler, `bildirim.yaml -> bot.aralik_dakika`
+  fazladan kosuyu erken keser. Butce: 30 dk x 18 saat = ~1095 dk/ay, rapor
+  workflow'unun ~400 dk'si ustune toplam ~%75. Sikismada ilk dugme
+  `aralik_dakika: 60`.
+- **iki workflow ayni dizine commit ETMEZ**: `bot-sorgu.yml` yalnizca
+  `bot_offset.txt` ekler. `git add 04-projects/yatirim-sistemi/` yazilsaydi
+  bot kosusu rapor workflow'unun urettigi dosyalari da commit eder ve iki
+  workflow surekli rebase catismasi yasardi.
 - **kurumsal olay ledger'a yazilmaz**: `islemler.yaml` yalnizca SENIN islemlerini tutar, append-only. Bedelsiz sirketin isidir, nakit akisi yoktur. Ayri defter: `simulasyon/kurumsal-olaylar.yaml`.
 - **bayatlik = kacirilan ISLEM GUNU, takvim gunu DEGIL**: BIST Cuma'dan Pazartesi'ye 3 takvim gunu gecirir, 1 islem gunu. Sartnamedeki "bist: 1 gun" takvim gunu olarak kodlansaydi her Pazartesi tum BIST hisseleri bayat cikardi. `FiyatVerisi._sinif_takvimi()` referans takvimi sinifin kendi verisinden turetir. Esigi 1'in ALTINDA olan siniflar (kripto) surekli piyasadir, onlarda referans tum takvimdir.
 - **gunluk barda dakika esigi yok**: fiyat verisi `interval="1d"`. "kripto 15 dakika" gunluk barda tek bir seye karsilik gelir: esik 0 = en son barda veri olmali. Intraday veriye gecilmeden dakika/saat esigi anlamsizdir.

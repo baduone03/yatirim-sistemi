@@ -21,10 +21,65 @@ ORANSAL = "oransal"
 SABIT = "sabit"
 GUN_YIL = 365.0
 
+IYIMSER = "iyimser"
+TEMEL = "temel"
+KOTUMSER = "kotumser"
+SENARYOLAR = (IYIMSER, TEMEL, KOTUMSER)
+
+
+@dataclass(frozen=True)
+class Tahmin:
+    """Olculmemis bir kalemin uc senaryolu tahmini.
+
+    `null` ile arasindaki fark: null "bilmiyorum, hicbir sey soyleyemem"
+    demektir ve sinyali tamamen kapatir. Tahmin "olcmedim ama sinirlarini
+    biliyorum" demektir - karar UC senaryoda da ayni cikiyorsa parametreyi
+    olcmeden de guvenle islem yapilabilir. Karar degisiyorsa sinyal yine
+    bastirilir; fark, artik HANGI sayinin olculmesi gerektiginin bilinmesi.
+
+    Tek bir "ortalama" tahmine dusurmek bu ayrimi yok eder: ortalama daima
+    bir karar uretir ve o kararin tahmine mi olcume mi dayandigi kaybolur.
+    """
+
+    iyimser: float
+    temel: float
+    kotumser: float
+    kaynak: str = ""
+
+    def deger(self, senaryo: str) -> float:
+        if senaryo not in SENARYOLAR:
+            raise ValueError(
+                f"senaryo {' | '.join(SENARYOLAR)} olmali, '{senaryo}' geldi")
+        return float(getattr(self, senaryo))
+
+    @property
+    def genislik(self) -> float:
+        """Kotumser - iyimser. Belirsizligin buyuklugu."""
+        return abs(self.kotumser - self.iyimser)
+
+
+def _cozumle(deger, senaryo: str):
+    """Tahmin ise senaryo degerine indirger, degilse oldugu gibi birakir."""
+    return deger.deger(senaryo) if isinstance(deger, Tahmin) else deger
+
+
+def _senaryo_sec(senaryo: str, yalniz: str, alan: str) -> str:
+    """Tek parametre oynatilirken digerleri TEMEL'de kalir."""
+    if not yalniz:
+        return senaryo
+    return senaryo if alan == yalniz else TEMEL
+
 
 # --------------------------------------------------------------------------
 # Islem maliyeti (gidis-donus, bir kez)
 # --------------------------------------------------------------------------
+
+TAHMINLI_ISLEM_ALANLARI = ("komisyon_oran", "komisyon_usd",
+                           "kur_spread_tek_yon", "kambiyo_vergisi",
+                           "menkul_spread")
+TAHMINLI_TASIMA_ALANLARI = ("gider_orani_yillik", "temettu_verimi",
+                            "temettu_stopaji")
+
 
 @dataclass(frozen=True)
 class IslemProfili:
@@ -32,12 +87,23 @@ class IslemProfili:
 
     ad: str
     komisyon_tip: str = ORANSAL
-    komisyon_oran: float | None = None
-    komisyon_usd: float | None = None
+    komisyon_oran: float | Tahmin | None = None
+    komisyon_usd: float | Tahmin | None = None
     kur_cevrimi: bool | None = None
-    kur_spread_tek_yon: float | None = None
-    kambiyo_vergisi: float | None = None
-    menkul_spread: float | None = None
+    kur_spread_tek_yon: float | Tahmin | None = None
+    kambiyo_vergisi: float | Tahmin | None = None
+    menkul_spread: float | Tahmin | None = None
+
+    def senaryoyla(self, senaryo: str, yalniz: str = "") -> IslemProfili:
+        return replace(self, **{
+            alan: _cozumle(getattr(self, alan), _senaryo_sec(senaryo, yalniz, alan))
+            for alan in TAHMINLI_ISLEM_ALANLARI})
+
+    @property
+    def tahminler(self) -> dict[str, Tahmin]:
+        return {f"{self.ad}.{alan}": getattr(self, alan)
+                for alan in TAHMINLI_ISLEM_ALANLARI
+                if isinstance(getattr(self, alan), Tahmin)}
 
     @property
     def eksik_kalemler(self) -> list[str]:
@@ -98,9 +164,20 @@ class TasimaKalemleri:
 
     sembol: str
     beyan_edildi: bool = True
-    gider_orani_yillik: float | None = None
-    temettu_verimi: float | None = None
-    temettu_stopaji: float | None = None
+    gider_orani_yillik: float | Tahmin | None = None
+    temettu_verimi: float | Tahmin | None = None
+    temettu_stopaji: float | Tahmin | None = None
+
+    def senaryoyla(self, senaryo: str, yalniz: str = "") -> TasimaKalemleri:
+        return replace(self, **{
+            alan: _cozumle(getattr(self, alan), _senaryo_sec(senaryo, yalniz, alan))
+            for alan in TAHMINLI_TASIMA_ALANLARI})
+
+    @property
+    def tahminler(self) -> dict[str, Tahmin]:
+        return {f"{self.sembol}.{alan}": getattr(self, alan)
+                for alan in TAHMINLI_TASIMA_ALANLARI
+                if isinstance(getattr(self, alan), Tahmin)}
 
     @property
     def eksik_kalemler(self) -> list[str]:
@@ -148,6 +225,17 @@ class VarlikMaliyeti:
     def sinyal_acik(self) -> bool:
         return not self.eksik_kalemler
 
+    @property
+    def tahminler(self) -> dict[str, Tahmin]:
+        profil = self.profil.tahminler if self.profil else {}
+        return {**profil, **self.tasima.tahminler}
+
+    def senaryoyla(self, senaryo: str, yalniz: str = "") -> VarlikMaliyeti:
+        return replace(
+            self,
+            profil=self.profil.senaryoyla(senaryo, yalniz) if self.profil else None,
+            tasima=self.tasima.senaryoyla(senaryo, yalniz))
+
 
 # --------------------------------------------------------------------------
 # Model
@@ -165,7 +253,35 @@ class MaliyetModeli:
     enflasyon_serisi: str = ""
     enflasyon_bayatlik_gun: int = 45
     nakit_stopaji: float | None = None
+    referans_pozisyon_try: float = 3000.0   # tutulmayan varlikta sabit komisyon payi
     uyarilar: list[str] = field(default_factory=list)
+
+    def senaryoyla(self, senaryo: str, yalniz: str = "") -> MaliyetModeli:
+        """Tahmin kalemlerini tek senaryonun degerine indirger.
+
+        Boylece mevcut hesap kodu (gidis_donus, yillik) hic degismeden senaryo
+        bazinda kosulabilir - duyarlilik testi ayri bir matematik degil, ayni
+        matematigin farkli girdiyle tekrari.
+
+        `yalniz` verilirse SADECE o alan senaryoya gecer, digerleri temelde
+        kalir. Hepsini birden oynatmak "karar degisiyor" der ama sebebini
+        soylemez; tek tek oynatmak sorumlu parametreyi izole eder.
+        """
+        return replace(self, varliklar={s: v.senaryoyla(senaryo, yalniz)
+                                        for s, v in self.varliklar.items()})
+
+    @property
+    def tahminler(self) -> dict[str, Tahmin]:
+        """Kalem adi -> tahmin. Sembol oneki temizlenir (kalem bazli gruplama)."""
+        toplu: dict[str, Tahmin] = {}
+        for sembol, varlik in self.varliklar.items():
+            for tam_ad, tahmin in varlik.tahminler.items():
+                toplu[_kalem_adi(sembol, tam_ad)] = tahmin
+        return toplu
+
+    def tahminli_mi(self, sembol: str) -> bool:
+        varlik = self.varliklar.get(sembol)
+        return bool(varlik and varlik.tahminler)
 
     def oranlarla(self, risksiz: tuple[float, str] | None,
                   enflasyon: tuple[float, str] | None,
@@ -284,11 +400,39 @@ def modeli_kur(ham: dict, sinif_haritasi: dict[str, str]) -> MaliyetModeli:
         enflasyon_serisi=str(enflasyon_ham.get("tcmb_serisi", "")),
         enflasyon_bayatlik_gun=int(enflasyon_ham.get("bayatlik_gun", 45)),
         nakit_stopaji=_sayi(nakit_ham.get("stopaj")),
+        referans_pozisyon_try=float(
+            (maliyet_ham.get("duyarlilik") or {}).get("referans_pozisyon_try", 3000.0)),
     )
 
 
-def _sayi(deger) -> float | None:
-    return None if deger is None else float(deger)
+def _sayi(deger) -> float | Tahmin | None:
+    """YAML degerini kaleme cevirir: sayi, uc senaryolu Tahmin, ya da None.
+
+    Tahmin bloguna `tahmin: true` yazilmasi ZORUNLU: uc senaryo alanini
+    yanlislikla yazmis bir blok sessizce tahmin olarak islenirse, olculmus
+    bir sayiymis gibi davranan ama aslinda uydurulmus bir deger sisteme girer.
+    """
+    if deger is None:
+        return None
+    if not isinstance(deger, dict):
+        return float(deger)
+    if not deger.get("tahmin"):
+        raise ValueError(
+            f"maliyet kalemi sozluk olarak yazilmis ama 'tahmin: true' yok: {deger}")
+    eksik = [ad for ad in SENARYOLAR if deger.get(ad) is None]
+    if eksik:
+        raise ValueError(f"tahmin blogunda eksik senaryo: {eksik} ({deger})")
+    tahmin = Tahmin(
+        iyimser=float(deger[IYIMSER]),
+        temel=float(deger[TEMEL]),
+        kotumser=float(deger[KOTUMSER]),
+        kaynak=str(deger.get("kaynak", "")),
+    )
+    if not tahmin.iyimser <= tahmin.temel <= tahmin.kotumser:
+        raise ValueError(
+            "tahmin senaryolari iyimser <= temel <= kotumser olmali "
+            f"(maliyet kalemi icin iyimser DAIMA en dusuk maliyettir): {deger}")
+    return tahmin
 
 
 def _kalem_adi(sembol: str, kalem: str) -> str:

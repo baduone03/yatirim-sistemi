@@ -24,6 +24,8 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from config import (
+    RISK_DISLA,
+    RISK_DUZELT,
     Ayarlar,
     hafta_sonu_mu,
     BayatlikEsikleri,
@@ -36,6 +38,11 @@ from config import (
     Yapilandirma,
     sablonu_reddet,
     yapilandirmayi_oku,
+)
+from duyarlilik import (
+    ISLEM_MANTIKLI,
+    MALIYET_YUTUYOR as KARAR_MALIYET_YUTUYOR,
+    duyarliligi_olc,
 )
 from fetch import (
     FiyatVerisi,
@@ -113,7 +120,14 @@ from portfolio import (
     portfoyu_ledgerdan_hesapla,
     sinif_sapmalari,
 )
-from report import _dagilim_bolumu, _devre_kesici_bolumu, _risk_bolumu
+from rapor_maliyet import duyarlilik_bolumu
+from report import (
+    rapor_olustur,
+    _dagilim_bolumu,
+    _devre_kesici_bolumu,
+    _risk_bolumu,
+    _uyari_bolumu,
+)
 from risk import (
     RiskRaporu,
     VarlikRiski,
@@ -124,6 +138,8 @@ from risk import (
 )
 from sinyal import (
     ARTIR,
+    MALIYET_YUTUYOR,
+    PARAMETRE_BELIRSIZLIGI,
     AZALT,
     BEKLEME,
     DEVRE_KESICI,
@@ -153,13 +169,15 @@ BUGUN = "2026-08-17"
 
 
 def karar_ver(sapmalar=(), risk=None, esikler=ESIKLER, bekleme=BEKLEME_YOK,
-              kesici=KESICI, gecmis=None, maliyet=None, simdi=None):
+              kesici=KESICI, gecmis=None, maliyet=None, simdi=None,
+              duyarlilik=None):
     """Testlerde karar uretmenin kisa yolu."""
     return kararlari_uret(
         list(sapmalar),
         risk if risk is not None else RiskRaporu(0.0, 0.0, [], pd.DataFrame(), 0, []),
         esikler, bekleme, kesici, gecmis or SinyalGecmisi(), BUGUN, maliyet,
-        simdi or datetime(2026, 8, 17, 16, 0, tzinfo=timezone.utc))
+        simdi or datetime(2026, 8, 17, 16, 0, tzinfo=timezone.utc),
+        duyarlilik)
 
 
 def gecici_yaz(icerik: str, ad: str = "test.yaml") -> Path:
@@ -844,6 +862,201 @@ class KurumsalOlayTespitiTesti(unittest.TestCase):
         )
         self.assertNotIn("X.IS", fiyatlar.son_fiyatlar)
         self.assertIn("Y.IS", fiyatlar.son_fiyatlar)
+
+    def _sicramali_gecmis(self):
+        """Y.IS sakin, X.IS son gunde %50 duser (kayitli olmayan bedelsiz gibi).
+
+        Sicrama getiri serisinde tek gunluk -%50 olarak durur; risk hesabina
+        girerse hem X.IS'in volatilitesini hem korelasyon matrisini bozar.
+        """
+        gunler = pd.bdate_range("2025-01-01", periods=200)
+        rastgele = np.random.default_rng(7)
+        sakin = 100 * np.exp(np.cumsum(rastgele.normal(0, 0.01, 200)))
+        sicramali = sakin.copy()
+        sicramali[-1] = sicramali[-2] * 0.5
+        return pd.DataFrame({"X.IS": sicramali, "Y.IS": sakin * 1.5}, index=gunler)
+
+    def _yapilandirma(self, modu=RISK_DISLA, dusus_esigi=0.20):
+        return Yapilandirma(
+            ayarlar=AYARLAR, esikler=ESIKLER,
+            hedef_dagilim={"bist": 1.0},
+            varliklar={"X.IS": Varlik("X.IS", "X", "bist", "TRY"),
+                       "Y.IS": Varlik("Y.IS", "Y", "bist", "TRY")},
+            nakit_try=0.0, pozisyonlar=[],
+            kurumsal_olay=KurumsalOlayAyarlari(
+                risk_modu=modu, gozlem_dusus_esigi=dusus_esigi))
+
+    def _portfoy(self):
+        """X.IS supheli -> fiyatlanamaz -> portfoye girmez."""
+        return Portfoy(
+            pozisyonlar=[PozisyonDegeri("Y.IS", "Y", "bist", 100.0, 10000.0, 15000.0)],
+            nakit_try=0.0, fiyatlanamayan=["X.IS"])
+
+    def test_supheli_sembol_risk_hesabindan_cikiyor(self):
+        """Degerleme durunca risk hesabi da durmali.
+
+        Fiyata guvenmeyip o fiyattan turetilen volatiliteye guvenmek
+        tutarsizdir: sicrama volatiliteyi, korelasyonu ve betayi sisirir.
+        """
+        gecmis = self._sicramali_gecmis()
+        gerekce = "2025-10-08: %-50.0 fiyat hareketi, hacimde karsiligi yok"
+        portfoy = self._portfoy()
+
+        rapor = riski_hesapla(
+            self._yapilandirma(),
+            FiyatVerisi(try_gecmis=gecmis, usdtry=40.0, eksik_semboller=[],
+                        kurumsal_olay_supheleri={"X.IS": gerekce}),
+            portfoy)
+
+        semboller = [r.sembol for r in rapor.varlik_riskleri]
+        self.assertEqual(semboller, ["Y.IS"])
+        self.assertNotIn("X.IS", rapor.korelasyon.columns)
+        self.assertEqual(rapor.dislanan, {"X.IS": gerekce})
+
+    def test_dislanmayan_sicrama_volatiliteyi_sisirir(self):
+        """Dislamanin neyi engelledigi: seri iceri alinsaydi ne olurdu.
+
+        X.IS'in portfoy agirligi zaten sifir (fiyatlanamiyor), yani portfoy
+        volatilitesi degismez. Bozulan sey RAPORDAKI sayilar - sembolun kendi
+        volatilitesi ve korelasyon matrisi. Kisma karari bunlara bakiyor.
+        """
+        kirli = riski_hesapla(
+            self._yapilandirma(),
+            FiyatVerisi(try_gecmis=self._sicramali_gecmis(), usdtry=40.0,
+                        eksik_semboller=[]),
+            self._portfoy())
+
+        vol = {r.sembol: r.yillik_volatilite for r in kirli.varlik_riskleri}
+        self.assertGreater(vol["X.IS"], vol["Y.IS"] * 3)
+        self.assertIn("X.IS", kirli.korelasyon.columns)
+
+    def test_dislama_sonrasi_gozlem_azalmasi_uyarisi(self):
+        """Dislama veri setinin %20'sinden fazlasini goturuyorsa uyari.
+
+        Olcu gozlem HUCRESI (gun x sembol), yalnizca gun sayisi degil: ortak
+        takvim bir kesisim oldugu icin sembol cikarmak gun sayisini dusurmez,
+        artirir. Kaybedilen sey gun degil kapsamdir.
+        """
+        gecmis = self._sicramali_gecmis()   # iki sembol, biri dislanacak -> %50
+        fiyatlar = FiyatVerisi(
+            try_gecmis=gecmis, usdtry=40.0, eksik_semboller=[],
+            kurumsal_olay_supheleri={"X.IS": "sicrama"})
+
+        rapor = riski_hesapla(self._yapilandirma(), fiyatlar, self._portfoy())
+        self.assertAlmostEqual(rapor.gozlem_dususu, 0.5, places=6)
+        self.assertTrue(rapor.gozlem_guvenilirligi_dustu)
+
+        metin = " ".join(_uyari_bolumu(self._portfoy(), fiyatlar, rapor))
+        self.assertIn("Volatilite tahmini guvenilirligi dustu", metin)
+        telegram = " ".join(uyarilari_topla(fiyatlar, self._portfoy(), karar_ver(),
+                                            None, None, rapor))
+        self.assertIn("Volatilite tahmini guvenilirligi dustu", telegram)
+
+    def test_dislama_yoksa_gozlem_uyarisi_da_yok(self):
+        rapor = riski_hesapla(
+            self._yapilandirma(),
+            FiyatVerisi(try_gecmis=self._sicramali_gecmis(), usdtry=40.0,
+                        eksik_semboller=[]),
+            self._portfoy())
+        self.assertEqual(rapor.gozlem_dususu, 0.0)
+        self.assertFalse(rapor.gozlem_guvenilirligi_dustu)
+
+    def test_esik_asilmazsa_uyari_basilmaz(self):
+        """%50 dusus, esik %60 -> uyari yok. Esik YAML'dan geliyor."""
+        fiyatlar = FiyatVerisi(
+            try_gecmis=self._sicramali_gecmis(), usdtry=40.0, eksik_semboller=[],
+            kurumsal_olay_supheleri={"X.IS": "sicrama"})
+        rapor = riski_hesapla(self._yapilandirma(dusus_esigi=0.60), fiyatlar,
+                              self._portfoy())
+        self.assertFalse(rapor.gozlem_guvenilirligi_dustu)
+
+    def test_duzelt_modu_defterdeki_oranla_seriyi_duzeltir(self):
+        """risk_modu: duzelt -> sicrama silinir, sembol risk hesabinda KALIR."""
+        gunler = pd.bdate_range("2025-01-01", periods=200)
+        fiyat = pd.Series(100.0, index=gunler)
+        ex = gunler[-1]
+        fiyat[fiyat.index >= ex] = 50.0          # 2.0 bedelsiz, ex-tarihte yarilanir
+        gecmis = pd.DataFrame({"X.IS": fiyat, "Y.IS": pd.Series(50.0, index=gunler)})
+        olay = KurumsalOlay(tarih=ex.date().isoformat(), sembol="X.IS",
+                            tip="bedelsiz", oran=2.0)
+
+        rapor = riski_hesapla(
+            self._yapilandirma(modu=RISK_DUZELT),
+            FiyatVerisi(try_gecmis=gecmis, usdtry=40.0, eksik_semboller=[],
+                        kurumsal_olay_supheleri={"X.IS": "sicrama"}),
+            self._portfoy(),
+            [olay])
+
+        self.assertEqual(rapor.dislanan, {})
+        self.assertIn("X.IS", rapor.duzeltilen)
+        self.assertIn("X.IS", rapor.korelasyon.columns)
+        # Duzeltme sonrasi seri tamamen duz -> volatilite sifir.
+        vol = {r.sembol: r.yillik_volatilite for r in rapor.varlik_riskleri}
+        self.assertAlmostEqual(vol["X.IS"], 0.0, places=9)
+
+    def test_duzelt_modu_defterde_oran_yoksa_yine_dislar(self):
+        """Uydurulmus oran, sisirilmis volatiliteden kotudur."""
+        fiyatlar = FiyatVerisi(
+            try_gecmis=self._sicramali_gecmis(), usdtry=40.0, eksik_semboller=[],
+            kurumsal_olay_supheleri={"X.IS": "sicrama"})
+        rapor = riski_hesapla(self._yapilandirma(modu=RISK_DUZELT), fiyatlar,
+                              self._portfoy(), [])
+        self.assertIn("X.IS", rapor.dislanan)
+        self.assertIn("defterde oran yok", rapor.dislanan["X.IS"])
+        self.assertEqual(rapor.duzeltilen, {})
+
+    def test_risk_modu_yaml_dogrulanir(self):
+        varliklar = gecici_yaz(
+            """
+ayarlar: {kur_sembolu: USDTRY=X, gecmis_gun: 365, islem_gunu_yil: 252}
+hedef_dagilim: {bist: 1.0}
+varliklar:
+  - {sembol: A.IS, ad: A, sinif: bist, kur: TRY}
+kurumsal_olay: {risk_modu: sil}
+""",
+            ad="varliklar.yaml")
+        portfoy = gecici_yaz("nakit_try: 0\npozisyonlar: []\n", ad="portfoy.yaml")
+        with self.assertRaisesRegex(ValueError, "risk_modu"):
+            yapilandirmayi_oku(varliklar_dosyasi=varliklar, portfoy_dosyasi=portfoy)
+
+    def test_tum_semboller_supheliyse_risk_hesabi_durur(self):
+        """Bos getiri matrisi yerine sebebi yazan hata."""
+        gecmis = self._sicramali_gecmis()
+        fiyatlar = FiyatVerisi(
+            try_gecmis=gecmis, usdtry=40.0, eksik_semboller=[],
+            kurumsal_olay_supheleri={"X.IS": "sicrama", "Y.IS": "sicrama"})
+        with self.assertRaisesRegex(RuntimeError, "kurumsal olay suphesiyle dislandi"):
+            riski_hesapla(self._yapilandirma(), fiyatlar,
+                          Portfoy(pozisyonlar=[], nakit_try=1000.0,
+                                  fiyatlanamayan=["X.IS", "Y.IS"]))
+
+    def test_rapor_dislanan_sembolu_gerekcesiyle_yazar(self):
+        """Hangi sembol, neden. Eksik satirli tablo not dusulmezse tam gorunur."""
+        gerekce = "2026-08-15: %-50.0 fiyat hareketi, hacimde karsiligi yok"
+        rapor = RiskRaporu(
+            portfoy_volatilitesi=0.2, portfoy_max_drawdown=-0.1,
+            varlik_riskleri=[VarlikRiski("Y.IS", 0.2, -0.1, 1.0, 1.0)],
+            korelasyon=pd.DataFrame(), gozlem_sayisi=100, yetersiz_veri=[],
+            dislanan={"X.IS": gerekce})
+        gunler = pd.date_range("2026-08-01", periods=5, freq="D")
+        fiyatlar = FiyatVerisi(
+            try_gecmis=pd.DataFrame({"X.IS": 100.0, "Y.IS": 50.0}, index=gunler),
+            usdtry=40.0, eksik_semboller=[],
+            kurumsal_olay_supheleri={"X.IS": gerekce})
+        portfoy = Portfoy(
+            pozisyonlar=[PozisyonDegeri("Y.IS", "Y", "bist", 100.0, 10000.0, 15000.0)],
+            nakit_try=0.0, fiyatlanamayan=["X.IS"])
+
+        uyarilar = " ".join(_uyari_bolumu(portfoy, fiyatlar, rapor))
+        self.assertIn("X.IS", uyarilar)
+        self.assertIn(gerekce, uyarilar)
+        self.assertIn("RISK HESABINDAN da cikarildi", uyarilar)
+        # Gerekce tek kez yazilmali - ayri madde olsaydi tekrarlanirdi.
+        self.assertEqual(uyarilar.count(gerekce), 1)
+
+        tablo = " ".join(_risk_bolumu(rapor, {"Y.IS": "Y"}, ESIKLER, karar_ver()))
+        self.assertIn("Tabloda YOK", tablo)
+        self.assertIn("X.IS", tablo)
 
 
 class SinifBazliBayatlikTesti(unittest.TestCase):
@@ -2284,6 +2497,253 @@ class KurAyristirmaTesti(unittest.TestCase):
             usdtry=40.0, eksik_semboller=[])
         self.assertIsNone(degisim_24s(
             Portfoy(pozisyonlar=[], nakit_try=100.0, fiyatlanamayan=[]), fiyatlar))
+
+
+
+class MaliyetDuyarliligiTesti(unittest.TestCase):
+    """Sartname I7: tahminli kalem uc senaryoda kosulur.
+
+    Amac "her sey belirsiz" demek degil, HANGI sayinin olculmesi gerektigini
+    siralamak. Genis aralikta bile karari cevirmeyen parametreyi olcmek bos is.
+    """
+
+    SINIFLAR = {"UCUZ.IS": "bist", "QQQ": "nasdaq"}
+    ESIK = 0.03          # rebalancing sapma esigi
+
+    def _ham(self, iyimser, temel, kotumser, ikinci=None):
+        """QQQ tahminli, UCUZ.IS olculmus. Tahminli kalem: kur_spread_tek_yon."""
+        abd = {
+            "komisyon_tip": "oransal",
+            "komisyon_oran": 0.0,
+            "kur_cevrimi": True,
+            "kur_spread_tek_yon": {"tahmin": True, "kaynak": "olculmedi-genis-aralik",
+                                   "iyimser": iyimser, "temel": temel,
+                                   "kotumser": kotumser},
+            "kambiyo_vergisi": ikinci or 0.0,
+            "menkul_spread": 0.0,
+        }
+        return {
+            "maliyet": {
+                "sinif_profili": {"bist": "bist", "nasdaq": "abd"},
+                "islem": {
+                    "bist": {"komisyon_tip": "oransal", "komisyon_oran": 0.001,
+                             "kur_cevrimi": False, "menkul_spread": 0.0},
+                    "abd": abd,
+                },
+                "tasima": {
+                    "UCUZ.IS": {"gider_orani_yillik": 0.0, "temettu_verimi": 0.0},
+                    "QQQ": {"gider_orani_yillik": 0.0, "temettu_verimi": 0.0},
+                },
+                "firsat": {"tl_risksiz_yillik": 0.48},
+            },
+        }
+
+    def _olc(self, iyimser, temel, kotumser, ikinci=None):
+        model = modeli_kur(self._ham(iyimser, temel, kotumser, ikinci), self.SINIFLAR)
+        return duyarliligi_olc(model, self.ESIK, {}, usdtry=41.0)
+
+    def test_duyarlilik_uc_senaryo_karar_ayni_ise_sinyal(self):
+        """En kotumser senaryoda bile maliyet esigin altinda -> sinyal acik.
+
+        Gidis-donus = 2 x spread. Kotumser 0.004 -> %0.8, esik %3.
+        """
+        rapor = self._olc(0.0005, 0.0020, 0.0040)
+        varlik = rapor.varliklar["QQQ"]
+
+        self.assertTrue(varlik.dayanikli)
+        self.assertTrue(varlik.sinyal_acik)
+        self.assertEqual(set(varlik.kararlar.values()), {ISLEM_MANTIKLI})
+        self.assertEqual(varlik.etiket, "karar dayanikli")
+        self.assertTrue(rapor.sinyal_acik_mi("QQQ"))
+        self.assertEqual(rapor.olculmesi_gerekenler, [])
+
+    def test_duyarlilik_karar_degisirse_bastiriliyor(self):
+        """Iyimserde %0.2, kotumserde %4 -> esik (%3) ortada kaliyor."""
+        rapor = self._olc(0.0010, 0.0050, 0.0200)
+        varlik = rapor.varliklar["QQQ"]
+
+        self.assertFalse(varlik.dayanikli)
+        self.assertFalse(varlik.sinyal_acik)
+        self.assertEqual(varlik.belirsiz_parametreler, ["kur_spread_tek_yon"])
+        self.assertIn("parametre belirsizligi: kur_spread_tek_yon", varlik.etiket)
+        self.assertFalse(rapor.sinyal_acik_mi("QQQ"))
+
+        # Sinyal gercekten bastiriliyor mu - karar noktasindan gecerek.
+        risk = _riskler(VarlikRiski("QQQ", 0.3, -0.2, 0.9, 0.5))
+        karar = karar_ver(risk=risk, duyarlilik=rapor)
+        sonuc = karar.sonuc(SEMBOL, "QQQ")
+        self.assertFalse(sonuc.acik)
+        self.assertEqual(sonuc.sebep, PARAMETRE_BELIRSIZLIGI)
+        self.assertIn("kur_spread_tek_yon", sonuc.etiket)
+
+    def test_dayanikli_ama_maliyet_yutuyorsa_sinyal_yok(self):
+        """Karar uc senaryoda da AYNI olabilir ama yonu "islem yapma" olabilir.
+
+        Dayaniklilik kararin guvenilir oldugunu soyler, yapilmasi gerektigini
+        degil. Yalnizca dayanikliliga bakan bir kapi, maliyeti kesinlikle
+        sapmadan buyuk olan varlikta islem onerirdi.
+        """
+        rapor = self._olc(0.0200, 0.0300, 0.0400)   # gidis-donus %4 - %8
+        varlik = rapor.varliklar["QQQ"]
+
+        self.assertTrue(varlik.dayanikli)
+        self.assertFalse(varlik.sinyal_acik)
+        self.assertEqual(varlik.etiket, "karar dayanikli: maliyet sapmayi yutuyor")
+        self.assertEqual(set(varlik.kararlar.values()), {KARAR_MALIYET_YUTUYOR})
+        # Olculecek bir sey YOK - belirsizlik listesine girmemeli.
+        self.assertEqual(rapor.olculmesi_gerekenler, [])
+        self.assertIn("QQQ", rapor.maliyet_yutanlar)
+
+        karar = karar_ver(risk=_riskler(VarlikRiski("QQQ", 0.3, -0.2, 0.9, 0.5)),
+                          duyarlilik=rapor)
+        self.assertEqual(karar.sonuc(SEMBOL, "QQQ").sebep, MALIYET_YUTUYOR)
+
+    def test_olculmesi_gereken_parametre_siralamasi(self):
+        """Cok varligi etkileyen parametre once. Esitlikte alfabetik."""
+        ham = self._ham(0.0010, 0.0050, 0.0200)
+        # Ikinci bir tahminli kalem: yalnizca bist profilini etkiler.
+        ham["maliyet"]["islem"]["bist"]["menkul_spread"] = {
+            "tahmin": True, "iyimser": 0.0001, "temel": 0.005, "kotumser": 0.030}
+        ham["maliyet"]["sinif_profili"]["bist"] = "bist"
+        ham["maliyet"]["tasima"]["IKI.IS"] = {"gider_orani_yillik": 0.0,
+                                              "temettu_verimi": 0.0}
+        ham["maliyet"]["tasima"]["UC.IS"] = {"gider_orani_yillik": 0.0,
+                                             "temettu_verimi": 0.0}
+        siniflar = {**self.SINIFLAR, "IKI.IS": "bist", "UC.IS": "bist"}
+
+        rapor = duyarliligi_olc(modeli_kur(ham, siniflar), self.ESIK, {}, 41.0)
+        siralama = rapor.olculmesi_gerekenler
+
+        self.assertEqual([p for p, _ in siralama],
+                         ["menkul_spread", "kur_spread_tek_yon"])
+        self.assertEqual(siralama[0][1], ["IKI.IS", "UC.IS", "UCUZ.IS"])
+        self.assertEqual(siralama[1][1], ["QQQ"])
+
+    def test_tek_parametre_izole_edilir(self):
+        """Iki tahminli kalemden yalnizca karari cevireni yazilir.
+
+        Hepsini birden oynatmak "karar degisiyor" der ama sebebini soylemez;
+        sorumlu izole edilmezse olcum sirasi cikarilamaz.
+        """
+        # kambiyo_vergisi de tahminli ama araligi karari cevirmeyecek kadar dar.
+        ham = self._ham(0.0010, 0.0050, 0.0200)
+        ham["maliyet"]["islem"]["abd"]["kambiyo_vergisi"] = {
+            "tahmin": True, "iyimser": 0.0, "temel": 0.0001, "kotumser": 0.0002}
+
+        rapor = duyarliligi_olc(modeli_kur(ham, self.SINIFLAR), self.ESIK, {}, 41.0)
+        self.assertEqual(rapor.varliklar["QQQ"].belirsiz_parametreler,
+                         ["kur_spread_tek_yon"])
+
+    def test_tahmin_blogu_dogrulanir(self):
+        with self.assertRaisesRegex(ValueError, "tahmin: true"):
+            modeli_kur({"maliyet": {"islem": {"abd": {"komisyon_oran": {"a": 1}}}}}, {})
+        with self.assertRaisesRegex(ValueError, "eksik senaryo"):
+            modeli_kur({"maliyet": {"islem": {"abd": {
+                "komisyon_oran": {"tahmin": True, "iyimser": 0.1}}}}}, {})
+        with self.assertRaisesRegex(ValueError, "iyimser <= temel <= kotumser"):
+            modeli_kur({"maliyet": {"islem": {"abd": {"komisyon_oran": {
+                "tahmin": True, "iyimser": 0.9, "temel": 0.1,
+                "kotumser": 0.2}}}}}, {})
+
+    def test_eksik_kalem_duyarliliktan_ONCE_bastirir(self):
+        """Iki kapi da kapali oldugunda sebep "eksik maliyet" olmali.
+
+        Tahminli kalem hakkinda "su sayiyi olc" denebilir, eksik kalem
+        hakkinda hicbir sey. Olculebilir oneri, olculemez boslugu gizlememeli.
+        """
+        ham = self._ham(0.0010, 0.0050, 0.0200)
+        ham["maliyet"]["tasima"]["QQQ"]["temettu_verimi"] = None
+        model = modeli_kur(ham, self.SINIFLAR)
+        rapor = duyarliligi_olc(model, self.ESIK, {}, 41.0)
+
+        karar = karar_ver(risk=_riskler(VarlikRiski("QQQ", 0.3, -0.2, 0.9, 0.5)),
+                          maliyet=model, duyarlilik=rapor)
+        self.assertEqual(karar.sonuc(SEMBOL, "QQQ").sebep, EKSIK_MALIYET)
+
+    def test_rapor_olculmesi_gereken_parametreleri_yazar(self):
+        rapor = self._olc(0.0010, 0.0050, 0.0200)
+        metin = " ".join(duyarlilik_bolumu(rapor, {}))
+        self.assertIn("OLCULMESI GEREKEN PARAMETRELER", metin)
+        self.assertIn("kur_spread_tek_yon", metin)
+        self.assertIn("parametre belirsizligi", metin)
+
+    def test_telegram_olculmemis_parametreyi_bildirir(self):
+        rapor = self._olc(0.0010, 0.0050, 0.0200)
+        uyarilar = " ".join(uyarilari_topla(None, None, karar_ver(), None, None,
+                                            None, rapor))
+        self.assertIn("kur_spread_tek_yon", uyarilar)
+        self.assertIn("sinyal bastirildi", uyarilar)
+
+
+class TamRaporTesti(unittest.TestCase):
+    """`rapor_olustur` bastan sona kuruluyor mu.
+
+    Bolumler tek tek test ediliyor ama montaj edilmiyordu: bir bolumun
+    imzasi degistiginde hata ancak canli kosuda - yani Telegram'a rapor
+    gitmedigi anda - gorunurdu.
+    """
+
+    def _parcalar(self):
+        gunler = pd.bdate_range("2026-06-01", periods=60)
+        gecmis = pd.DataFrame(
+            {"THYAO.IS": np.linspace(100, 120, 60),
+             "BTC-USD": np.linspace(50, 60, 60)}, index=gunler)
+        fiyatlar = FiyatVerisi(
+            try_gecmis=gecmis, usdtry=41.0, eksik_semboller=[],
+            sinif_haritasi={"THYAO.IS": "bist", "BTC-USD": "kripto"})
+        yapilandirma = Yapilandirma(
+            ayarlar=AYARLAR, esikler=ESIKLER,
+            hedef_dagilim={"bist": 0.6, "kripto": 0.4},
+            varliklar={"THYAO.IS": Varlik("THYAO.IS", "THY", "bist", "TRY"),
+                       "BTC-USD": Varlik("BTC-USD", "Bitcoin", "kripto", "USD")},
+            nakit_try=0.0, pozisyonlar=[])
+        durum = defter_durumu(
+            "  - {tarih: 2026-06-02, yon: AL, sembol: THYAO.IS, adet: 50, "
+            "fiyat_try: 100, gerekce: acilis}\n"
+            "  - {tarih: 2026-06-10, yon: AL, sembol: BTC-USD, adet: 10, "
+            "fiyat_try: 2000, gerekce: sapma}\n",
+            nakit=40000.0)
+        portfoy = portfoyu_ledgerdan_hesapla(yapilandirma, fiyatlar, durum)
+        risk = riski_hesapla(yapilandirma, fiyatlar, portfoy)
+        sapmalar = sinif_sapmalari(portfoy, yapilandirma.hedef_dagilim)
+        maliyet = modeli_kur({
+            "maliyet": {
+                "sinif_profili": {"bist": "bist", "kripto": "kripto"},
+                "islem": {
+                    "bist": {"komisyon_tip": "oransal", "komisyon_oran": 0.0015,
+                             "kur_cevrimi": False, "menkul_spread": 0.001},
+                    "kripto": {"komisyon_tip": "oransal",
+                               "komisyon_oran": {"tahmin": True, "iyimser": 0.001,
+                                                 "temel": 0.010, "kotumser": 0.030},
+                               "kur_cevrimi": False, "menkul_spread": 0.0},
+                },
+                "tasima": {
+                    "THYAO.IS": {"gider_orani_yillik": 0.0, "temettu_verimi": 0.0},
+                    "BTC-USD": {"gider_orani_yillik": 0.0, "temettu_verimi": 0.0},
+                },
+                "firsat": {"tl_risksiz_yillik": 0.48},
+            },
+            "enflasyon": {"yillik": 0.25},
+        }, yapilandirma.sinif_haritasi)
+        duyarlilik = duyarliligi_olc(
+            maliyet, ESIKLER.rebalancing_sapma,
+            {p.sembol: p.deger_try for p in portfoy.pozisyonlar}, 41.0)
+        karar = karar_ver(sapmalar, risk, maliyet=maliyet, duyarlilik=duyarlilik)
+        return (yapilandirma, fiyatlar, portfoy, sapmalar, risk, karar, durum,
+                maliyet, duyarlilik)
+
+    def test_rapor_bastan_sona_kuruluyor(self):
+        metin = rapor_olustur(*self._parcalar())
+        for bolum in ("# Simulasyon Raporu", "## Risk metrikleri",
+                      "## Maliyet duyarliligi", "## Maliyet dagilimi"):
+            self.assertIn(bolum, metin)
+        self.assertGreater(len(metin), 1000)
+
+    def test_duyarlilik_verilmezse_bolum_yok(self):
+        """Geriye uyumluluk: eski cagri sekli hala calisir."""
+        parcalar = self._parcalar()[:-1]
+        metin = rapor_olustur(*parcalar)
+        self.assertNotIn("## Maliyet duyarliligi", metin)
 
 
 if __name__ == "__main__":

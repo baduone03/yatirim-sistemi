@@ -72,3 +72,17 @@ takvim:
   # icin gap riski. BIST 10:00'da aciliyor, brifing bir saat once.
   brifing_gunu: 0              # 0 = Pazartesi (datetime.weekday)
   brifing_saati: "09:00"
+
+# Telegram SORGU botu (scripts/yatirim/bot_sorgu.py) - salt okunur.
+#
+# Workflow cron'u sabit 30 dakikadir; GitHub Actions zamanlamasi YAML
+# okuyamaz. Aralik burada tanimlanir, script fazladan kosuyu erken keser -
+# yani sikligi degistirmek icin workflow'a dokunmak gerekmez.
+#
+# DAKIKA BUTCESI: 30 dakikalik aralik x 18 saat = 36 kosu/gun = ~1095 dk/ay.
+# Rapor workflow'unun ~400 dk'si ustune ~1500 dk (2000'in %75'i). Butceyi
+# yariya indirmek icin aralik_dakika: 60 yaz - workflow degismez.
+bot:
+  aralik_dakika: 30
+  baslangic_saat_tr: 7     # bu saatten once cevap verilmez
+  bitis_saat_tr: 1         # ertesi gun; gece bosuna dakika yakilmasin

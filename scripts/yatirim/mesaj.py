@@ -284,7 +284,8 @@ def uyari_mesaji(tip: str, mesaj: str) -> str:
     return f"<b>{UYARI_SIMGELERI.get(tip, '⚠️')} {kacis(tip.upper())}</b>\n{kacis(mesaj)}"
 
 
-def uyarilari_topla(fiyatlar, portfoy, karar, maliyet, bayatlik) -> list[str]:
+def uyarilari_topla(fiyatlar, portfoy, karar, maliyet, bayatlik,
+                    risk=None, duyarlilik=None) -> list[str]:
     """Gun sonu ozetine girecek TUM veri/model uyarilari.
 
     Tek yerde toplanmasi sart: eskiden uyari bloklari mesaj sablonunun icine
@@ -322,7 +323,19 @@ def uyarilari_topla(fiyatlar, portfoy, karar, maliyet, bayatlik) -> list[str]:
     supheliler = fiyatlar.kurumsal_olay_supheleri if fiyatlar is not None else {}
     for sembol, gerekce in sorted(supheliler.items()):
         uyarilar.append(f"Olasi kurumsal olay {sembol}: {gerekce} "
-                        "- degerleme durduruldu.")
+                        "- degerleme durduruldu, risk hesabindan cikarildi.")
+
+    if risk is not None and risk.gozlem_guvenilirligi_dustu:
+        uyarilar.append(
+            f"Volatilite tahmini guvenilirligi dustu: dislama risk verisinin "
+            f"%{risk.gozlem_dususu * 100:.0f}'ini goturdu "
+            f"(esik %{risk.gozlem_dusus_esigi * 100:.0f}).")
+
+    for parametre, semboller in (duyarlilik.olculmesi_gerekenler
+                                 if duyarlilik is not None else []):
+        uyarilar.append(
+            f"Olculmemis parametre {parametre}: {len(semboller)} varlikta "
+            f"karar degistiriyor ({', '.join(semboller)}) - sinyal bastirildi.")
 
     ucgenleme = fiyatlar.ucgenleme if fiyatlar is not None else None
     for sonuc in sorted(getattr(ucgenleme, "dogrulanmayanlar", []),

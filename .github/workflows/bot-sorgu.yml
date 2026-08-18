@@ -1,0 +1,95 @@
+name: Telegram Sorgu Botu
+
+# AYRI workflow. `gunluk-rapor.yml` rapor uretir ve Telegram'a YAZAR;
+# bu workflow yalnizca gelen soruyu OKUYUP cevaplar. Ikisini birlestirmek,
+# sorgu botunun her kosusunda rapor hattini da calistirmak demekti.
+#
+# SALT OKUNUR: hicbir komut islem acmaz, portfoy dosyasi degistirmez.
+# Repoya yazilan tek sey `simulasyon/bot_offset.txt` - son islenen
+# Telegram update_id. Degismediyse commit ATILMAZ.
+#
+# ARALIK: cron burada SABIT 30 dakikadir - GitHub Actions zamanlamasi YAML
+# okuyamaz. Gercek aralik `bildirim.yaml -> bot.aralik_dakika` icinde ve
+# script fazladan kosuyu hicbir sey yapmadan keser. Sikligi degistirmek icin
+# bu dosyaya dokunmak gerekmiyor.
+#
+# DAKIKA BUTCESI (private repo, GitHub Free = 2000 dk/ay, kosu basina
+# YUKARI YUVARLANIR):
+#   30 dk aralik x 18 saat = 36 kosu/gun x 30.4 = ~1095 kosu = ~1095 dk (%55)
+#   gunluk-rapor.yml ~400 dk (%20) ustune toplam ~%75.
+# Butce sikisirsa ilk cevrilecek dugme `bot.aralik_dakika: 60` (~550 dk).
+# Mesaj YOKKEN kosu getUpdates'ten sonra hemen cikar; asil maliyet checkout
+# ve pip adimlaridir, bu yuzden pip cache acik.
+
+on:
+  schedule:
+    # Saatler UTC, Turkiye kalici UTC+3. TR 07:00-01:00 = UTC 04:00-22:00.
+    # Gece penceresi disi bilincli: kimse soru sormazken dakika yakmak,
+    # butcenin yarisini uyuyan bir bota harcamak demek.
+    #
+    # Dakika 3 ve 33, 0/30 DEGIL: GitHub zamanlanmis kosulari best-effort
+    # calistirir ve tam saat/yarim saat kuyrugun en kalabalik anidir.
+    - cron: '3,33 4-21 * * *'
+  workflow_dispatch:          # elle tetikleme - test icin
+
+permissions:
+  contents: write             # yalnizca bot_offset.txt commit'i icin
+
+concurrency:
+  group: bot-sorgu
+  cancel-in-progress: false   # iki kosu ayni offset dosyasina yazmasin
+
+jobs:
+  sorgu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/yatirim/requirements.txt
+
+      - name: Bagimliliklar
+        run: pip install -r scripts/yatirim/requirements.txt
+
+      - name: Son durumu al
+        # Rapor workflow'u sinyal-durumu.yaml ve raporlari commit ediyor.
+        # Pull edilmezse bot bayat latch/rapor okur ve "son calisma" yanlis
+        # cikar. Ayrica offset commit'i catisir.
+        run: git pull --rebase --autostash
+
+      - name: Sorgulari cevapla
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_IZINLI_CHAT_ID: ${{ secrets.TELEGRAM_IZINLI_CHAT_ID }}
+        run: python scripts/yatirim/bot_sorgu.py
+
+      - name: Offset defterini commit et
+        # YALNIZCA offset dosyasi. `git add 04-projects/yatirim-sistemi/`
+        # yazmak, bot kosusunun rapor workflow'unun urettigi dosyalari da
+        # commit etmesine yol acardi - iki workflow ayni dosyalari
+        # itistirir ve rebase catismasi cikar.
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add 04-projects/yatirim-sistemi/simulasyon/bot_offset.txt
+          if git diff --staged --quiet; then
+            echo "Offset degismedi, commit atlandi."
+          else
+            git commit -m "chore: bot offset $(date -u +'%Y-%m-%d %H:%M') UTC"
+            git pull --rebase --autostash
+            git push
+          fi
+
+      # Hata bildirimi YOK - bilincli.
+      #
+      # Sorgu botu yarim saatte bir calisiyor. Gecici bir ag hatasinda her
+      # kosuda Telegram'a "bot basarisiz" mesaji dusmesi, botun cevaplamasi
+      # gereken sohbeti kendi hata mesajlariyla doldurur. Kosu basarisiz
+      # olursa Actions sekmesinde kirmizi gorunur; sorgu botunun sessiz
+      # kalmasinin bedeli, rapor workflow'unun sessiz kalmasi kadar agir
+      # degil - kullanici zaten oradadir, tekrar sorar.

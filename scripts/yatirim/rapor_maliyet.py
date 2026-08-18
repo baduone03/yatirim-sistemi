@@ -8,7 +8,9 @@ konuya bakiyor - maliyetin getiriye etkisi - o yuzden birlikte duruyorlar.
 from __future__ import annotations
 
 from bicim import oran, yuzde
+from duyarlilik import DuyarlilikRaporu
 from maliyet import (
+    SENARYOLAR,
     MaliyetDagilimi,
     MaliyetKalemi,
     MaliyetModeli,
@@ -78,6 +80,68 @@ def eksik_maliyet_bolumu(maliyet: MaliyetModeli) -> list[str]:
         ">",
         "> Degerleri `varliklar.yaml` -> `maliyet` altina yaz. `null` = "
         "bilinmiyor, `0.0` = olculdu ve sifir cikti; ikisi ayni sey degildir.",
+        "",
+    ]
+    return satirlar
+
+
+
+def duyarlilik_bolumu(rapor: DuyarlilikRaporu,
+                      varlik_adlari: dict[str, str]) -> list[str]:
+    """Uc senaryolu maliyet duyarliligi + olculmesi gereken parametre sirasi.
+
+    Amac tek bir soruyu cevaplamak: SIRADA HANGI SAYIYI OLCMELI. Bir parametre
+    kac varligin kararini ceviriyorsa o kadar oncelikli.
+    """
+    if not rapor.varliklar:
+        return []
+    satirlar = [
+        "## Maliyet duyarliligi",
+        "",
+        "Karar olcutu: gidis-donus maliyeti < islem yapmaya deger en kucuk "
+        f"sapma ({oran(rapor.esik)}). Maliyet bu sinirin ustundeyse islem, "
+        "duzelttigi sapmadan fazlasini goturur.",
+        "",
+        "| Varlik | Iyimser | Temel | Kotumser | Sonuc |",
+        "|---|---:|---:|---:|---|",
+    ]
+    for sembol, varlik in sorted(rapor.varliklar.items()):
+        maliyetler = " | ".join(
+            oran(varlik.maliyetler[ad], 2) if ad in varlik.maliyetler else "-"
+            for ad in SENARYOLAR)
+        satirlar.append(
+            f"| {varlik_adlari.get(sembol, sembol)} | {maliyetler} | "
+            f"{varlik.etiket} |")
+    satirlar.append("")
+
+    gerekenler = rapor.olculmesi_gerekenler
+    if not gerekenler:
+        satirlar += [
+            "Olculmesi gereken parametre yok: tahminli kalemlerin hicbiri karari "
+            "cevirmiyor. Genis aralikla bile karar ayni cikiyorsa o sayiyi olcmek "
+            "islem kararini degistirmez.",
+            "",
+        ]
+        return satirlar
+
+    satirlar += [
+        "### OLCULMESI GEREKEN PARAMETRELER",
+        "",
+        "Etki sirasina gore. Ustteki sayiyi olcmek en cok varligin sinyalini acar.",
+        "",
+        "| # | Parametre | Etkilenen varlik | Semboller |",
+        "|---:|---|---:|---|",
+    ]
+    for sira, (parametre, semboller) in enumerate(gerekenler, start=1):
+        satirlar.append(
+            f"| {sira} | `{parametre}` | {len(semboller)} | "
+            + ", ".join(f"`{s}`" for s in semboller) + " |")
+    satirlar += [
+        "",
+        "> Bu parametreler olculene kadar ilgili varliklarda islem sinyali "
+        "URETILMEZ. Tahmin araliklari `varliklar.yaml` icinde "
+        "`kaynak: olculmedi-genis-aralik` ile isaretli; olculen deger "
+        "girildiginde aralik tek sayiya iner ve varlik kendiliginden acilir.",
         "",
     ]
     return satirlar

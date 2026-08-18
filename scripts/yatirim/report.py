@@ -14,6 +14,7 @@ from bicim import yuzde as _yuzde
 from maliyet import MaliyetDagilimi, MaliyetModeli, donem_orani
 from portfolio import Portfoy, SinifSapmasi
 from rapor_maliyet import (
+    duyarlilik_bolumu,
     eksik_maliyet_bolumu,
     getiri_satirlari,
     maliyet_dagilimi_bolumu,
@@ -155,6 +156,16 @@ def _risk_bolumu(risk: RiskRaporu, varlik_adlari: dict[str, str],
         "yasardin sorusunun cevabi. Portfoy dun kurulmus olsa bile bir yillik "
         "rakam yazar.",
         "",
+    ]
+    if risk.dislanan:
+        # Not dusulmezse eksik tablo tam gorunur. Gerekce "Veri uyarilari"nda.
+        satirlar += [
+            "Tabloda YOK (kurumsal olay suphesi, seri guvenilmez): "
+            + ", ".join(f"`{s}`" for s in sorted(risk.dislanan))
+            + ". Korelasyon matrisi ve portfoy volatilitesi de onsuz hesaplandi.",
+            "",
+        ]
+    satirlar += [
         "| Varlik | Yillik volatilite | Max drawdown | Agirlik | Risk katkisi | Beta |",
         "|---|---:|---:|---:|---:|---:|",
     ]
@@ -303,12 +314,15 @@ def _uyari_bolumu(portfoy: Portfoy, fiyatlar: FiyatVerisi, risk: RiskRaporu,
             "Degerleme yapildi ama dogrulanmadi.")
     sorunlar += fiyatlar.ucgenleme.uyarilar
     for sembol, gerekce in sorted(fiyatlar.kurumsal_olay_supheleri.items()):
+        # Risk notu ayri madde olsaydi ayni gerekce iki kez yazilirdi.
+        risk_notu = (
+            " Sembol RISK HESABINDAN da cikarildi - volatilite, korelasyon ve "
+            "beta onsuz hesaplandi." if sembol in risk.dislanan else "")
         sorunlar.append(
-            f"**Olasi kurumsal olay - {sembol}**: {gerekce}. Degerleme DURDURULDU. "
+            f"**Olasi kurumsal olay - {sembol}**: {gerekce}. Degerleme DURDURULDU."
+            f"{risk_notu} "
             "Bedelsiz/split ise `simulasyon/kurumsal-olaylar.yaml` dosyasina yaz; "
-            "gercek hareketse hacim esigini gozden gecir. "
-            "UYARI: risk metrikleri bu sembol icin hala ham seriden hesaplaniyor, "
-            "volatilite ve korelasyon sisirilmis olabilir."
+            "gercek hareketse hacim esigini gozden gecir."
         )
     if fiyatlar.eksik_semboller:
         sorunlar.append(f"Fiyat verisi gelmeyen sembol: {', '.join(fiyatlar.eksik_semboller)}")
@@ -322,6 +336,17 @@ def _uyari_bolumu(portfoy: Portfoy, fiyatlar: FiyatVerisi, risk: RiskRaporu,
         sorunlar.append(
             f"Fiyatlanamadigi icin toplama girmeyen pozisyon: {', '.join(portfoy.fiyatlanamayan)}"
         )
+    for sembol, olay_ozeti in sorted(risk.duzeltilen.items()):
+        sorunlar.append(
+            f"Risk serisi duzeltildi - {sembol}: defterdeki oranla geri-duzeltme "
+            f"uygulandi ({olay_ozeti}). Degerleme ve pozisyon muhasebesi "
+            "etkilenmez, yalnizca volatilite/korelasyon serisi.")
+    if risk.gozlem_guvenilirligi_dustu:
+        sorunlar.append(
+            f"**Volatilite tahmini guvenilirligi dustu**: dislama risk veri "
+            f"setinin %{risk.gozlem_dususu * 100:.0f}'ini goturdu "
+            f"(esik %{risk.gozlem_dusus_esigi * 100:.0f}). Portfoy volatilitesi "
+            "ve korelasyon matrisi eksik kapsamla hesaplandi.")
     if risk.yetersiz_veri:
         sorunlar.append(
             f"Risk hesabina girmeyen (yetersiz gecmis): {', '.join(risk.yetersiz_veri)}"
@@ -429,7 +454,8 @@ def donem_gunu(yapilandirma: Yapilandirma, durum=None,
 def rapor_olustur(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
                   portfoy: Portfoy, sapmalar: list[SinifSapmasi],
                   risk: RiskRaporu, karar: Karar, durum=None,
-                  maliyet: MaliyetModeli | None = None) -> str:
+                  maliyet: MaliyetModeli | None = None,
+                  duyarlilik=None) -> str:
     bugun = date.today().isoformat()
     varlik_adlari = {s: v.ad for s, v in yapilandirma.varliklar.items()}
     baslik = "Simulasyon Raporu" if durum else "Yatirim Raporu"
@@ -467,6 +493,8 @@ def rapor_olustur(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
             ),
             maliyet,
         )
+    if duyarlilik is not None:
+        satirlar += duyarlilik_bolumu(duyarlilik, varlik_adlari)
     satirlar += _ucgenleme_bolumu(fiyatlar)
     satirlar += _uyari_bolumu(portfoy, fiyatlar, risk, yapilandirma.bayatlik,
                               maliyet)
