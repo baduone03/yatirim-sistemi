@@ -54,7 +54,7 @@ from portfolio import (  # noqa: E402
     portfoyu_ledgerdan_hesapla,
     sinif_sapmalari,
 )
-from duyarlilik import duyarliligi_olc  # noqa: E402
+from duyarlilik import duyarliligi_olc, referans_pozisyonlar  # noqa: E402
 from report import (  # noqa: E402
     OZET_BASLANGIC,
     OZET_BITIS,
@@ -306,7 +306,10 @@ def main() -> int:
     # olculmesi gerektigi yazar.
     duyarlilik = duyarliligi_olc(
         maliyet, yapilandirma.esikler.rebalancing_sapma,
-        {p.sembol: p.deger_try for p in portfoy.pozisyonlar}, fiyatlar.usdtry)
+        referans_pozisyonlar(portfoy, yapilandirma.hedef_dagilim,
+                             yapilandirma.sinif_haritasi,
+                             maliyet.referans_pozisyon_try),
+        fiyatlar.usdtry)
 
     # Sinyal karari TEK noktada verilir; rapor ve Telegram yalnizca render eder.
     karar = kararlari_uret(sapmalar, risk, yapilandirma.esikler,

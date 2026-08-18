@@ -411,6 +411,15 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
                 f"sembol var: {tanimsiz}")
 
     sinif_haritasi = {s: v.sinif for s, v in varliklar.items()}
+    # Yazim hatasi sessizce etkisiz kalmasin: `THYA0.IS` yazilsaydi sembol
+    # profil spread'ini kullanmaya devam eder ve kimse fark etmezdi.
+    tanimsiz = sorted(
+        set((varlik_ham.get("maliyet") or {}).get("sembol_spreadi") or {})
+        - set(varliklar))
+    if tanimsiz:
+        raise ValueError(
+            f"maliyet.sembol_spreadi icinde varliklar.yaml'da olmayan sembol: "
+            f"{tanimsiz}")
     maliyet = modeli_kur(varlik_ham, sinif_haritasi)
     _maliyeti_dogrula(varlik_ham, varliklar)
 

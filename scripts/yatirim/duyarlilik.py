@@ -27,9 +27,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from maliyet import SENARYOLAR, TEMEL, MaliyetModeli
+import math
+
+from maliyet import KOTUMSER, SENARYOLAR, TEMEL, MaliyetModeli
 
 ISLEM_MANTIKLI = "islem-mantikli"
+GERCEK = "gercek"          # pozisyon tutuluyor, degeri bu
+HEDEF = "hedef"            # tutulmuyor, hedef dagilimda alacagi deger
+YEDEK = "yedek"            # portfoy bos - YAML sabiti
 MALIYET_YUTUYOR = "maliyet-yutuyor"
 OLCULEMEDI = "olculemedi"
 
@@ -43,6 +48,10 @@ class VarlikDuyarliligi:
     kararlar: dict[str, str] = field(default_factory=dict)
     belirsiz_parametreler: list[str] = field(default_factory=list)
     maliyetler: dict[str, float] = field(default_factory=dict)
+    pozisyon_try: float = 0.0
+    pozisyon_kaynagi: str = GERCEK
+    minimum_pozisyon: float | None = None      # temel senaryo
+    minimum_pozisyon_kotumser: float | None = None
 
     @property
     def tahminli(self) -> bool:
@@ -69,6 +78,28 @@ class VarlikDuyarliligi:
         return self.dayanikli and self.kararlar.get(TEMEL) == ISLEM_MANTIKLI
 
     @property
+    def ekonomik_degil(self) -> bool:
+        """Karar dayanikli ama yonu "islem yapma" - yani sorun BELIRSIZLIK DEGIL.
+
+        Bu ayrim raporun ana faydasi: belirsizlikte yapilacak sey bir sayiyi
+        OLCMEK, burada ise pozisyonu BUYUTMEK ya da varliktan CIKMAK. Ikisini
+        ayni kutuya koymak, cozulemeyecek bir sorunu olculecek bir soru gibi
+        gostermek olurdu.
+        """
+        return self.dayanikli and not self.sinyal_acik
+
+    @property
+    def buyutmek_ise_yarar(self) -> bool:
+        """Pozisyonu buyutmek maliyeti esigin altina indirir mi?
+
+        Oransal maliyet (spread, kambiyo vergisi) pozisyonla KUCULMEZ; yalnizca
+        sabit komisyonun payi kuculur. Taban zaten esigin ustundeyse hicbir
+        buyukluk yetmez - o varliktan cikmaktan baska secenek yok.
+        """
+        return (self.minimum_pozisyon is not None
+                and math.isfinite(self.minimum_pozisyon))
+
+    @property
     def etiket(self) -> str:
         if not self.kararlar or OLCULEMEDI in self.kararlar.values():
             return "olculemedi"
@@ -76,7 +107,10 @@ class VarlikDuyarliligi:
             return "parametre belirsizligi: " + ", ".join(self.belirsiz_parametreler)
         if self.sinyal_acik:
             return "karar dayanikli"
-        return "karar dayanikli: maliyet sapmayi yutuyor"
+        if self.buyutmek_ise_yarar:
+            return (f"pozisyon cok kucuk (min {self.minimum_pozisyon:,.0f} TL)"
+                    .replace(",", "."))
+        return "maliyet tabani esigin ustunde - buyutmek ise yaramaz"
 
 
 @dataclass(frozen=True)
@@ -120,6 +154,16 @@ class DuyarlilikRaporu:
         return {s: v for s, v in sorted(self.varliklar.items()) if not v.dayanikli}
 
     @property
+    def ekonomik_olmayanlar(self) -> dict[str, VarlikDuyarliligi]:
+        """Pozisyon buyuklugu yuzunden islem yapilamayan varliklar.
+
+        `belirsizler` ile KARISTIRMA: orada eksik olan bir SAYI, burada eksik
+        olan PARA. Cozumleri de farkli - biri olculur, digeri buyutulur veya
+        varliktan cikilir.
+        """
+        return {s: v for s, v in sorted(self.varliklar.items()) if v.ekonomik_degil}
+
+    @property
     def maliyet_yutanlar(self) -> dict[str, VarlikDuyarliligi]:
         """Karar dayanikli ama yonu "islem yapma". Belirsizlikle KARISTIRMA:
         burada olculecek bir sey yok, maliyet gercekten sapmadan buyuk."""
@@ -155,20 +199,63 @@ def _karar(model: MaliyetModeli, sembol: str, pozisyon_try: float,
     return ISLEM_MANTIKLI if maliyet < esik else MALIYET_YUTUYOR
 
 
+def referans_pozisyonlar(portfoy, hedef_dagilim: dict[str, float],
+                         sinif_haritasi: dict[str, str],
+                         yedek_try: float) -> dict[str, tuple[float, str]]:
+    """Her sembol icin duyarlilik hesabinda kullanilacak pozisyon buyuklugu.
+
+    Sabit bir referans varsaymak sonucu belirler: ayni varlik 3.000 TL'de
+    "ekonomik degil", 12.000 TL'de "olcmen gereken parametre var" cikiyor.
+    Bu yuzden buyukluk portfoyden TURETILIR:
+
+      GERCEK - varlik tutuluyorsa pozisyonun bugunku degeri.
+      HEDEF  - tutulmuyorsa, hedef dagilimda alacagi deger: toplam x sinif
+               hedefi / o siniftaki sembol sayisi. "Alsaydim ne kadar
+               olurdu" sorusunun cevabi budur.
+      YEDEK  - portfoy bos veya hedef tanimsizsa YAML'daki sabit deger.
+               Yalnizca ilk kosuda devreye girer.
+    """
+    toplam = portfoy.toplam_deger_try if portfoy is not None else 0.0
+    tutulan = {p.sembol: p.deger_try for p in (portfoy.pozisyonlar if portfoy else [])}
+    sinif_sayisi: dict[str, int] = {}
+    for sinif in sinif_haritasi.values():
+        sinif_sayisi[sinif] = sinif_sayisi.get(sinif, 0) + 1
+
+    sonuc: dict[str, tuple[float, str]] = {}
+    for sembol, sinif in sinif_haritasi.items():
+        if tutulan.get(sembol, 0.0) > 0:
+            sonuc[sembol] = (tutulan[sembol], GERCEK)
+            continue
+        hedef = hedef_dagilim.get(sinif, 0.0) if toplam > 0 else 0.0
+        pay = toplam * hedef / max(sinif_sayisi.get(sinif, 1), 1)
+        sonuc[sembol] = (pay, HEDEF) if pay > 0 else (yedek_try, YEDEK)
+    return sonuc
+
+
 def duyarliligi_olc(model: MaliyetModeli, esik: float,
-                    pozisyon_degerleri: dict[str, float],
+                    pozisyon_degerleri: dict[str, float] | dict[str, tuple[float, str]],
                     usdtry: float) -> DuyarlilikRaporu:
     """Her varlik icin uc senaryoyu kosar, sorumlu parametreleri isaretler.
 
     `esik` = rebalancing sapma esigi. Sistem bundan kucuk bir sapmayi zaten
     islem yapmaya degmez sayiyor; gidis-donus maliyeti bu sinirin ustundeyse
     islem sapmadan cok maliyeti buyutur.
+
+    `pozisyon_degerleri` ya {sembol: TL} ya da `referans_pozisyonlar`
+    ciktisidir ({sembol: (TL, kaynak)}); ikincisi buyuklugun nereden geldigini
+    de tasir ve rapor bunu yazar.
     """
     senaryo_modelleri = {ad: model.senaryoyla(ad) for ad in SENARYOLAR}
     varliklar: dict[str, VarlikDuyarliligi] = {}
 
     for sembol, varlik in model.varliklar.items():
-        pozisyon = pozisyon_degerleri.get(sembol, model.referans_pozisyon_try)
+        ham = pozisyon_degerleri.get(sembol)
+        if ham is None:
+            pozisyon, kaynak = model.referans_pozisyon_try, YEDEK
+        elif isinstance(ham, tuple):
+            pozisyon, kaynak = ham
+        else:
+            pozisyon, kaynak = float(ham), GERCEK
         kararlar, maliyetler = {}, {}
         for ad, senaryo_modeli in senaryo_modelleri.items():
             kararlar[ad] = _karar(senaryo_modeli, sembol, pozisyon, usdtry, esik)
@@ -196,6 +283,10 @@ def duyarliligi_olc(model: MaliyetModeli, esik: float,
 
         varliklar[sembol] = VarlikDuyarliligi(
             sembol=sembol, sinif=varlik.sinif, kararlar=kararlar,
-            belirsiz_parametreler=sorumlular, maliyetler=maliyetler)
+            belirsiz_parametreler=sorumlular, maliyetler=maliyetler,
+            pozisyon_try=pozisyon, pozisyon_kaynagi=kaynak,
+            minimum_pozisyon=model.minimum_pozisyon(sembol, esik, usdtry, TEMEL),
+            minimum_pozisyon_kotumser=model.minimum_pozisyon(
+                sembol, esik, usdtry, KOTUMSER))
 
     return DuyarlilikRaporu(varliklar=varliklar, esik=esik)

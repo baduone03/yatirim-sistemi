@@ -15,6 +15,7 @@ from maliyet import MaliyetDagilimi, MaliyetModeli, donem_orani
 from portfolio import Portfoy, SinifSapmasi
 from rapor_maliyet import (
     duyarlilik_bolumu,
+    ekonomik_olmayanlar_bolumu,
     eksik_maliyet_bolumu,
     getiri_satirlari,
     maliyet_dagilimi_bolumu,
@@ -495,6 +496,7 @@ def rapor_olustur(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
         )
     if duyarlilik is not None:
         satirlar += duyarlilik_bolumu(duyarlilik, varlik_adlari)
+        satirlar += ekonomik_olmayanlar_bolumu(duyarlilik)
     satirlar += _ucgenleme_bolumu(fiyatlar)
     satirlar += _uyari_bolumu(portfoy, fiyatlar, risk, yapilandirma.bayatlik,
                               maliyet)

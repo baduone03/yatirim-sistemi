@@ -224,6 +224,34 @@ Bu vault'ta her token para. Ciktilari su kurallara gore uret:
   cikar; 12.000 TL'de `kur_spread_tek_yon` belirleyici parametre olur. Yani
   duyarlilik sonucu POZISYON BUYUKLUGUNE bagli - `maliyet.duyarlilik.
   referans_pozisyon_try` degistirilirse sonuc degisir.
+- **ham `Tahmin` ARITMETIGE GIRMEZ**: `Tahmin > 0` ve `Tahmin * float`
+  TypeError verir. `eksik_kalemler` icin `_pozitif_olabilir` (KOTUMSER
+  senaryoya bakar - iyimserde 0 olan verim kotumserde varsa stopaj sorusu
+  DUSMEZ), aritmetik icin `senaryoyla(TEMEL)`. Bu kural bir kez ihlal edildi
+  ve gercek yapilandirmayla main.py coktu; `GercekYapilandirmaTesti` bunun
+  icin var - sentetik sozlukler gercek YAML'daki girinti hatasini yakalamaz.
+- **rapor kalemi tahmine dayaniyorsa ISARETLENIR**: `maliyet_kalemleri`
+  `[TAHMIN: temel senaryo]` notu ekler. Olculmus gibi gorunen bir tahmin,
+  modelin kapatmaya calistigi hatanin ta kendisi.
+- **`maliyet.sembol_spreadi` profili EZER**: tek global spread, likiditesi
+  cok farkli hisseleri ayni kefeye koyar (BIST30 dar, kucuk hisse genis) ve
+  buyuklerde maliyeti abartip gereksiz "ekonomik degil" karari uretir.
+  Listede olmayan sembol profilin varsayilanini alir; tanimsiz sembol
+  `config` dogrulamasinda patlar.
+- **referans pozisyon SABIT DEGIL, portfoyden turetilir**
+  (`duyarlilik.referans_pozisyonlar`): tutulan varlikta gercek deger,
+  tutulmayanda hedef dagilimda alacagi deger (sinif hedefi / o siniftaki
+  sembol sayisi), portfoy bossa YAML yedegi. Sabit referans varsaymak sonucu
+  OLCMEK yerine SECMEK olur - ayni varlik 1.700 TL'de "pozisyon cok kucuk",
+  12.000 TL'de "su parametreyi olc" cikiyor.
+- **"ekonomik degil" ile "parametre belirsizligi" AYRI bolumler**: ilkinde
+  eksik olan PARA, ikincisinde bir SAYI. Cozumleri de farkli - biri buyutulur
+  veya varliktan cikilir, digeri olculur. Ayni listede gosterilirse cozumu
+  para olan sorun "sonra olcerim" kutusunda kalir.
+- **minimum ekonomik pozisyon**: `2*komisyon_usd*usdtry / (esik - taban)`.
+  `taban` = pozisyondan BAGIMSIZ kisim (oransal komisyon + 2*kur spread +
+  kambiyo vergisi + 2*menkul spread). Taban esigi asiyorsa `math.inf` doner -
+  hicbir buyukluk yetmez, o varliktan cikmaktan baska secenek yok.
 - **sorgu botu SALT OKUNUR**: `bot_sorgu.py` `gecmisi_yaz` CAGIRMAZ. Cagirsaydi
   soru sormak latch'i ilerletir ve kimse islem yapmadan bekleme suresi baslardi.
   Yazdigi tek dosya `simulasyon/bot_offset.txt`.

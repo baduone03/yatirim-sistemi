@@ -15,6 +15,7 @@ icin `modeli_kur`, canli oranlari baglamak icin `MaliyetModeli.oranlarla`.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, replace
 
 ORANSAL = "oransal"
@@ -61,6 +62,18 @@ class Tahmin:
 def _cozumle(deger, senaryo: str):
     """Tahmin ise senaryo degerine indirger, degilse oldugu gibi birakir."""
     return deger.deger(senaryo) if isinstance(deger, Tahmin) else deger
+
+
+def _pozitif_olabilir(deger) -> bool:
+    """Kalem sifirdan buyuk OLABILIR mi?
+
+    Tahmin'de en KOTUMSER senaryoya bakilir: temettu verimi iyimserde 0 ama
+    kotumserde %8 ise stopaj sorusu DUSMEZ. Iyimsere bakan bir kontrol,
+    belirsiz bir kalemi "yapisal sifir" sayip stopaji sessizce atlardi.
+    """
+    if deger is None:
+        return False
+    return deger.kotumser > 0 if isinstance(deger, Tahmin) else deger > 0
 
 
 def _senaryo_sec(senaryo: str, yalniz: str, alan: str) -> str:
@@ -133,6 +146,49 @@ class IslemProfili:
             eksik.append(f"{self.ad}.menkul_spread")
         return eksik
 
+    @property
+    def tahminli(self) -> bool:
+        return bool(self.tahminler)
+
+    def maliyet_tabani(self, senaryo: str = TEMEL) -> float | None:
+        """Pozisyon buyuklugunden BAGIMSIZ maliyet. Eksik kalem varsa None.
+
+        Oransal kalemler (kur spread'i, kambiyo vergisi, menkul spread ve
+        oransal komisyon) pozisyon buyudukce KUCULMEZ. Yani bu sayi, pozisyon
+        ne kadar buyutulurse buyutulsun asilamayan bir TABANDIR. Yalnizca
+        SABIT komisyon disarida kalir - tek kuculebilen kalem odur.
+        """
+        cozulmus = self.senaryoyla(senaryo) if self.tahminli else self
+        if cozulmus.eksik_kalemler:
+            return None
+        komisyon = 0.0 if cozulmus.komisyon_tip == SABIT else 2 * cozulmus.komisyon_oran
+        spread = 2 * (cozulmus.kur_spread_tek_yon or 0.0) if cozulmus.kur_cevrimi else 0.0
+        vergi = (cozulmus.kambiyo_vergisi or 0.0) if cozulmus.kur_cevrimi else 0.0
+        return komisyon + spread + vergi + 2 * cozulmus.menkul_spread
+
+    def minimum_pozisyon(self, esik: float, usdtry: float,
+                         senaryo: str = TEMEL) -> float | None:
+        """Gidis-donus maliyetini `esik` altina indiren en kucuk pozisyon (TL).
+
+        Doner:
+          None      - kalem eksik, hesaplanamaz
+          0.0       - her buyuklukte zaten esigin altinda
+          math.inf  - TABAN esigi asiyor; pozisyonu buyutmek ISE YARAMAZ
+          sayi      - bu buyuklugun ustunde islem ekonomik olur
+
+        Sabit komisyon pozisyona BOLUNUR, oransal kalemler bolunmez:
+            2*komisyon_usd*usdtry / P + taban = esik
+        """
+        taban = self.maliyet_tabani(senaryo)
+        if taban is None:
+            return None
+        if taban >= esik:
+            return math.inf
+        if self.komisyon_tip != SABIT:
+            return 0.0
+        cozulmus = self.senaryoyla(senaryo) if self.tahminli else self
+        return 2 * cozulmus.komisyon_usd * usdtry / (esik - taban)
+
     def gidis_donus(self, pozisyon_try: float, usdtry: float) -> float | None:
         """Gidis-donus islem maliyeti orani. Eksik kalem varsa None.
 
@@ -144,13 +200,17 @@ class IslemProfili:
         """
         if self.eksik_kalemler or pozisyon_try <= 0:
             return None
-        if self.komisyon_tip == SABIT:
-            komisyon = (2 * self.komisyon_usd * usdtry) / pozisyon_try
+        # Tahminli kalem TEMEL senaryoya indirgenir: ham Tahmin nesnesiyle
+        # aritmetik TypeError verir. Senaryo bazli hesap icin cagiran taraf
+        # zaten modeli `senaryoyla` ile cozer.
+        birim = self.senaryoyla(TEMEL) if self.tahminli else self
+        if birim.komisyon_tip == SABIT:
+            komisyon = (2 * birim.komisyon_usd * usdtry) / pozisyon_try
         else:
-            komisyon = 2 * self.komisyon_oran
-        spread = 2 * (self.kur_spread_tek_yon or 0.0) if self.kur_cevrimi else 0.0
-        vergi = (self.kambiyo_vergisi or 0.0) if self.kur_cevrimi else 0.0
-        return komisyon + spread + vergi + 2 * self.menkul_spread
+            komisyon = 2 * birim.komisyon_oran
+        spread = 2 * (birim.kur_spread_tek_yon or 0.0) if birim.kur_cevrimi else 0.0
+        vergi = (birim.kambiyo_vergisi or 0.0) if birim.kur_cevrimi else 0.0
+        return komisyon + spread + vergi + 2 * birim.menkul_spread
 
 
 # --------------------------------------------------------------------------
@@ -189,17 +249,25 @@ class TasimaKalemleri:
         if self.temettu_verimi is None:
             eksik.append(f"{self.sembol}.temettu_verimi")
         # Temettu odemeyen varlikta stopaj sorusu DUSER - sorulursa altin ve
-        # kripto sonsuza kadar bloklu kalir.
-        elif self.temettu_verimi > 0 and self.temettu_stopaji is None:
+        # kripto sonsuza kadar bloklu kalirdi. Tahminli verimde OLCUT
+        # kotumser senaryodur, bkz. _pozitif_olabilir.
+        elif _pozitif_olabilir(self.temettu_verimi) and self.temettu_stopaji is None:
             eksik.append(f"{self.sembol}.temettu_stopaji")
         return eksik
 
     @property
     def yillik(self) -> float | None:
-        """h = gider_orani + temettu_verimi * stopaj_orani"""
+        """h = gider_orani + temettu_verimi * stopaj_orani
+
+        Tahminli kalem TEMEL senaryoya indirgenir. Ham `Tahmin` nesnesiyle
+        carpma yapmak TypeError verirdi; sessizce None donmek ise olculmus
+        bir kalemi olculmemis gostermek olurdu.
+        """
         if self.eksik_kalemler:
             return None
-        return self.gider_orani_yillik + self.temettu_verimi * (self.temettu_stopaji or 0.0)
+        cozulmus = self.senaryoyla(TEMEL)
+        return (cozulmus.gider_orani_yillik
+                + cozulmus.temettu_verimi * (cozulmus.temettu_stopaji or 0.0))
 
 
 # --------------------------------------------------------------------------
@@ -350,11 +418,19 @@ class MaliyetModeli:
         varlik = self.varliklar.get(sembol)
         return None if varlik is None else varlik.tasima.yillik
 
+    def minimum_pozisyon(self, sembol: str, esik: float, usdtry: float,
+                         senaryo: str = TEMEL) -> float | None:
+        varlik = self.varliklar.get(sembol)
+        if varlik is None or varlik.profil is None:
+            return None
+        return varlik.profil.minimum_pozisyon(esik, usdtry, senaryo)
+
 
 def modeli_kur(ham: dict, sinif_haritasi: dict[str, str]) -> MaliyetModeli:
     """varliklar.yaml -> MaliyetModeli. Ag'a cikmaz, yalnizca ayristirir."""
     maliyet_ham = ham.get("maliyet") or {}
     profil_haritasi = maliyet_ham.get("sinif_profili") or {}
+    spread_ham = maliyet_ham.get("sembol_spreadi") or {}
     islem_ham = maliyet_ham.get("islem") or {}
     tasima_ham = maliyet_ham.get("tasima") or {}
     firsat_ham = maliyet_ham.get("firsat") or {}
@@ -378,10 +454,16 @@ def modeli_kur(ham: dict, sinif_haritasi: dict[str, str]) -> MaliyetModeli:
     varliklar = {}
     for sembol, sinif in sinif_haritasi.items():
         kalem = tasima_ham.get(sembol)
+        # Sembol bazli spread profildeki degeri EZER. Tek global spread,
+        # likiditesi cok farkli hisseleri ayni kefeye koyar: BIST30'da dar,
+        # kucuk hissede genis. Listede olmayan sembol profilin degerini alir.
+        profil = profiller.get(profil_haritasi.get(sinif, ""))
+        if profil is not None and sembol in spread_ham:
+            profil = replace(profil, menkul_spread=_sayi(spread_ham[sembol]))
         varliklar[sembol] = VarlikMaliyeti(
             sembol=sembol,
             sinif=sinif,
-            profil=profiller.get(profil_haritasi.get(sinif, "")),
+            profil=profil,
             tasima=TasimaKalemleri(
                 sembol=sembol,
                 beyan_edildi=kalem is not None,

@@ -40,7 +40,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from bicim import oran, tl, yuzde  # noqa: E402
 from bildirim import bol  # noqa: E402
 from config import PROJE_DIZINI, TR_OFSET, yapilandirmayi_oku  # noqa: E402
-from duyarlilik import duyarliligi_olc  # noqa: E402
+from duyarlilik import (  # noqa: E402
+    GERCEK,
+    HEDEF,
+    YEDEK,
+    duyarliligi_olc,
+    referans_pozisyonlar,
+)
 from fetch import fiyatlari_getir, maliyet_modelini_coz  # noqa: E402
 from kurumsal_olay import bilinen_olay_anahtarlari, olaylari_oku  # noqa: E402
 from ledger import durumu_hesapla, islemleri_oku  # noqa: E402
@@ -208,7 +214,10 @@ def veriyi_yukle(env: dict[str, str]) -> Veri:
     sapmalar = sinif_sapmalari(portfoy, yapilandirma.hedef_dagilim)
     duyarlilik = duyarliligi_olc(
         maliyet, yapilandirma.esikler.rebalancing_sapma,
-        {p.sembol: p.deger_try for p in portfoy.pozisyonlar}, fiyatlar.usdtry)
+        referans_pozisyonlar(portfoy, yapilandirma.hedef_dagilim,
+                             yapilandirma.sinif_haritasi,
+                             maliyet.referans_pozisyon_try),
+        fiyatlar.usdtry)
     karar = kararlari_uret(sapmalar, risk, yapilandirma.esikler,
                            yapilandirma.bekleme, yapilandirma.devre_kesici,
                            gecmisi_oku(), bugun, maliyet, None, duyarlilik)
@@ -380,10 +389,29 @@ def komut_son(baglam: Baglam, arguman: str) -> str:
     return "\n".join(satirlar)
 
 
+POZISYON_KAYNAGI = {
+    GERCEK: "gercek pozisyon",
+    HEDEF: "hedef dagilimda alacagi deger",
+    YEDEK: "YAML yedegi - portfoy bos",
+}
+
+
 def komut_param(baglam: Baglam, arguman: str) -> str:
     veri = baglam.veri
-    gerekenler = veri.duyarlilik.olculmesi_gerekenler
-    satirlar = _basliklar(veri) + ["<b>Olculmesi gereken parametreler</b>"]
+    duyarlilik = veri.duyarlilik
+    satirlar = _basliklar(veri)
+
+    # Referans buyukluk YAZILMAZSA liste hangi dunyayi anlattigini soylemiyor:
+    # ayni varlik 1.700 TL'de "pozisyon cok kucuk", 12.000 TL'de "su parametreyi
+    # olc" cikar. Sonuc buyukluge bagli, o yuzden buyukluk once gelir.
+    satirlar += ["<b>Referans pozisyon buyuklukleri</b>"]
+    for sembol, varlik in sorted(duyarlilik.varliklar.items()):
+        satirlar.append(
+            f"{kacis(sembol)}: {tl(varlik.pozisyon_try)} "
+            f"({kacis(POZISYON_KAYNAGI.get(varlik.pozisyon_kaynagi, ''))})")
+
+    satirlar += ["", "<b>Olculmesi gereken parametreler</b>"]
+    gerekenler = duyarlilik.olculmesi_gerekenler
     if not gerekenler:
         satirlar.append("Yok - tahminli kalemlerin hicbiri karari cevirmiyor.")
     else:
@@ -391,10 +419,21 @@ def komut_param(baglam: Baglam, arguman: str) -> str:
             satirlar.append(
                 f"{sira}. {kacis(parametre)} - {len(semboller)} varlik "
                 f"({kacis(', '.join(semboller))})")
-    yutanlar = veri.duyarlilik.maliyet_yutanlar
-    if yutanlar:
-        satirlar += ["", "Maliyet sapmayi yutuyor (olculecek sey yok): "
-                     + kacis(", ".join(sorted(yutanlar)))]
+
+    ekonomik_olmayanlar = duyarlilik.ekonomik_olmayanlar
+    if ekonomik_olmayanlar:
+        satirlar += ["", "<b>Ekonomik olmayan pozisyonlar</b>",
+                     "Olculecek sey YOK - ya buyut ya cik:"]
+        for sembol, varlik in ekonomik_olmayanlar.items():
+            if varlik.buyutmek_ise_yarar:
+                satirlar.append(
+                    f"{kacis(sembol)}: {tl(varlik.pozisyon_try)} -> "
+                    f"minimum {tl(varlik.minimum_pozisyon)}")
+            else:
+                satirlar.append(
+                    f"{kacis(sembol)}: {tl(varlik.pozisyon_try)} - maliyet "
+                    "tabani esigin ustunde, buyutmek ise yaramaz")
+
     engellenen = veri.maliyet.eksik_kalem_ozeti
     if engellenen:
         satirlar += ["", "<b>Hic tahmini olmayan (bloklu) kalemler</b>"]

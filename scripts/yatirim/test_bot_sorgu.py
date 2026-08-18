@@ -496,6 +496,20 @@ class KomutGovdesiTesti(unittest.TestCase):
     def test_risk_dislanan_sembolu_bildirir(self):
         self.assertIn("GC=F", self._cevap("/risk"))
 
+
+    def test_param_referans_pozisyonu_yazar(self):
+        """Buyukluk yazilmazsa liste hangi dunyayi anlattigini soylemiyor."""
+        cevap = self._cevap("/param")
+        self.assertIn("Referans pozisyon", cevap)
+        for sembol in self.veri.duyarlilik.varliklar:
+            self.assertIn(sembol, cevap)
+
+    def test_param_ekonomik_olmayanlari_ayirir(self):
+        cevap = self._cevap("/param")
+        if self.veri.duyarlilik.ekonomik_olmayanlar:
+            self.assertIn("Ekonomik olmayan pozisyonlar", cevap)
+            self.assertIn("ya buyut ya cik", cevap)
+
     def test_veri_bir_kez_yuklenir(self):
         """Iki komut ayni kosuda gelirse Yahoo'ya iki kez gidilmemeli."""
         sayac = []

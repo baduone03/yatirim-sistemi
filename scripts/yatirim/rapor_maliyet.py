@@ -7,10 +7,13 @@ konuya bakiyor - maliyetin getiriye etkisi - o yuzden birlikte duruyorlar.
 
 from __future__ import annotations
 
-from bicim import oran, yuzde
-from duyarlilik import DuyarlilikRaporu
+import math
+
+from bicim import oran, tl, yuzde
+from duyarlilik import GERCEK, HEDEF, YEDEK, DuyarlilikRaporu
 from maliyet import (
     SENARYOLAR,
+    TEMEL,
     MaliyetDagilimi,
     MaliyetKalemi,
     MaliyetModeli,
@@ -102,16 +105,23 @@ def duyarlilik_bolumu(rapor: DuyarlilikRaporu,
         f"sapma ({oran(rapor.esik)}). Maliyet bu sinirin ustundeyse islem, "
         "duzelttigi sapmadan fazlasini goturur.",
         "",
-        "| Varlik | Iyimser | Temel | Kotumser | Sonuc |",
-        "|---|---:|---:|---:|---|",
+        # Sabit referans varsaymak sonucu belirler: ayni varlik 3.000 TL'de
+        # "ekonomik degil", 12.000 TL'de "olc" cikar. Buyukluk yazilmazsa
+        # tablo hangi dunyayi anlattigini soylemiyor demektir.
+        "Pozisyon sutunu: tutulan varlikta GERCEK deger, tutulmayanda hedef "
+        "dagilimda alacagi deger. Sonuc bu buyukluge BAGLI - sabit komisyonun "
+        "payi pozisyonla kuculur.",
+        "",
+        "| Varlik | Pozisyon | Iyimser | Temel | Kotumser | Sonuc |",
+        "|---|---:|---:|---:|---:|---|",
     ]
     for sembol, varlik in sorted(rapor.varliklar.items()):
         maliyetler = " | ".join(
             oran(varlik.maliyetler[ad], 2) if ad in varlik.maliyetler else "-"
             for ad in SENARYOLAR)
         satirlar.append(
-            f"| {varlik_adlari.get(sembol, sembol)} | {maliyetler} | "
-            f"{varlik.etiket} |")
+            f"| {varlik_adlari.get(sembol, sembol)} | "
+            f"{tl(varlik.pozisyon_try)} | {maliyetler} | {varlik.etiket} |")
     satirlar.append("")
 
     gerekenler = rapor.olculmesi_gerekenler
@@ -147,6 +157,78 @@ def duyarlilik_bolumu(rapor: DuyarlilikRaporu,
     return satirlar
 
 
+
+POZISYON_KAYNAGI = {
+    GERCEK: "gercek",
+    HEDEF: "hedef dagilim",
+    YEDEK: "YAML yedegi",
+}
+
+
+def ekonomik_olmayanlar_bolumu(rapor: DuyarlilikRaporu) -> list[str]:
+    """Pozisyon buyuklugu yuzunden islem yapilamayan varliklar.
+
+    Neden AYRI bolum: parametre belirsizliginde yapilacak sey bir sayiyi
+    OLCMEK, burada pozisyonu BUYUTMEK ya da varliktan CIKMAK. Ayni listede
+    gosterilirse, cozumu para olan bir sorun olculecek bir soru gibi gorunur
+    ve sonsuza kadar "sonra bakarim" kutusunda kalir.
+    """
+    ekonomik_olmayanlar = rapor.ekonomik_olmayanlar
+    if not ekonomik_olmayanlar:
+        return []
+
+    satirlar = [
+        "## Ekonomik olmayan pozisyonlar",
+        "",
+        "Bu varliklarda gidis-donus maliyeti, sistemin islem yapmaya deger "
+        f"gordugu en kucuk sapmadan ({oran(rapor.esik)}) BUYUK. Yani sinyal ne "
+        "derse desin islem, duzelttigi sapmadan fazlasini goturur.",
+        "",
+        "**Sorun parametre belirsizligi DEGIL** - uc senaryoda da ayni sonuc "
+        "cikiyor. Olculecek bir sey yok; ya pozisyon buyuyecek ya da varliktan "
+        "cikilacak.",
+        "",
+        "| Varlik | Pozisyon | Kaynak | Maliyet (temel) | Minimum ekonomik | Kotumserde |",
+        "|---|---:|---|---:|---:|---:|",
+    ]
+    for sembol, varlik in ekonomik_olmayanlar.items():
+        maliyet = varlik.maliyetler.get(TEMEL)
+        satirlar.append(
+            f"| `{sembol}` | {tl(varlik.pozisyon_try)} | "
+            f"{POZISYON_KAYNAGI.get(varlik.pozisyon_kaynagi, varlik.pozisyon_kaynagi)} | "
+            f"{oran(maliyet, 2) if maliyet is not None else '-'} | "
+            f"{_minimum(varlik.minimum_pozisyon)} | "
+            f"{_minimum(varlik.minimum_pozisyon_kotumser)} |")
+
+    satirlar += [
+        "",
+        "**Minimum ekonomik pozisyon**: gidis-donus maliyetini esigin altina "
+        "indiren en kucuk pozisyon. Yalnizca SABIT komisyonun payi pozisyonla "
+        "kuculur; spread ve kambiyo vergisi oransaldir ve hicbir buyuklukte "
+        "kuculmez. `hicbir buyukluk` yazan satirda maliyet TABANI zaten esigin "
+        "ustunde - o varlikta islem matematiksel olarak kaybettirir.",
+        "",
+    ]
+    buyutulebilir = [v for v in ekonomik_olmayanlar.values() if v.buyutmek_ise_yarar]
+    if buyutulebilir:
+        satirlar += ["> **Karar**: her varlik icin ya pozisyonu minimumun "
+                     "ustune cikar ya da varliktan tamamen cik. Arada kalmak "
+                     "en pahali secenek - pozisyon duruyor ama rebalance "
+                     "edilemiyor, yani hedef dagilim fiilen uygulanamiyor.",
+                     ""]
+    return satirlar
+
+
+def _minimum(deger: float | None) -> str:
+    if deger is None:
+        return "-"
+    if not math.isfinite(deger):
+        return "hicbir buyukluk"
+    if deger <= 0:
+        return "sinir yok"
+    return tl(deger)
+
+
 def maliyet_kalemleri(portfoy: Portfoy, durum, maliyet: MaliyetModeli,
                       donem_gun: int, taban_try: float) -> list[MaliyetKalemi]:
     """Brut getiriden dusulecek kalemler. Olculemeyen kalem None KALIR.
@@ -157,13 +239,20 @@ def maliyet_kalemleri(portfoy: Portfoy, durum, maliyet: MaliyetModeli,
     """
     if taban_try <= 0:
         return []
+    # Tahminli kalemler TEMEL senaryoya indirgenir. Ham `Tahmin` nesnesiyle
+    # carpma TypeError verir; burada indirgenmezse rapor hic uretilmez.
+    # Kullanilan tahminler kalem aciklamasinda isaretlenir - "olculmus" gibi
+    # gorunen bir tahmin, modelin kapatmaya calistigi hatanin ta kendisi.
+    tahminli = {s for s, v in maliyet.varliklar.items() if v.tahminler}
+    maliyet = maliyet.senaryoyla(TEMEL)
+    tahmin_notu = " [TAHMIN: temel senaryo]" if tahminli else ""
     return [
         MaliyetKalemi("Komisyon",
                       durum.toplam_komisyon_try / taban_try if durum else None,
                       "defterden, fiilen odenen"),
         MaliyetKalemi("Kur spread", _kur_spreadi(durum, maliyet, taban_try),
-                      "TL<->USD cevrimi, islem basina"),
-        *_tasima_kalemleri(portfoy, maliyet, donem_gun, taban_try),
+                      "TL<->USD cevrimi, islem basina" + tahmin_notu),
+        *_tasima_kalemleri(portfoy, maliyet, donem_gun, taban_try, tahmin_notu),
         MaliyetKalemi("Vergi", None,
                       "gerceklesen kazanc uzerinden; oran modele girilmedi"),
     ]
@@ -186,7 +275,7 @@ def _kur_spreadi(durum, maliyet: MaliyetModeli, taban_try: float) -> float | Non
 
 
 def _tasima_kalemleri(portfoy: Portfoy, maliyet: MaliyetModeli, donem_gun: int,
-                      taban_try: float) -> list[MaliyetKalemi]:
+                      taban_try: float, tahmin_notu: str = "") -> list[MaliyetKalemi]:
     """Tasima kalemleri aciktaki pozisyonlarda, donem boyunca isler."""
     gider = 0.0
     stopaj = 0.0
@@ -209,9 +298,9 @@ def _tasima_kalemleri(portfoy: Portfoy, maliyet: MaliyetModeli, donem_gun: int,
                 tasima.temettu_verimi * (tasima.temettu_stopaji or 0.0), donem_gun)
     return [
         MaliyetKalemi("Gider orani", gider / taban_try if gider_olculdu else None,
-                      "fon gideri, donem orantili"),
+                      "fon gideri, donem orantili" + tahmin_notu),
         MaliyetKalemi("Temettu stopaji", stopaj / taban_try if stopaj_olculdu else None,
-                      "kaynakta kesilir, ekstrede gorunmez"),
+                      "kaynakta kesilir, ekstrede gorunmez" + tahmin_notu),
     ]
 
 

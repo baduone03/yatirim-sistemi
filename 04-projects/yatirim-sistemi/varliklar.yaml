@@ -194,9 +194,23 @@ maliyet:
   islem:
     bist:
       komisyon_tip: oransal
-      komisyon_oran: 0.0015        # islemler.yaml komisyon_orani ile ayni
+      komisyon_oran:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # temel deger islemler.yaml komisyon_orani ile ayni
+        iyimser: 0.001
+        temel: 0.0015
+        kotumser: 0.0025
       kur_cevrimi: false           # TL hesap, TL hisse - cevrim yok
-      menkul_spread: 0.0010        # DOGRULANACAK, hisseye gore degisir
+      # VARSAYILAN spread - sembol_spreadi'nde listelenmeyen BIST
+      # sembolleri bunu kullanir. Likidite bagimli oldugu icin aralik
+      # genis: BIST30'da dar, kucuk hissede cok daha genis.
+      menkul_spread:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        iyimser: 0.0005
+        temel: 0.002
+        kotumser: 0.006
 
     abd_midas:
       komisyon_tip: sabit
@@ -242,7 +256,57 @@ maliyet:
       komisyon_tip: oransal
       komisyon_oran: null
       kur_cevrimi: null            # platform TL mi USD mi bilinmiyor
-      menkul_spread: null
+      menkul_spread:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # enstrumana bagli: ETF mi fiziki mi henuz belli degil
+        iyimser: 0.001
+        temel: 0.003
+        kotumser: 0.008
+
+
+  # Sembol bazli menkul kiymet spread'i. Profildeki degeri EZER.
+  # Listede OLMAYAN sembol profilin varsayilanini kullanir.
+  #
+  # Neden sembol bazli: tek global spread, likiditesi cok farkli hisseleri
+  # ayni kefeye koyar. BIST30'da emir defteri derin ve spread dar; kucuk
+  # hissede birkac kat genis olabilir. Tek deger, buyuklerde maliyeti
+  # abartip gereksiz "ekonomik degil" karari uretir.
+  #
+  # CLAUDE EKLEDI - Dodo sembol bazli deger vermedi, yalnizca "buyuklerde
+  # dar" dedi. Asagidaki BIST30 araliklari o kurala gore turetildi,
+  # OLCULMEDI. Gercek spread emir defterinden okunur.
+  sembol_spreadi:
+    THYAO.IS:
+      tahmin: true
+      kaynak: "olculmedi-genis-aralik"
+      iyimser: 0.0005
+      temel: 0.001
+      kotumser: 0.002
+    ASELS.IS:
+      tahmin: true
+      kaynak: "olculmedi-genis-aralik"
+      iyimser: 0.0005
+      temel: 0.001
+      kotumser: 0.002
+    TUPRS.IS:
+      tahmin: true
+      kaynak: "olculmedi-genis-aralik"
+      iyimser: 0.0005
+      temel: 0.001
+      kotumser: 0.002
+    GARAN.IS:
+      tahmin: true
+      kaynak: "olculmedi-genis-aralik"
+      iyimser: 0.0005
+      temel: 0.001
+      kotumser: 0.002
+    XU100.IS:
+      tahmin: true
+      kaynak: "olculmedi-genis-aralik"
+      iyimser: 0.0005
+      temel: 0.001
+      kotumser: 0.002
 
   # Tasima maliyeti: tuttugun her gun isler, bilesiktir. Sembol bazinda.
   # Listede OLMAYAN sembol "beyan edilmemis" sayilir ve bloklanir.
@@ -315,10 +379,24 @@ maliyet:
       gider_orani_yillik: 0.0
       temettu_verimi: 0.0
     GC=F:
-      gider_orani_yillik: 0.0
+      gider_orani_yillik:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # tasima_maliyeti: ETF gider orani VEYA fiziki saklama farki.
+        # Hangi enstrumanla tutuldugu kararlasmadi - aralik bu yuzden genis.
+        iyimser: 0.0
+        temel: 0.0025
+        kotumser: 0.006
       temettu_verimi: 0.0          # fiziki maden temettu odemez
     SI=F:
-      gider_orani_yillik: 0.0
+      gider_orani_yillik:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # tasima_maliyeti: ETF gider orani VEYA fiziki saklama farki.
+        # Hangi enstrumanla tutuldugu kararlasmadi - aralik bu yuzden genis.
+        iyimser: 0.0
+        temel: 0.0025
+        kotumser: 0.006
       temettu_verimi: 0.0
     XU100.IS:
       gider_orani_yillik: 0.0

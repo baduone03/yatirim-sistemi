@@ -39,10 +39,17 @@ from config import (
     sablonu_reddet,
     yapilandirmayi_oku,
 )
+import copy
+import math
+
 from duyarlilik import (
+    GERCEK,
+    HEDEF,
+    YEDEK,
     ISLEM_MANTIKLI,
     MALIYET_YUTUYOR as KARAR_MALIYET_YUTUYOR,
     duyarliligi_olc,
+    referans_pozisyonlar,
 )
 from fetch import (
     FiyatVerisi,
@@ -68,6 +75,7 @@ from kaynaklar import (
 from kurumsal_olay import KurumsalOlay, olaylari_oku
 from ledger import durumu_hesapla, islemleri_oku
 from maliyet import (
+    Tahmin,
     IslemProfili,
     MaliyetDagilimi,
     MaliyetKalemi,
@@ -120,7 +128,11 @@ from portfolio import (
     portfoyu_ledgerdan_hesapla,
     sinif_sapmalari,
 )
-from rapor_maliyet import duyarlilik_bolumu
+from rapor_maliyet import (
+    duyarlilik_bolumu,
+    ekonomik_olmayanlar_bolumu,
+    maliyet_kalemleri,
+)
 from report import (
     rapor_olustur,
     _dagilim_bolumu,
@@ -2588,8 +2600,14 @@ class MaliyetDuyarliligiTesti(unittest.TestCase):
 
         self.assertTrue(varlik.dayanikli)
         self.assertFalse(varlik.sinyal_acik)
-        self.assertEqual(varlik.etiket, "karar dayanikli: maliyet sapmayi yutuyor")
+        self.assertTrue(varlik.ekonomik_degil)
+        # Oransal komisyon + %4 spread -> maliyet TABANI esigin ustunde.
+        # Pozisyonu buyutmek oransal kalemleri kucultmez.
+        self.assertFalse(varlik.buyutmek_ise_yarar)
+        self.assertEqual(varlik.etiket,
+                         "maliyet tabani esigin ustunde - buyutmek ise yaramaz")
         self.assertEqual(set(varlik.kararlar.values()), {KARAR_MALIYET_YUTUYOR})
+        self.assertIn("QQQ", rapor.ekonomik_olmayanlar)
         # Olculecek bir sey YOK - belirsizlik listesine girmemeli.
         self.assertEqual(rapor.olculmesi_gerekenler, [])
         self.assertIn("QQQ", rapor.maliyet_yutanlar)
@@ -2744,6 +2762,282 @@ class TamRaporTesti(unittest.TestCase):
         parcalar = self._parcalar()[:-1]
         metin = rapor_olustur(*parcalar)
         self.assertNotIn("## Maliyet duyarliligi", metin)
+
+
+
+class TahminAritmetigiTesti(unittest.TestCase):
+    """REGRESYON: ham `Tahmin` nesnesi aritmetige girmemeli.
+
+    Tahmin bloklari eklendiginde `engellenenler` -> `Tahmin > 0` ve
+    `yillik_tasima` -> `Tahmin * float` TypeError firlatti; yani gercek
+    yapilandirmayla main.py cokuyordu. Tahminli alanlara dokunan her yol
+    burada bir kez kosuluyor.
+    """
+
+    HAM = {
+        "maliyet": {
+            "sinif_profili": {"nasdaq": "abd"},
+            "islem": {
+                "abd": {"komisyon_tip": "sabit", "komisyon_usd": 1.5,
+                        "kur_cevrimi": True,
+                        "kur_spread_tek_yon": {"tahmin": True, "iyimser": 0.001,
+                                               "temel": 0.004, "kotumser": 0.009},
+                        "kambiyo_vergisi": 0.0, "menkul_spread": 0.00002},
+            },
+            "tasima": {
+                "QQQ": {
+                    "gider_orani_yillik": 0.002,
+                    "temettu_verimi": {"tahmin": True, "iyimser": 0.008,
+                                       "temel": 0.012, "kotumser": 0.016},
+                    "temettu_stopaji": {"tahmin": True, "iyimser": 0.10,
+                                        "temel": 0.15, "kotumser": 0.30},
+                },
+            },
+            "firsat": {"tl_risksiz_yillik": 0.48},
+        },
+    }
+
+    def _model(self):
+        return modeli_kur(self.HAM, {"QQQ": "nasdaq"})
+
+    def test_engellenenler_tahminle_patlamaz(self):
+        self.assertEqual(self._model().engellenenler, {})
+
+    def test_yillik_tasima_temel_senaryoyu_kullanir(self):
+        # 0.002 + 0.012 * 0.15
+        self.assertAlmostEqual(self._model().yillik_tasima("QQQ"), 0.0038)
+
+    def test_gidis_donus_temel_senaryoyu_kullanir(self):
+        model = self._model()
+        cozulmus = model.senaryoyla("temel")
+        self.assertAlmostEqual(model.gidis_donus("QQQ", 10_000, 41.0),
+                               cozulmus.gidis_donus("QQQ", 10_000, 41.0))
+
+    def test_rapor_kalemleri_tahminle_kuruluyor(self):
+        portfoy = Portfoy(
+            pozisyonlar=[PozisyonDegeri("QQQ", "QQQ", "nasdaq", 1, 9000, 10000)],
+            nakit_try=0.0, fiyatlanamayan=[])
+        kalemler = maliyet_kalemleri(portfoy, None, self._model(), 30, 10_000)
+        adlar = {k.ad: k for k in kalemler}
+        self.assertIsNotNone(adlar["Gider orani"].oran)
+        # Tahmin kullanildigi kalemde isaretlenmeli - "olculmus" gibi gorunen
+        # bir tahmin, modelin kapatmaya calistigi hatanin ta kendisi.
+        self.assertIn("TAHMIN", adlar["Gider orani"].aciklama)
+
+    def test_kotumserde_pozitif_verim_stopaji_zorunlu_kilar(self):
+        """Iyimserde 0 olsa bile kotumserde temettu varsa stopaj sorusu DUSMEZ."""
+        ham = copy.deepcopy(self.HAM)
+        ham["maliyet"]["tasima"]["QQQ"]["temettu_verimi"] = {
+            "tahmin": True, "iyimser": 0.0, "temel": 0.01, "kotumser": 0.03}
+        ham["maliyet"]["tasima"]["QQQ"]["temettu_stopaji"] = None
+        model = modeli_kur(ham, {"QQQ": "nasdaq"})
+        self.assertIn("QQQ.temettu_stopaji", model.engellenenler["QQQ"])
+
+
+class MinimumEkonomikPozisyonTesti(unittest.TestCase):
+    """Sabit komisyonun payi pozisyonla kuculur, oransal kalemler kuculmez."""
+
+    ESIK = 0.03
+
+    def _profil(self, **degisiklikler):
+        varsayilan = dict(ad="abd", komisyon_tip="sabit", komisyon_usd=1.5,
+                          kur_cevrimi=True, kur_spread_tek_yon=0.004,
+                          kambiyo_vergisi=0.0, menkul_spread=0.00002)
+        return IslemProfili(**{**varsayilan, **degisiklikler})
+
+    def test_minimum_pozisyon_esigi_tam_karsilar(self):
+        profil = self._profil()
+        minimum = profil.minimum_pozisyon(self.ESIK, usdtry=41.0)
+        self.assertAlmostEqual(profil.gidis_donus(minimum, 41.0), self.ESIK,
+                               places=9)
+        # Bir kurus ustunde maliyet esigin ALTINA iner.
+        self.assertLess(profil.gidis_donus(minimum * 1.01, 41.0), self.ESIK)
+
+    def test_taban_esigin_ustundeyse_hicbir_buyukluk_yetmez(self):
+        """Oransal kalemler pozisyonla kuculmez - buyutmek ISE YARAMAZ."""
+        profil = self._profil(kur_spread_tek_yon=0.02)   # taban %4 > esik %3
+        self.assertEqual(profil.minimum_pozisyon(self.ESIK, 41.0), math.inf)
+        self.assertAlmostEqual(profil.maliyet_tabani(), 0.04004)
+
+    def test_oransal_komisyonda_sinir_yok(self):
+        """Oransal profilde maliyet pozisyondan bagimsiz - esigin altindaysa
+        her buyukluk uygun."""
+        profil = self._profil(komisyon_tip="oransal", komisyon_oran=0.001,
+                              komisyon_usd=None, kur_cevrimi=False)
+        self.assertEqual(profil.minimum_pozisyon(self.ESIK, 41.0), 0.0)
+
+    def test_eksik_kalemde_hesaplanmaz(self):
+        profil = self._profil(kur_spread_tek_yon=None)
+        self.assertIsNone(profil.minimum_pozisyon(self.ESIK, 41.0))
+
+    def test_kotumser_senaryo_minimumu_yukseltir(self):
+        profil = self._profil(kur_spread_tek_yon=Tahmin(0.0015, 0.004, 0.009))
+        temel = profil.minimum_pozisyon(self.ESIK, 41.0)
+        kotumser = profil.minimum_pozisyon(self.ESIK, 41.0, "kotumser")
+        self.assertGreater(kotumser, temel)
+
+
+class ReferansPozisyonTesti(unittest.TestCase):
+    """Sabit referans varsaymak sonucu belirler - portfoyden turetilmeli."""
+
+    HEDEF = {"bist": 0.5, "nasdaq": 0.5}
+    SINIFLAR = {"A.IS": "bist", "B.IS": "bist", "QQQ": "nasdaq"}
+
+    def _portfoy(self, nakit=5000.0):
+        return Portfoy(
+            pozisyonlar=[PozisyonDegeri("A.IS", "A", "bist", 10, 4000, 5000)],
+            nakit_try=nakit, fiyatlanamayan=[])
+
+    def test_tutulan_varlikta_gercek_deger(self):
+        sonuc = referans_pozisyonlar(self._portfoy(), self.HEDEF, self.SINIFLAR, 3000)
+        self.assertEqual(sonuc["A.IS"], (5000.0, GERCEK))
+
+    def test_tutulmayan_varlikta_hedef_dagilim(self):
+        """Toplam 10.000, nasdaq hedefi %50, o sinifta tek sembol -> 5.000."""
+        sonuc = referans_pozisyonlar(self._portfoy(), self.HEDEF, self.SINIFLAR, 3000)
+        self.assertEqual(sonuc["QQQ"], (5000.0, HEDEF))
+        # bist hedefi %50 ama SINIFTA IKI sembol var -> pay bolunur.
+        self.assertEqual(sonuc["B.IS"], (2500.0, HEDEF))
+
+    def test_portfoy_bossa_yaml_yedegi(self):
+        bos = Portfoy(pozisyonlar=[], nakit_try=0.0, fiyatlanamayan=[])
+        sonuc = referans_pozisyonlar(bos, self.HEDEF, self.SINIFLAR, 3000)
+        self.assertEqual(sonuc["QQQ"], (3000.0, YEDEK))
+
+    def test_buyukluk_karari_degistirir(self):
+        """Ayni varlik, iki farkli buyuklukte iki farkli sonuc.
+
+        Bu testin varlik sebebi: sabit bir referans varsaymak, sonucu
+        olcmek yerine SECMEK olurdu.
+        """
+        ham = {
+            "maliyet": {
+                "sinif_profili": {"nasdaq": "abd"},
+                "islem": {"abd": {"komisyon_tip": "sabit", "komisyon_usd": 1.5,
+                                  "kur_cevrimi": True, "kur_spread_tek_yon": 0.004,
+                                  "kambiyo_vergisi": 0.0, "menkul_spread": 0.0}},
+                "tasima": {"QQQ": {"gider_orani_yillik": 0.0, "temettu_verimi": 0.0}},
+            },
+        }
+        model = modeli_kur(ham, {"QQQ": "nasdaq"})
+        kucuk = duyarliligi_olc(model, 0.03, {"QQQ": 2000.0}, 41.0)
+        buyuk = duyarliligi_olc(model, 0.03, {"QQQ": 20000.0}, 41.0)
+
+        self.assertTrue(kucuk.varliklar["QQQ"].ekonomik_degil)
+        self.assertTrue(kucuk.varliklar["QQQ"].buyutmek_ise_yarar)
+        self.assertFalse(buyuk.varliklar["QQQ"].ekonomik_degil)
+        self.assertIn("QQQ", kucuk.ekonomik_olmayanlar)
+        self.assertNotIn("QQQ", buyuk.ekonomik_olmayanlar)
+
+    def test_rapor_ekonomik_olmayanlari_ayri_yazar(self):
+        """Belirsizlikle ayni kutuya konmamali - cozumleri farkli."""
+        ham = {
+            "maliyet": {
+                "sinif_profili": {"nasdaq": "abd"},
+                "islem": {"abd": {"komisyon_tip": "sabit", "komisyon_usd": 1.5,
+                                  "kur_cevrimi": True, "kur_spread_tek_yon": 0.004,
+                                  "kambiyo_vergisi": 0.0, "menkul_spread": 0.0}},
+                "tasima": {"QQQ": {"gider_orani_yillik": 0.0, "temettu_verimi": 0.0}},
+            },
+        }
+        rapor = duyarliligi_olc(modeli_kur(ham, {"QQQ": "nasdaq"}), 0.03,
+                                {"QQQ": 2000.0}, 41.0)
+        metin = " ".join(ekonomik_olmayanlar_bolumu(rapor))
+        self.assertIn("Ekonomik olmayan pozisyonlar", metin)
+        self.assertIn("Minimum ekonomik", metin)
+        self.assertIn("QQQ", metin)
+        # Olculecek parametre YOK - belirsizlik listesine girmemeli.
+        self.assertEqual(rapor.olculmesi_gerekenler, [])
+
+
+class SembolBazliSpreadTesti(unittest.TestCase):
+    """Tek global spread, likiditesi farkli hisseleri ayni kefeye koyar."""
+
+    HAM = {
+        "maliyet": {
+            "sinif_profili": {"bist": "bist"},
+            "islem": {"bist": {"komisyon_tip": "oransal", "komisyon_oran": 0.001,
+                               "kur_cevrimi": False, "menkul_spread": 0.006}},
+            "sembol_spreadi": {"BUYUK.IS": 0.0005},
+            "tasima": {
+                "BUYUK.IS": {"gider_orani_yillik": 0.0, "temettu_verimi": 0.0},
+                "KUCUK.IS": {"gider_orani_yillik": 0.0, "temettu_verimi": 0.0},
+            },
+        },
+    }
+    SINIFLAR = {"BUYUK.IS": "bist", "KUCUK.IS": "bist"}
+
+    def test_sembol_spreadi_profili_ezer(self):
+        model = modeli_kur(self.HAM, self.SINIFLAR)
+        self.assertAlmostEqual(model.gidis_donus("BUYUK.IS", 10_000, 41.0),
+                               0.002 + 2 * 0.0005)
+        self.assertAlmostEqual(model.gidis_donus("KUCUK.IS", 10_000, 41.0),
+                               0.002 + 2 * 0.006)
+
+    def test_listede_olmayan_sembol_profili_kullanir(self):
+        model = modeli_kur(self.HAM, self.SINIFLAR)
+        profil_spreadi = model.varliklar["KUCUK.IS"].profil.menkul_spread
+        self.assertAlmostEqual(profil_spreadi, 0.006)
+
+    def test_sembol_spreadi_tahmin_olabilir(self):
+        ham = copy.deepcopy(self.HAM)
+        ham["maliyet"]["sembol_spreadi"]["BUYUK.IS"] = {
+            "tahmin": True, "iyimser": 0.0005, "temel": 0.001, "kotumser": 0.002}
+        model = modeli_kur(ham, self.SINIFLAR)
+        self.assertIn("bist.menkul_spread", model.varliklar["BUYUK.IS"].tahminler)
+        # Sembol bazli tahmin duyarlilikta da parametre adiyla gorunur.
+        rapor = duyarliligi_olc(model, 0.0035, {"BUYUK.IS": 10_000.0}, 41.0)
+        self.assertEqual(rapor.varliklar["BUYUK.IS"].belirsiz_parametreler,
+                         ["menkul_spread"])
+
+    def test_tanimsiz_sembol_yakalanir(self):
+        """`THYA0.IS` yazilsaydi sessizce profil degeri kullanilirdi."""
+        varliklar = gecici_yaz(
+            """
+ayarlar: {kur_sembolu: USDTRY=X, gecmis_gun: 365, islem_gunu_yil: 252}
+hedef_dagilim: {bist: 1.0}
+varliklar:
+  - {sembol: A.IS, ad: A, sinif: bist, kur: TRY}
+maliyet:
+  sembol_spreadi: {YOK.IS: 0.001}
+""",
+            ad="varliklar.yaml")
+        portfoy = gecici_yaz("nakit_try: 0\npozisyonlar: []\n", ad="portfoy.yaml")
+        with self.assertRaisesRegex(ValueError, "sembol_spreadi"):
+            yapilandirmayi_oku(varliklar_dosyasi=varliklar, portfoy_dosyasi=portfoy)
+
+
+class GercekYapilandirmaTesti(unittest.TestCase):
+    """varliklar.yaml gercekten cozuluyor mu - tahmin bloklari dahil.
+
+    Birim testler sentetik sozluklerle calisiyor; gercek dosyadaki bir girinti
+    hatasi ya da tanimsiz sembol yalnizca burada gorunur.
+    """
+
+    def test_yapilandirma_okunuyor(self):
+        yapilandirma = yapilandirmayi_oku()
+        maliyet = yapilandirma.maliyet
+        self.assertTrue(maliyet.varliklar)
+        # Tahminli alanlara dokunan yollarin hepsi patlamadan kosmali.
+        self.assertIsInstance(maliyet.engellenenler, dict)
+        self.assertIsInstance(maliyet.eksik_kalem_ozeti, dict)
+        for sembol in maliyet.varliklar:
+            maliyet.yillik_tasima(sembol)
+            maliyet.gidis_donus(sembol, 10_000, 41.0)
+            maliyet.minimum_pozisyon(sembol, 0.03, 41.0)
+
+    def test_duyarlilik_gercek_yapilandirmayla_kosuyor(self):
+        yapilandirma = yapilandirmayi_oku()
+        portfoy = Portfoy(pozisyonlar=[], nakit_try=20_000.0, fiyatlanamayan=[])
+        rapor = duyarliligi_olc(
+            yapilandirma.maliyet, yapilandirma.esikler.rebalancing_sapma,
+            referans_pozisyonlar(portfoy, yapilandirma.hedef_dagilim,
+                                 yapilandirma.sinif_haritasi,
+                                 yapilandirma.maliyet.referans_pozisyon_try),
+            41.0)
+        self.assertEqual(set(rapor.varliklar), set(yapilandirma.varliklar))
+        duyarlilik_bolumu(rapor, {})
+        ekonomik_olmayanlar_bolumu(rapor)
 
 
 if __name__ == "__main__":
