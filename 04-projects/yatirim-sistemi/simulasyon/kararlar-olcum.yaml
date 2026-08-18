@@ -1,0 +1,33 @@
+# MAKINE URETIMI - elle duzenleme.
+# karar_takip.py tarafindan yazilir. Kararlar icin kararlar.yaml'a bak.
+
+olcumler:
+- karar_id: 2026-08-13-acilis
+  gun: 5
+  olcum_tarihi: '2026-08-18'
+  portfoy_degeri: 20342.07
+  portfoy_getirisi: 0.00386
+  fiyatlar: {}
+  getiriler: {}
+- karar_id: 2026-08-13-asels-kisma
+  gun: 5
+  olcum_tarihi: '2026-08-18'
+  portfoy_degeri: 20342.07
+  portfoy_getirisi: 0.00386
+  fiyatlar:
+    ASELS.IS: 381.25
+    TUPRS.IS: 374.0
+  getiriler:
+    ASELS.IS: -0.036639
+    TUPRS.IS: 0.080925
+- karar_id: 2026-08-13-garan-tuprs
+  gun: 5
+  olcum_tarihi: '2026-08-18'
+  portfoy_degeri: 20342.07
+  portfoy_getirisi: 0.00386
+  fiyatlar:
+    GARAN.IS: 129.3
+    TUPRS.IS: 374.0
+  getiriler:
+    GARAN.IS: -0.002315
+    TUPRS.IS: 0.080925
