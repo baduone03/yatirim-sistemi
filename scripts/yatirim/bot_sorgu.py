@@ -434,6 +434,16 @@ def komut_param(baglam: Baglam, arguman: str) -> str:
                     f"{kacis(sembol)}: {tl(varlik.pozisyon_try)} - maliyet "
                     "tabani esigin ustunde, buyutmek ise yaramaz")
 
+    kapsam_disi = duyarlilik.kapsam_disi_tahminler
+    if kapsam_disi:
+        # "Karari cevirmiyor" bu kalemler icin "test edildi" DEMEK DEGIL -
+        # karar olcutune hic girmiyorlar. Yazilmazsa sinanmamis tahmin
+        # sinanmis gibi gorunur.
+        satirlar += ["", "<b>Duyarlilik testinin KAPSAMADIGI tahminler</b>",
+                     "Tasima maliyeti - net getiriyi etkiler, islem kapisini etkilemez:"]
+        satirlar += [f"- {kacis(parametre)}: {len(semboller)} varlik"
+                     for parametre, semboller in sorted(kapsam_disi.items())]
+
     engellenen = veri.maliyet.eksik_kalem_ozeti
     if engellenen:
         satirlar += ["", "<b>Hic tahmini olmayan (bloklu) kalemler</b>"]

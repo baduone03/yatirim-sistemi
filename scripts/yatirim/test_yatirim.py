@@ -3040,6 +3040,99 @@ class GercekYapilandirmaTesti(unittest.TestCase):
         ekonomik_olmayanlar_bolumu(rapor)
 
 
+
+class KapsamDisiTahminTesti(unittest.TestCase):
+    """Karar olcutune hic girmeyen tahminler ayri raporlanir.
+
+    "Sinandi ve gecti" ile "hic sinanmadi" ayni sey degil. Ayrim
+    yazilmazsa, sinanmamis bir tahminle acilan sinyal sinanmis sanilir -
+    ki BIST'in blokajini tam da temettu tahminleri kaldirdi.
+    """
+
+    HAM = {
+        "maliyet": {
+            "sinif_profili": {"bist": "bist"},
+            "islem": {"bist": {"komisyon_tip": "oransal", "komisyon_oran": 0.001,
+                               "kur_cevrimi": False, "menkul_spread": 0.0}},
+            "tasima": {
+                "A.IS": {
+                    "gider_orani_yillik": 0.0,
+                    "temettu_verimi": {"tahmin": True, "iyimser": 0.0,
+                                       "temel": 0.04, "kotumser": 0.15},
+                    "temettu_stopaji": {"tahmin": True, "iyimser": 0.10,
+                                        "temel": 0.15, "kotumser": 0.20},
+                },
+            },
+        },
+    }
+
+    def _rapor(self):
+        model = modeli_kur(self.HAM, {"A.IS": "bist"})
+        return duyarliligi_olc(model, 0.03, {"A.IS": 10_000.0}, 41.0)
+
+    def test_tasima_tahmini_karari_etkilemez(self):
+        """Temettu verimi %0 ile %15 arasinda oynasa da karar AYNI.
+
+        Cunku karar `gidis_donus` uzerinden veriliyor ve o hesapta tasima yok.
+        """
+        rapor = self._rapor()
+        varlik = rapor.varliklar["A.IS"]
+        self.assertTrue(varlik.dayanikli)
+        self.assertTrue(varlik.sinyal_acik)
+        self.assertEqual(rapor.olculmesi_gerekenler, [])
+
+    def test_kapsam_disi_ayri_listelenir(self):
+        rapor = self._rapor()
+        self.assertEqual(sorted(rapor.kapsam_disi_tahminler),
+                         ["temettu_stopaji", "temettu_verimi"])
+        self.assertEqual(rapor.kapsam_disi_tahminler["temettu_verimi"], ["A.IS"])
+
+    def test_islem_tahmini_kapsam_disina_girmez(self):
+        """Kur spread'i karar olcutune GIRER - kapsam disi listesinde olmamali."""
+        ham = copy.deepcopy(self.HAM)
+        ham["maliyet"]["islem"]["bist"]["menkul_spread"] = {
+            "tahmin": True, "iyimser": 0.001, "temel": 0.005, "kotumser": 0.02}
+        rapor = duyarliligi_olc(modeli_kur(ham, {"A.IS": "bist"}), 0.03,
+                                {"A.IS": 10_000.0}, 41.0)
+        self.assertNotIn("menkul_spread", rapor.kapsam_disi_tahminler)
+        self.assertIn("menkul_spread", dict(rapor.olculmesi_gerekenler))
+
+    def test_rapor_kapsam_disini_yazar(self):
+        metin = " ".join(duyarlilik_bolumu(self._rapor(), {}))
+        self.assertIn("KAPSAMADIGI tahminler", metin)
+        self.assertIn("temettu_verimi", metin)
+        self.assertIn("test edildi", metin)
+
+    def test_kapsam_disi_yoksa_bolum_yazilmaz(self):
+        ham = copy.deepcopy(self.HAM)
+        ham["maliyet"]["tasima"]["A.IS"] = {"gider_orani_yillik": 0.0,
+                                            "temettu_verimi": 0.0}
+        rapor = duyarliligi_olc(modeli_kur(ham, {"A.IS": "bist"}), 0.03,
+                                {"A.IS": 10_000.0}, 41.0)
+        self.assertEqual(rapor.kapsam_disi_tahminler, {})
+        self.assertNotIn("KAPSAMADIGI", " ".join(duyarlilik_bolumu(rapor, {})))
+
+
+class TumVarliklarOlculebilirTesti(unittest.TestCase):
+    """varliklar.yaml'da `null` maliyet kalemi KALMADI.
+
+    Bu test bir davranis kilidi: yeni bir varlik eklenip maliyet kalemi
+    doldurulmazsa burada patlar. Sessizce bloklu kalan bir varlik, raporda
+    tek satir olarak gorunur ve aylarca fark edilmez.
+    """
+
+    def test_hicbir_varlik_eksik_kalem_yuzunden_bloklu_degil(self):
+        engellenenler = yapilandirmayi_oku().maliyet.engellenenler
+        self.assertEqual(engellenenler, {},
+                         f"eksik maliyet kalemi olan varlik: {sorted(engellenenler)}")
+
+    def test_her_varlik_icin_gidis_donus_hesaplanabiliyor(self):
+        yapilandirma = yapilandirmayi_oku()
+        for sembol in yapilandirma.varliklar:
+            self.assertIsNotNone(
+                yapilandirma.maliyet.gidis_donus(sembol, 10_000, 41.0), sembol)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 

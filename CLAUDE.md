@@ -252,6 +252,23 @@ Bu vault'ta her token para. Ciktilari su kurallara gore uret:
   `taban` = pozisyondan BAGIMSIZ kisim (oransal komisyon + 2*kur spread +
   kambiyo vergisi + 2*menkul spread). Taban esigi asiyorsa `math.inf` doner -
   hicbir buyukluk yetmez, o varliktan cikmaktan baska secenek yok.
+- **duyarlilik testi TASIMA kalemlerini KAPSAMAZ**: karar olcutu
+  `gidis_donus`, o da yalnizca ISLEM maliyetini kullanir. Gider orani, temettu
+  verimi ve stopaj varligi TUTMANIN bedelidir, ALIP SATMANIN degil - uc
+  senaryoda kosulsalar da karari degistiremezler ve "hicbiri karari
+  cevirmiyor" satirina duserler. Bu, TEST EDILDIKLERI anlamina GELMEZ.
+  `DuyarlilikRaporu.kapsam_disi_tahminler` onlari ayri listeler. Ayrim onemli:
+  BIST'in blokajini tam da bu sinanmamis temettu tahminleri kaldirdi.
+- **`null` kalem KALMADI, hepsi tahmin**: 12 varligin tamami olculebilir.
+  `TumVarliklarOlculebilirTesti` bunu kilitliyor - yeni varlik eklenip maliyet
+  kalemi doldurulmazsa test patlar. Sessizce bloklu kalan varlik raporda tek
+  satir olur ve aylarca fark edilmez.
+- **`emtia_bilinmiyor.kur_cevrimi: false` bir VARSAYIM**: gram altin TL ile TR
+  platformundan alinir kabul edildi, kur marji saticinin TL fiyatina gomulu ve
+  `menkul_spread` araligi (0.0010-0.0080) bunu kapsiyor. USD hesaptan ABD
+  altin ETF'i alinacaksa `true` yapilmali VE `kur_spread_tek_yon` +
+  `kambiyo_vergisi` doldurulmali. Bool oldugu icin aralik alamaz - olcum degil
+  yapisal secim.
 - **sorgu botu SALT OKUNUR**: `bot_sorgu.py` `gecmisi_yaz` CAGIRMAZ. Cagirsaydi
   soru sormak latch'i ilerletir ve kimse islem yapmadan bekleme suresi baslardi.
   Yazdigi tek dosya `simulasyon/bot_offset.txt`.

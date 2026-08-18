@@ -127,12 +127,12 @@ def duyarlilik_bolumu(rapor: DuyarlilikRaporu,
     gerekenler = rapor.olculmesi_gerekenler
     if not gerekenler:
         satirlar += [
-            "Olculmesi gereken parametre yok: tahminli kalemlerin hicbiri karari "
-            "cevirmiyor. Genis aralikla bile karar ayni cikiyorsa o sayiyi olcmek "
-            "islem kararini degistirmez.",
+            "Olculmesi gereken parametre yok: karar olcutune giren tahminlerin "
+            "hicbiri karari cevirmiyor. Genis aralikla bile karar ayni cikiyorsa "
+            "o sayiyi olcmek islem kararini degistirmez.",
             "",
         ]
-        return satirlar
+        return satirlar + _kapsam_disi_satirlari(rapor)
 
     satirlar += [
         "### OLCULMESI GEREKEN PARAMETRELER",
@@ -154,7 +154,36 @@ def duyarlilik_bolumu(rapor: DuyarlilikRaporu,
         "girildiginde aralik tek sayiya iner ve varlik kendiliginden acilir.",
         "",
     ]
-    return satirlar
+    return satirlar + _kapsam_disi_satirlari(rapor)
+
+
+def _kapsam_disi_satirlari(rapor: DuyarlilikRaporu) -> list[str]:
+    """Karar olcutune hic girmeyen tahminler.
+
+    Yazilmazsa tablo bu kalemleri "sinandi ve gecti" gibi gosterir; oysa
+    hesaba hic girmediler. Ayrimi kaldirmak, sinanmamis bir tahminle acilan
+    bir sinyali sinanmis sanmak demek.
+    """
+    kapsam_disi = rapor.kapsam_disi_tahminler
+    if not kapsam_disi:
+        return []
+    return [
+        "### Duyarlilik testinin KAPSAMADIGI tahminler",
+        "",
+        "Bu kalemler karar olcutune (gidis-donus islem maliyeti) HIC GIRMIYOR: "
+        "tasima maliyetidir, yani varligi TUTMANIN bedeli, ALIP SATMANIN degil. "
+        "Uc senaryoda kosulsalar da karari degistiremezler - dolayisiyla "
+        "\"karari cevirmiyor\" demek onlar icin **test edildi** anlamina gelmez.",
+        "",
+        "Net getiri raporunu ETKILERLER; islem kapisini etkilemezler.",
+        "",
+        "| Parametre | Etkilenen varlik | Semboller |",
+        "|---|---:|---|",
+        *[f"| `{parametre}` | {len(semboller)} | "
+          + ", ".join(f"`{s}`" for s in semboller) + " |"
+          for parametre, semboller in sorted(kapsam_disi.items())],
+        "",
+    ]
 
 
 

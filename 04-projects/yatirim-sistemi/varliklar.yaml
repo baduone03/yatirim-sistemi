@@ -254,8 +254,25 @@ maliyet:
       # platformdan alinacagi kararlasmadi. Platform belli olunca bu blok
       # gercek tarifeyle degistirilir.
       komisyon_tip: oransal
-      komisyon_oran: null
-      kur_cevrimi: null            # platform TL mi USD mi bilinmiyor
+      komisyon_oran:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # CLAUDE TAHMINI - Dodo aralik vermedi, model bilgisinden
+        # Platform belli degil, aralik uc secenegi birden kapsiyor:
+        # kuyumcu/banka altin hesabinda ayri komisyon genelde YOK (0),
+        # araci kurum uzerinden sertifika/ETF'te hisse benzeri (~0.0015),
+        # bazi platformlarda daha yuksek.
+        iyimser: 0.0
+        temel: 0.0015
+        kotumser: 0.004
+
+      # YAPISAL SECIM, olcum DEGIL - aralik alamaz, bu yuzden tek deger.
+      # VARSAYIM: gram altin TL ile TR platformundan alinir. O durumda
+      # ayri bir kur cevrimi yoktur; saticinin TL fiyatina gomulu kur
+      # marji menkul_spread araliginin (0.0010-0.0080) icinde kalir.
+      # USD hesaptan ABD altin ETF'i alinacaksa BU DEGER true OLMALI ve
+      # kur_spread_tek_yon + kambiyo_vergisi doldurulmali.
+      kur_cevrimi: false
       menkul_spread:
         tahmin: true
         kaynak: "olculmedi-genis-aralik"
@@ -313,20 +330,84 @@ maliyet:
   tasima:
     THYAO.IS:
       gider_orani_yillik: 0.0      # hisse senedi, fon degil - yapisal sifir
-      temettu_verimi: null         # DOGRULANACAK
-      temettu_stopaji: null        # DOGRULANACAK
+      temettu_verimi:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # CLAUDE TAHMINI - Dodo aralik vermedi, model bilgisinden
+        # THY tarihsel olarak nakit temettu dagitmiyor; kotumser uc
+        # politika degisikligi ihtimali icin acik birakildi.
+        iyimser: 0.0
+        temel: 0.0
+        kotumser: 0.02
+      temettu_stopaji:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # CLAUDE TAHMINI - Dodo aralik vermedi, model bilgisinden
+        # TR gercek kisi temettu stopaji. Oran mevzuatla degisiyor -
+        # guncel tebligden DOGRULA, aralik bu belirsizlik icin genis.
+        iyimser: 0.1
+        temel: 0.15
+        kotumser: 0.2
     ASELS.IS:
       gider_orani_yillik: 0.0
-      temettu_verimi: null
-      temettu_stopaji: null
+      temettu_verimi:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # CLAUDE TAHMINI - Dodo aralik vermedi, model bilgisinden
+        # Savunma sanayii, karin buyuk kismi yatirima donuyor -
+        # dagitim var ama dusuk.
+        iyimser: 0.0
+        temel: 0.01
+        kotumser: 0.03
+      temettu_stopaji:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # CLAUDE TAHMINI - Dodo aralik vermedi, model bilgisinden
+        # TR gercek kisi temettu stopaji. Oran mevzuatla degisiyor -
+        # guncel tebligden DOGRULA, aralik bu belirsizlik icin genis.
+        iyimser: 0.1
+        temel: 0.15
+        kotumser: 0.2
     TUPRS.IS:
       gider_orani_yillik: 0.0
-      temettu_verimi: null
-      temettu_stopaji: null
+      temettu_verimi:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # CLAUDE TAHMINI - Dodo aralik vermedi, model bilgisinden
+        # Rafineri: yuksek ve COK oynak dagitici. Rafineri marji iyi
+        # gecen yilin verimi kotu yilin uc katina cikabiliyor.
+        iyimser: 0.02
+        temel: 0.06
+        kotumser: 0.15
+      temettu_stopaji:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # CLAUDE TAHMINI - Dodo aralik vermedi, model bilgisinden
+        # TR gercek kisi temettu stopaji. Oran mevzuatla degisiyor -
+        # guncel tebligden DOGRULA, aralik bu belirsizlik icin genis.
+        iyimser: 0.1
+        temel: 0.15
+        kotumser: 0.2
     GARAN.IS:
       gider_orani_yillik: 0.0
-      temettu_verimi: null
-      temettu_stopaji: null
+      temettu_verimi:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # CLAUDE TAHMINI - Dodo aralik vermedi, model bilgisinden
+        # Banka: duzenli dagitici ama oran BDDK/kar dagitim
+        # kisitlarina bagli olarak yillara gore degisiyor.
+        iyimser: 0.01
+        temel: 0.04
+        kotumser: 0.08
+      temettu_stopaji:
+        tahmin: true
+        kaynak: "olculmedi-genis-aralik"
+        # CLAUDE TAHMINI - Dodo aralik vermedi, model bilgisinden
+        # TR gercek kisi temettu stopaji. Oran mevzuatla degisiyor -
+        # guncel tebligden DOGRULA, aralik bu belirsizlik icin genis.
+        iyimser: 0.1
+        temel: 0.15
+        kotumser: 0.2
     QQQ:
       gider_orani_yillik: 0.0020   # Invesco QQQ gider orani %0.20
       temettu_verimi:

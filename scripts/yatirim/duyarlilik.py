@@ -29,7 +29,13 @@ from dataclasses import dataclass, field
 
 import math
 
-from maliyet import KOTUMSER, SENARYOLAR, TEMEL, MaliyetModeli
+from maliyet import (
+    KOTUMSER,
+    SENARYOLAR,
+    TAHMINLI_TASIMA_ALANLARI,
+    TEMEL,
+    MaliyetModeli,
+)
 
 ISLEM_MANTIKLI = "islem-mantikli"
 GERCEK = "gercek"          # pozisyon tutuluyor, degeri bu
@@ -52,6 +58,7 @@ class VarlikDuyarliligi:
     pozisyon_kaynagi: str = GERCEK
     minimum_pozisyon: float | None = None      # temel senaryo
     minimum_pozisyon_kotumser: float | None = None
+    kapsam_disi_parametreler: list[str] = field(default_factory=list)
 
     @property
     def tahminli(self) -> bool:
@@ -152,6 +159,26 @@ class DuyarlilikRaporu:
     @property
     def belirsizler(self) -> dict[str, VarlikDuyarliligi]:
         return {s: v for s, v in sorted(self.varliklar.items()) if not v.dayanikli}
+
+    @property
+    def kapsam_disi_tahminler(self) -> dict[str, list[str]]:
+        """Karar olcutune HIC GIRMEYEN tahminler: parametre -> varliklar.
+
+        Karar `gidis_donus` uzerinden veriliyor ve o hesap yalnizca ISLEM
+        maliyetini kullaniyor. Tasima kalemleri (gider orani, temettu verimi,
+        stopaj) bir varligin TUTULMA maliyetidir, ALIP SATMA maliyeti degil -
+        dolayisiyla "islem yapmaya deger mi" sorusunu degistiremezler.
+
+        Ayri raporlanmalari sart: uc senaryoda kosulup karari degistirmedikleri
+        icin "hicbiri karari cevirmiyor" satirina dusuyorlar ve test edilmis
+        gibi gorunuyorlar. Oysa test edilmediler, hesaba hic girmediler.
+        Bu kalemler net getiri raporunu etkiler, islem kapisini etkilemez.
+        """
+        kapsam_disi: dict[str, list[str]] = {}
+        for sembol, varlik in sorted(self.varliklar.items()):
+            for parametre in varlik.kapsam_disi_parametreler:
+                kapsam_disi.setdefault(parametre, []).append(sembol)
+        return kapsam_disi
 
     @property
     def ekonomik_olmayanlar(self) -> dict[str, VarlikDuyarliligi]:
@@ -281,12 +308,19 @@ def duyarliligi_olc(model: MaliyetModeli, esik: float,
                 sorumlular = sorted(
                     {ad.rsplit(".", 1)[-1] for ad in varlik.tahminler})
 
+        # Tasima tahminleri karar olcutune girmez - ayri raporlanir ki
+        # "sinanmadi" ile "sinandi ve gecti" birbirine karismasin.
+        kapsam_disi = sorted({
+            ad.rsplit(".", 1)[-1] for ad in varlik.tahminler
+            if ad.rsplit(".", 1)[-1] in TAHMINLI_TASIMA_ALANLARI})
+
         varliklar[sembol] = VarlikDuyarliligi(
             sembol=sembol, sinif=varlik.sinif, kararlar=kararlar,
             belirsiz_parametreler=sorumlular, maliyetler=maliyetler,
             pozisyon_try=pozisyon, pozisyon_kaynagi=kaynak,
             minimum_pozisyon=model.minimum_pozisyon(sembol, esik, usdtry, TEMEL),
             minimum_pozisyon_kotumser=model.minimum_pozisyon(
-                sembol, esik, usdtry, KOTUMSER))
+                sembol, esik, usdtry, KOTUMSER),
+            kapsam_disi_parametreler=kapsam_disi)
 
     return DuyarlilikRaporu(varliklar=varliklar, esik=esik)
