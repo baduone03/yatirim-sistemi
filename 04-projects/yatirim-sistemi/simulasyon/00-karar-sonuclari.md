@@ -1,6 +1,6 @@
 ---
 title: Karar Sonuclari
-date_created: 2026-08-18
+date_created: 2026-08-19
 tags: [yatirim, karar, olcum, geribildirim]
 status: active
 related: ["[[00-simulasyon]]", "[[00-sistem]]"]
@@ -18,7 +18,7 @@ Her karar **5/10/15/20/25/30.** gunlerde olculur. Esik tetiklensin veya tetiklen
 
 *Beklenti:* Portfoy volatilitesi (%15,6) en dusuk volatiliteli tekil varligin (QQQ) altinda kalacak - cesitlendirme calisiyorsa boyle olmali.
 
-Karar tarihi 2026-08-13 (5 gun once).
+Karar tarihi 2026-08-13 (6 gun once).
 
 | Gun | Tarih | Portfoy | Portfoy getirisi |
 |---|---|---|---|
@@ -32,7 +32,7 @@ Kalan kontrol gunleri: 10, 15, 20, 25, 30.
 
 *Beklenti:* TUPRS'un BIST bacagina ortalama korelasyonu 0,17 (GARAN 0,61 idi). Amac getiri degil risk: BIST bacak volatilitesi %29,2'den %26,9'a inmeli ve orada kalmali. TUPRS'un GARAN'i getiri olarak GECMESI beklenmiyor - geride kalirsa bile karar dogru olabilir, olcut volatilite.
 
-Karar tarihi 2026-08-13 (5 gun once).
+Karar tarihi 2026-08-13 (6 gun once).
 
 | Gun | Tarih | Portfoy | Portfoy getirisi | Satilan | Alinan | Takas farki |
 |---|---|---|---|---|---|---|
@@ -48,7 +48,7 @@ Kalan kontrol gunleri: 10, 15, 20, 25, 30.
 
 *Beklenti:* ASELS'in risk katkisi %20 tavaninin altina inip orada kalacak. ASELS +%10,2 yaptigi gun satildi; kazanandan satmak his olarak yanlis gelir. Eger ASELS bundan sonra da yukselirse bu karar GETIRI olarak kaybettirir ama RISK olarak dogru kalir. Ikisini ayri olc.
 
-Karar tarihi 2026-08-13 (5 gun once).
+Karar tarihi 2026-08-13 (6 gun once).
 
 | Gun | Tarih | Portfoy | Portfoy getirisi | Satilan | Alinan | Takas farki |
 |---|---|---|---|---|---|---|
