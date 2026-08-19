@@ -317,6 +317,18 @@ def uyarilari_topla(fiyatlar, portfoy, karar, maliyet, bayatlik,
             f"(tavan {karar.gunluk_maks}). Sinyal uretimi DURDURULDU - bu "
             "genellikle portfoyun degil verinin bozuk oldugunu gosterir.")
 
+    # Hurdle YEDEK kaynaktan geliyor. Bu satir bastirilamaz: yedek politika
+    # faizi mevduattan ~11 puan dusuk, yani gereken getiri citasi da o kadar
+    # DUSUK hesaplaniyor. Sessizce gevsemis bir cita, gevsemis olduguna dair
+    # hicbir isaret tasimayan bir citadir.
+    if maliyet is not None and maliyet.risksiz_yedege_dusuldu:
+        uyarilar.append(
+            f"Hurdle YEDEK kaynaktan: {maliyet.risksiz_kaynagi} "
+            f"(%{(maliyet.tl_risksiz_yillik or 0) * 100:.2f}). Birincil kaynak "
+            f"kullanilamadi. Gercek mevduat alternatifin bundan YUKSEK "
+            f"olabilir - o durumda cita oldugundan dusuk, varliklar "
+            f"oldugundan iyi gorunur.")
+
     # Hurdle rate durdurmayacak kadar ama guvenilecek kadar da taze degil.
     # Rapor uretiliyor; bayatligin GORUNMEMESI asil tehlike oldugu icin
     # gereken getiri / asiri getiri / nakit getirisi okunmadan once bu satir
@@ -324,12 +336,14 @@ def uyarilari_topla(fiyatlar, portfoy, karar, maliyet, bayatlik,
     if maliyet is not None and not maliyet.risksiz_taze_mi():
         yas = maliyet.risksiz_gun_yasi()
         if yas is not None:
+            sonrasi = ("bir sonraki kaynaga dusulur"
+                       if len(maliyet.risksiz_zincir) > 1 else "rapor uretilmez")
             uyarilar.append(
                 f"Hurdle rate {yas} GUNLUK ({maliyet.risksiz_serisi}, "
                 f"{maliyet.risksiz_tarih}) - taze esigi "
                 f"{maliyet.risksiz_bayatlik_gun} gun. Gereken getiri, asiri "
-                f"getiri ve nakit getirisi bu orandan turuyor; {maliyet.risksiz_durdurma_gun} "
-                "gunu asarsa rapor uretilmez.")
+                f"getiri ve nakit getirisi bu orandan turuyor; "
+                f"{maliyet.risksiz_durdurma_gun} gunu asarsa {sonrasi}.")
 
     engellenenler = maliyet.engellenenler if maliyet is not None else {}
     if engellenenler:

@@ -366,8 +366,12 @@ def maliyet_modelini_coz(yapilandirma: Yapilandirma, getir=http_json,
     # kullanilabilir oldugu surece alinir; kac gunluk oldugu tarihiyle birlikte
     # modele tasinir ve bayatlik kararini tek yerde `risksiz_durduruyor_mu`
     # verir.
+    # `birincil_seri`, o an KAZANAN kaynak degil zincirdeki ilk seri. Kazanana
+    # bakmak, ilan edilmis oran one gectiginde canli seriyi hic yenilememek
+    # demekti - seri sonsuza kadar bayat kalir ve zincir bir daha asla
+    # birinciye donemezdi.
     for alan, seri, esik, etiket in (
-        ("risksiz", model.risksiz_serisi, model.risksiz_durdurma_gun, "hurdle rate"),
+        ("risksiz", model.birincil_seri, model.risksiz_durdurma_gun, "hurdle rate"),
         ("enflasyon", model.enflasyon_serisi, model.enflasyon_bayatlik_gun, "enflasyon"),
     ):
         canli[alan] = tcmb_yuzde_orani(kayitlar, seri, esik, bugun) if seri else None
@@ -375,7 +379,7 @@ def maliyet_modelini_coz(yapilandirma: Yapilandirma, getir=http_json,
             uyarilar.append(
                 f"TCMB {seri} serisi yok veya {esik} gunden bayat - {etiket} "
                 "yapilandirmadaki yedek degerden alindi.")
-    return model.oranlarla(canli["risksiz"], canli["enflasyon"], uyarilar)
+    return model.oranlarla(canli["risksiz"], canli["enflasyon"], uyarilar, bugun)
 
 
 def fiyatlari_getir(yapilandirma: Yapilandirma,

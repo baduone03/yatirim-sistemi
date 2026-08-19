@@ -3620,3 +3620,91 @@ if __name__ == "__main__":
 
 
 
+
+
+class HurdleZinciriTesti(unittest.TestCase):
+    """Mevduat birincil, politika faizi yedek. Sira BILINCLI - bkz. varliklar.yaml."""
+
+    BUGUN = date(2026, 8, 19)
+
+    def _model(self, mevduat_tarih="2026-08-07", ppk="2026-09-10"):
+        return modeli_kur({"maliyet": {"firsat": {"kaynaklar": [
+            {"tur": "tcmb_serisi", "ad": "mevduat", "seri": "TP.TRY.MT02",
+             "oran": 0.4791, "tarih": mevduat_tarih,
+             "bayatlik_gun": 7, "durdurma_gun": 30},
+            {"tur": "ilan_edilmis", "ad": "politika faizi", "oran": 0.37,
+             "tarih": "2026-01-23", "sonraki_gozden_gecirme": ppk},
+        ]}}}, {}).zinciri_coz(self.BUGUN)
+
+    def test_birincil_kullanilabilirken_yedege_dusulmez(self):
+        m = self._model()
+        self.assertAlmostEqual(m.tl_risksiz_yillik, 0.4791)
+        self.assertFalse(m.risksiz_yedege_dusuldu)
+
+    def test_isaretleme_bandinda_hala_birincil_kazanir(self):
+        """12 gunluk mevduat ISARETLENIR ama yedege dusurmez."""
+        m = self._model(mevduat_tarih="2026-08-07")
+        self.assertFalse(m.risksiz_taze_mi(self.BUGUN))
+        self.assertFalse(m.risksiz_durduruyor_mu(self.BUGUN))
+        self.assertAlmostEqual(m.tl_risksiz_yillik, 0.4791)
+
+    def test_birincil_durdurma_esigini_asinca_yedege_dusulur(self):
+        m = self._model(mevduat_tarih="2026-06-01")      # 79 gun
+        self.assertAlmostEqual(m.tl_risksiz_yillik, 0.37)
+        self.assertTrue(m.risksiz_yedege_dusuldu)
+        self.assertFalse(m.risksiz_durduruyor_mu(self.BUGUN),
+                         "ilan edilmis oran gun sayarak bayat ilan edilemez")
+        self.assertIsNone(hurdle_engeli(m, "T", self.BUGUN))
+
+    def test_ilan_edilmis_oran_GUN_SAYARAK_bayatlamaz(self):
+        """Politika faizi 23.01.2026'dan beri ayni; gun sayan kural 200+ gun
+        bayat der ve saclamalar. Dogru soru 'hala yururlukte mi'."""
+        m = self._model(mevduat_tarih="2026-06-01")
+        yedek = m.risksiz_zincir[1]
+        self.assertEqual(yedek.gun_yasi(self.BUGUN), 208)
+        self.assertTrue(yedek.taze_mi(self.BUGUN))
+
+    def test_ppk_gecmisse_yedek_de_supheli_ve_rapor_durur(self):
+        m = self._model(mevduat_tarih="2026-06-01", ppk="2026-08-01")
+        self.assertTrue(m.risksiz_durduruyor_mu(self.BUGUN))
+        self.assertIsNotNone(hurdle_engeli(m, "T", self.BUGUN))
+
+    def test_tarihsiz_ppk_taze_sayilmaz(self):
+        m = self._model(mevduat_tarih="2026-06-01", ppk="")
+        self.assertTrue(m.risksiz_durduruyor_mu(self.BUGUN))
+
+    def test_yedege_dusulunce_uyari_gorunur(self):
+        m = self._model(mevduat_tarih="2026-06-01")
+        uyarilar = uyarilari_topla(None, None, None, m, None)
+        self.assertTrue([u for u in uyarilar if "YEDEK kaynaktan" in u],
+                        f"yedek uyarisi yok: {uyarilar}")
+
+    def test_birincil_seri_kazanan_degil_ILK_seridir(self):
+        """Kazanana bakilsaydi yedege dusuldugunde canli seri hic yenilenmez
+        ve zincir bir daha asla birinciye donemezdi."""
+        m = self._model(mevduat_tarih="2026-06-01")
+        self.assertTrue(m.risksiz_yedege_dusuldu)
+        self.assertEqual(m.birincil_seri, "TP.TRY.MT02")
+
+    def test_tumu_ilan_edilmis_zincir_reddedilir(self):
+        with self.assertRaises(ValueError) as baglam:
+            modeli_kur({"maliyet": {"firsat": {"kaynaklar": [
+                {"tur": "ilan_edilmis", "ad": "a", "oran": 0.37,
+                 "tarih": "2026-01-23", "sonraki_gozden_gecirme": "2026-09-10"},
+            ]}}}, {})
+        self.assertIn("en az bir", str(baglam.exception))
+
+    def test_taninmayan_tur_reddedilir(self):
+        with self.assertRaises(ValueError):
+            modeli_kur({"maliyet": {"firsat": {"kaynaklar": [
+                {"tur": "uydurma", "oran": 0.4},
+            ]}}}, {})
+
+    def test_gercek_yapilandirmada_zincir_var_ve_mevduat_birincil(self):
+        maliyet = yapilandirmayi_oku().maliyet
+        self.assertGreaterEqual(len(maliyet.risksiz_zincir), 2,
+                                "zincir tanimli degil")
+        self.assertEqual(maliyet.risksiz_zincir[0].tur, "tcmb_serisi",
+                         "birincil kaynak mevduat serisi olmali - politika "
+                         "faizi one alinirsa cita ~11 puan duser")
+        self.assertEqual(maliyet.risksiz_zincir[-1].tur, "ilan_edilmis")

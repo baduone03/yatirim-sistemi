@@ -361,6 +361,94 @@ class VarlikMaliyeti:
 # Model
 # --------------------------------------------------------------------------
 
+SERI = "tcmb_serisi"
+ILAN_EDILMIS = "ilan_edilmis"
+
+
+@dataclass(frozen=True)
+class HurdleKaynagi:
+    """Hurdle rate'in gelebilecegi TEK bir kaynak.
+
+    Iki tur var ve TAZELIK SORULARI FARKLI:
+
+    `tcmb_serisi` - duzenli yayimlanan bir olcum (mevduat faizi). Soru
+        "kac gunluk?". Yayim gecikirse deger eskir.
+
+    `ilan_edilmis` - PPK'nin ilan ettigi politika faizi. Soru "kac gunluk?"
+        DEGIL, "hala yururlukte mi?". Politika faizi 23.01.2026'dan beri
+        degismedi; gun sayan bir kural onu 200+ gun bayat ilan eder ve
+        saclamalar. Dogru kontrol takvim: bir sonraki PPK toplantisi gectigi
+        halde deger guncellenmemisse arada faiz karari GECMIS OLABILIR -
+        yani sayi gecikmis degil, YANLIS olabilir.
+    """
+
+    tur: str
+    ad: str
+    oran: float | None = None
+    tarih: str = ""                  # ISO. Seride yayim, ilanda yururluk.
+    seri: str = ""                   # yalnizca tcmb_serisi
+    bayatlik_gun: int = 7            # yalnizca tcmb_serisi
+    durdurma_gun: int = 30           # yalnizca tcmb_serisi
+    sonraki_gozden_gecirme: str = ""  # yalnizca ilan_edilmis (sonraki PPK)
+
+    def gun_yasi(self, bugun: date) -> int | None:
+        tarih = _iso(self.tarih)
+        return None if tarih is None else (bugun - tarih).days
+
+    def taze_mi(self, bugun: date) -> bool:
+        """Isaretlemesiz kullanilabilir mi?"""
+        if self.oran is None:
+            return False
+        if self.tur == ILAN_EDILMIS:
+            return not self._gozden_gecirme_gecti(bugun)
+        yas = self.gun_yasi(bugun)
+        return yas is not None and yas <= self.bayatlik_gun
+
+    def kullanilabilir_mi(self, bugun: date) -> bool:
+        """Isaretlenerek de olsa kullanilabilir mi? (durdurma esiginin altinda)"""
+        if self.oran is None:
+            return False
+        if self.tur == ILAN_EDILMIS:
+            # Ilan edilmis oranin "durdurma" bandi YOK: ya yururlukte ya degil.
+            # Ara bir bant uydurmak, gecmis bir PPK karari ihtimalini
+            # "biraz bayat" diye yumusatmak olurdu.
+            return not self._gozden_gecirme_gecti(bugun)
+        yas = self.gun_yasi(bugun)
+        return yas is not None and yas <= self.durdurma_gun
+
+    def _gozden_gecirme_gecti(self, bugun: date) -> bool:
+        sonraki = _iso(self.sonraki_gozden_gecirme)
+        if sonraki is None:
+            # Tarihsiz ilan TAZE SAYILMAZ - tarihsiz yedekle ayni kural.
+            # Ne zaman gozden gecirilecegi bilinmeyen bir orana guvenilemez.
+            return True
+        return bugun > sonraki
+
+    def gerekce(self, bugun: date) -> str:
+        if self.oran is None:
+            return "oran yok"
+        if self.tur == ILAN_EDILMIS:
+            if self._gozden_gecirme_gecti(bugun):
+                return (f"gozden gecirme tarihi gecti "
+                        f"({self.sonraki_gozden_gecirme or 'tarihsiz'})")
+            return f"yururlukte ({self.tarih}, sonraki {self.sonraki_gozden_gecirme})"
+        yas = self.gun_yasi(bugun)
+        if yas is None:
+            return "tarih yok"
+        if yas > self.durdurma_gun:
+            return f"{yas} gunluk, durdurma esigi {self.durdurma_gun}"
+        if yas > self.bayatlik_gun:
+            return f"{yas} gunluk, taze esigi {self.bayatlik_gun}"
+        return f"{yas} gunluk"
+
+
+def _iso(ham: str) -> date | None:
+    try:
+        return date.fromisoformat(str(ham))
+    except (TypeError, ValueError):
+        return None
+
+
 @dataclass(frozen=True)
 class MaliyetModeli:
     varliklar: dict[str, VarlikMaliyeti] = field(default_factory=dict)
@@ -370,6 +458,12 @@ class MaliyetModeli:
     risksiz_serisi: str = ""
     risksiz_bayatlik_gun: int = 7
     risksiz_durdurma_gun: int = 30
+    # Zincir: sirayla denenir, ilk KULLANILABILIR olan kazanir. Duz alanlar
+    # (yukaridaki risksiz_*) zincirin SONUCUDUR - kod geri kalani degismeden
+    # calissin diye korundu.
+    risksiz_zincir: tuple[HurdleKaynagi, ...] = ()
+    risksiz_yedege_dusuldu: bool = False
+    risksiz_secilen: HurdleKaynagi | None = None
     enflasyon_yillik: float | None = None
     enflasyon_kaynagi: str = "yapilandirma"
     enflasyon_serisi: str = ""
@@ -418,6 +512,9 @@ class MaliyetModeli:
         yazilmis bir yedegin ne zamandan kaldigi bilinmiyorsa guncel olduguna
         guvenilemez.
         """
+        bugun = bugun or date.today()
+        if self.risksiz_secilen is not None:
+            return self.risksiz_secilen.taze_mi(bugun)
         yas = self.risksiz_gun_yasi(bugun)
         return yas is not None and yas <= self.risksiz_bayatlik_gun
 
@@ -460,28 +557,94 @@ class MaliyetModeli:
         Asil korkulan sey bayatligin GORUNMEMESIYDI; cozumu susmak degil,
         isaretlemek.
         """
+        bugun = bugun or date.today()
+        if self.risksiz_secilen is not None:
+            # ZINCIR farkindadir: durdurma karari SECILEN kaynagin kendi
+            # semantigine gore verilir. Duz alanlara bakan bir kural,
+            # ilan edilmis orana dusuldugunde onu "209 gun bayat" ilan edip
+            # raporu durdururdu - oysa o oran tam da bayatlayamadigi icin
+            # yedek secilmisti.
+            return not self.risksiz_secilen.kullanilabilir_mi(bugun)
         yas = self.risksiz_gun_yasi(bugun)
         return yas is None or yas > self.risksiz_durdurma_gun
 
+    @property
+    def birincil_seri(self) -> str:
+        """Canli cekilecek seri kodu.
+
+        Zincirdeki ILK `tcmb_serisi` kaynagi - o an kazanan kaynak degil.
+        Kazanana bakmak, ilan edilmis oran one gectiginde canli seriyi hic
+        yenilememek demekti; seri sonsuza kadar bayat kalir ve zincir bir
+        daha asla birinciye donemezdi.
+        """
+        return next((k.seri for k in self.risksiz_zincir
+                     if k.tur == SERI and k.seri), self.risksiz_serisi)
+
+    def zinciri_coz(self, bugun: date | None = None) -> MaliyetModeli:
+        """Zincirden kazanani secip duz alanlara yazar.
+
+        Sirayla denenir, ilk KULLANILABILIR kaynak kazanir. Hicbiri
+        kullanilamazsa duz alanlar BIRINCININ degerleriyle doldurulur - boylece
+        `hurdle_engeli` dogru sebebi ve dogru tarihi raporlayabilir.
+
+        Birincil mevduat faizi, yedek politika faizi. Sira bilincli: hurdle'in
+        tanimi "bu parayi nakitte tutsam ne kazanirdim" ve gercek alternatif
+        MEVDUATTIR. Politika faizi (%37) mevduattan (~%48) belirgin dusuk;
+        onu birincil yapmak citayi ~11 puan indirir ve her varlik hicbir sey
+        degismeden daha iyi gorunur. Yedek olmasinin sebebi yapisal: ilan
+        edilmis oran bayatlayamaz, yani haftalik seri tumden koptugunda sistem
+        susmak yerine dusebilecegi bir zemin bulur.
+        """
+        if not self.risksiz_zincir:
+            return self
+        bugun = bugun or date.today()
+        kazanan = next((k for k in self.risksiz_zincir if k.kullanilabilir_mi(bugun)),
+                       None)
+        dustu = kazanan is not None and kazanan is not self.risksiz_zincir[0]
+        secilen = kazanan or self.risksiz_zincir[0]
+        return replace(
+            self,
+            tl_risksiz_yillik=secilen.oran,
+            risksiz_kaynagi=secilen.ad,
+            risksiz_tarih=secilen.tarih,
+            risksiz_serisi=secilen.seri,
+            risksiz_bayatlik_gun=secilen.bayatlik_gun,
+            risksiz_durdurma_gun=secilen.durdurma_gun,
+            risksiz_yedege_dusuldu=dustu,
+            risksiz_secilen=secilen,
+        )
+
     def oranlarla(self, risksiz: tuple[float, str] | None,
                   enflasyon: tuple[float, str] | None,
-                  uyarilar: list[str]) -> MaliyetModeli:
+                  uyarilar: list[str], bugun: date | None = None
+                  ) -> MaliyetModeli:
         """Canli okunan oranlarla YENI model doner - mevcut model degismez.
 
         Canli okuma basarisizsa yapilandirmadaki yedek deger korunur. TCMB'nin
         bir gunluk kesintisi hurdle rate'i sifirlamamali; sifirlarsa her
         pozitif getiri yeniden "basari" gorunur.
+
+        Canli deger zincirdeki ILGILI seri kaynagina yazilir, duz alanlara
+        DEGIL - secimi `zinciri_coz` yapar. Dogrudan duz alana yazmak, canli
+        deger durdurma esigini asmis olsa bile onu kazanan ilan ederdi.
         """
         yeni = replace(self, uyarilar=[*self.uyarilar, *uyarilar])
         if risksiz is not None:
-            yeni = replace(yeni, tl_risksiz_yillik=risksiz[0],
-                           risksiz_kaynagi=risksiz[1],
-                           risksiz_tarih=(risksiz[2] if len(risksiz) > 2
-                                          else yeni.risksiz_tarih))
+            tarih = risksiz[2] if len(risksiz) > 2 else ""
+            yazildi = False
+            zincir = []
+            for kaynak in yeni.risksiz_zincir:
+                if kaynak.tur == SERI and not yazildi:
+                    zincir.append(replace(kaynak, oran=risksiz[0],
+                                          ad=risksiz[1], tarih=tarih or kaynak.tarih))
+                    yazildi = True
+                else:
+                    zincir.append(kaynak)
+            yeni = replace(yeni, risksiz_zincir=tuple(zincir))
         if enflasyon is not None:
             yeni = replace(yeni, enflasyon_yillik=enflasyon[0],
                            enflasyon_kaynagi=enflasyon[1])
-        return yeni
+        return yeni.zinciri_coz(bugun)
 
     def sinyal_acik(self, sembol: str) -> bool:
         varlik = self.varliklar.get(sembol)
@@ -636,6 +799,52 @@ class MaliyetModeli:
         return varlik.profil.minimum_pozisyon(esik, usdtry, senaryo)
 
 
+def _zinciri_coz(firsat_ham: dict) -> tuple[HurdleKaynagi, ...]:
+    """`firsat.kaynaklar` -> zincir. Yoksa duz alanlardan TEK kaynak uretir.
+
+    Geriye donuk uyum bilincli: `kaynaklar` yazilmamis bir yapilandirma
+    eskisi gibi calisir. Zincir mekanizmasi eklemek, mevcut kurulumu
+    bozmadan yeni bir secenek acmali.
+    """
+    ham_liste = firsat_ham.get("kaynaklar")
+    if not ham_liste:
+        return (HurdleKaynagi(
+            tur=SERI,
+            ad=str(firsat_ham.get("tcmb_serisi", "")) or "yapilandirma",
+            oran=_sayi(firsat_ham.get("tl_risksiz_yillik")),
+            tarih=str(firsat_ham.get("tl_risksiz_tarih", "")),
+            seri=str(firsat_ham.get("tcmb_serisi", "")),
+            bayatlik_gun=int(firsat_ham.get("bayatlik_gun", 7)),
+            durdurma_gun=int(firsat_ham.get("durdurma_gun", 30)),
+        ),)
+
+    zincir = []
+    for sira, kayit in enumerate(ham_liste, 1):
+        tur = str(kayit.get("tur", "")).strip()
+        if tur not in (SERI, ILAN_EDILMIS):
+            raise ValueError(
+                f"varliklar.yaml -> maliyet.firsat.kaynaklar[{sira}].tur "
+                f"'{tur}' taninmiyor; '{SERI}' veya '{ILAN_EDILMIS}' olmali.")
+        zincir.append(HurdleKaynagi(
+            tur=tur,
+            ad=str(kayit.get("ad", "")) or tur,
+            oran=_sayi(kayit.get("oran")),
+            tarih=str(kayit.get("tarih", "")),
+            seri=str(kayit.get("seri", "")),
+            bayatlik_gun=int(kayit.get("bayatlik_gun", 7)),
+            durdurma_gun=int(kayit.get("durdurma_gun", 30)),
+            sonraki_gozden_gecirme=str(kayit.get("sonraki_gozden_gecirme", "")),
+        ))
+    if not any(k.tur == SERI for k in zincir):
+        # Tumu ilan edilmis olsaydi sistem hicbir zaman canli veri okumaz ve
+        # hurdle tamamen elle bakima kalirdi. En az bir olculen kaynak sart.
+        raise ValueError(
+            "varliklar.yaml -> maliyet.firsat.kaynaklar icinde en az bir "
+            f"'{SERI}' kaynagi olmali; hepsi elle girilirse hurdle rate "
+            "hicbir zaman canli dogrulanmaz.")
+    return tuple(zincir)
+
+
 def modeli_kur(ham: dict, sinif_haritasi: dict[str, str]) -> MaliyetModeli:
     """varliklar.yaml -> MaliyetModeli. Ag'a cikmaz, yalnizca ayristirir."""
     maliyet_ham = ham.get("maliyet") or {}
@@ -690,6 +899,7 @@ def modeli_kur(ham: dict, sinif_haritasi: dict[str, str]) -> MaliyetModeli:
         risksiz_serisi=str(firsat_ham.get("tcmb_serisi", "")),
         risksiz_bayatlik_gun=int(firsat_ham.get("bayatlik_gun", 7)),
         risksiz_durdurma_gun=int(firsat_ham.get("durdurma_gun", 30)),
+        risksiz_zincir=_zinciri_coz(firsat_ham),
         enflasyon_yillik=_sayi(enflasyon_ham.get("yillik")),
         enflasyon_serisi=str(enflasyon_ham.get("tcmb_serisi", "")),
         enflasyon_bayatlik_gun=int(enflasyon_ham.get("bayatlik_gun", 45)),
@@ -707,7 +917,7 @@ def modeli_kur(ham: dict, sinif_haritasi: dict[str, str]) -> MaliyetModeli:
             )
             for sinif, kayit in (maliyet_ham.get("tutma") or {}).items()
         },
-    )
+    ).zinciri_coz()
 
 
 def _sayi(deger) -> float | Tahmin | None:

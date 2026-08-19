@@ -481,3 +481,35 @@ Bu vault'ta her token para. Ciktilari su kurallara gore uret:
   gerekmiyor. Python'daki "pytest YOK, stdlib unittest" kuralinin karsiligi.
   Dizin yolu yerine DOSYA yolu ver (`worker.test.js`) - dizin bicimi bu Node
   surumunde modul cozumleme hatasi veriyor.
+- **hurdle ZINCIR: mevduat birincil, politika faizi yedek**
+  (`varliklar.yaml -> maliyet.firsat.kaynaklar`). Sira BILINCLI: hurdle'in
+  tanimi "bu parayi nakitte tutsam ne kazanirdim" ve gercek alternatif
+  MEVDUATTIR (%47.91). Politika faizi (%37.00) 11 puan dusuk; onu birincil
+  yapmak citayi sessizce indirir ve her varlik hicbir sey degismeden daha iyi
+  gorunur. Yedek olmasinin sebebi yapisal, degeri degil.
+- **iki kaynak turu, IKI FARKLI TAZELIK SORUSU**: `tcmb_serisi` -> "kac
+  gunluk?" (duzenli yayimlanan olcum). `ilan_edilmis` -> "hala yururlukte
+  mi?" (PPK karari; kontrol `sonraki_gozden_gecirme` tarihidir). Politika
+  faizi 23.01.2026'dan beri degismedi - gun sayan kural onu 208 gun bayat
+  ilan eder ve saclamalar. `ilan_edilmis`in ara "isaretleme" bandi YOK: ya
+  yururlukte ya degil; ara bant uydurmak, gecmis bir PPK karari ihtimalini
+  "biraz bayat" diye yumusatmak olurdu.
+- **`risksiz_durduruyor_mu` ZINCIR farkinda olmali**: duz alanlara bakan
+  surum, yedege dusuldugunde politika faizini "208 gun bayat" ilan edip
+  raporu durduruyordu - oysa o oran tam da bayatlayamadigi icin yedek
+  secilmisti. Karar `risksiz_secilen.kullanilabilir_mi()`ye delege edilir.
+- **`birincil_seri` KAZANAN kaynak degil, zincirdeki ILK seridir**: fetch
+  bunu ceker. Kazanana bakilsaydi ilan edilmis oran one gectiginde canli seri
+  hic yenilenmez, sonsuza kadar bayat kalir ve zincir bir daha asla birinciye
+  donemezdi.
+- **yedege dusus MUTLAKA uyari uretir** (`uyarilari_topla`): yedek oran
+  citayi 11 puan dusuruyor. Sessizce gevsemis bir cita, gevsemis olduguna
+  dair hicbir isaret tasimayan citadir.
+- **zincirde en az bir `tcmb_serisi` ZORUNLU** (`_zinciri_coz` dogrulamasi):
+  tumu elle girilmis olsaydi hurdle hicbir zaman canli dogrulanmaz, tamamen
+  elle bakima kalirdi.
+- **TLREF ve politika faizi CEKILEMIYOR** (2026-08 itibariyla): `evds2`
+  `/service/evds/series=...` WAF'in HTML'ini doner (anahtarli da), `evds3`
+  `/igmevdsms-dis/` altinda `sk-seriler` DISINDAKI tum yollar 403.
+  `sk-seriler`teki 10 serinin icindeki tek faiz serisi `TP.TRY.MT02`.
+  Bu yuzden politika faizi elle giriliyor; PPK takvimi yilda ~8 satir bakim.

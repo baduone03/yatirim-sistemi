@@ -541,6 +541,42 @@ maliyet:
     tl_risksiz_yillik: 0.4791      # TCMB TP.TRY.MT02
     tl_risksiz_tarih: "2026-08-07" # serinin YAYIM tarihi, yazildigi gun degil
 
+    # HURDLE ZINCIRI. Sirayla denenir, ilk KULLANILABILIR kaynak kazanir;
+    # hicbiri kullanilamazsa rapor uretilmez.
+    #
+    # SIRA BILINCLIDIR. Hurdle'in tanimi "bu parayi nakitte tutsam ne
+    # kazanirdim" ve senin gercek alternatifin MEVDUATTIR. Politika faizi
+    # (%37.00) mevduattan (~%47.91) 11 puan dusuk; onu birincil yapmak citayi
+    # sessizce indirir ve her varlik hicbir sey degismeden daha iyi gorunur.
+    #
+    # Politika faizi YEDEK olarak duruyor cunku yapisal olarak BAYATLAYAMAZ:
+    # ilan edilmis bir orandir, degismedikce gecerlidir. Haftalik seri tumden
+    # koptugunda sistem susmak yerine dusebilecegi bir zemin bulur.
+    #
+    # IKI FARKLI TAZELIK SORUSU:
+    #   tcmb_serisi   -> "kac gunluk?"      (duzenli yayimlanan olcum)
+    #   ilan_edilmis  -> "hala yururlukte mi?" (PPK karari)
+    # Politika faizi 23.01.2026'dan beri degismedi; gun sayan bir kural onu
+    # 200+ gun bayat ilan eder ve saclamalar.
+    kaynaklar:
+      - tur: tcmb_serisi
+        ad: "TCMB mevduat faizi (3 aya kadar vadeli)"
+        seri: "TP.TRY.MT02"
+        oran: 0.4791                 # canli okuma basarisizsa yedek
+        tarih: "2026-08-07"          # serinin YAYIM tarihi
+        bayatlik_gun: 7              # ustunde ISARETLENIR, rapor uretilir
+        durdurma_gun: 30             # ustunde bir sonraki kaynaga DUSULUR
+
+      - tur: ilan_edilmis
+        ad: "TCMB politika faizi (1 hafta repo)"
+        oran: 0.3700
+        tarih: "2026-01-23"          # bu oranin YURURLUK tarihi
+        # Bir sonraki PPK toplantisi. Bu tarih gecip oran guncellenmediyse
+        # kaynak SUPHELI sayilir - arada faiz karari gecmis OLABILIR, yani
+        # sayi gecikmis degil YANLIS olabilir. Takvim yilda ~8 toplanti:
+        # tcmb.gov.tr -> Para Politikasi -> PPK Toplanti Takvimi
+        sonraki_gozden_gecirme: "2026-09-10"
+
 # Nakit modellemesi.
 # Yatirilmamis TL sifir getiriyle DURMAZ; duruyormus gibi modellersen sistem
 # "nakitte beklemek maliyetsiz" sanir ve gereginden fazla islem onerir.
