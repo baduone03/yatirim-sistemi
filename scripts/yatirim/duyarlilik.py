@@ -43,15 +43,23 @@ from maliyet import (
 # --- Boyut 1: islem maliyeti (gidis-donus) ---
 ISLEM_MANTIKLI = "islem-mantikli"
 
-# --- Boyut 2: tasima maliyeti (basabas tutma suresi) ---
+# --- Boyut 2: tasima maliyeti (gereken getiri) ---
 TUTMA_MANTIKLI = "tutma-mantikli"
-TUTMA_UZUN = "basabas-planlanandan-uzun"
+BEKLENTI_YETERSIZ = "beyan-gerekenin-altinda"
+BEKLENTI_YOK = "beklenti-beyan-edilmemis"
+
+# Maliyetin gereken getiri icindeki payi bunun altindaysa baglayici kisit
+# maliyet DEGIL, TL risksiz getiridir. Komisyonu sifirlasan bile gereken
+# getiri neredeyse ayni kalir - maliyet optimizasyonu karari degistirmez.
+HURDLE_HAKIMIYET_ESIGI = 0.10
 
 # Bastirma sebebi kodlari. Sinyal modulu bunlari kendi etiketlerine cevirir;
 # duyarlilik modulu sinyal modulunu import ETMEZ (bagimlilik tek yonlu kalir).
 SEBEP_PARAMETRE = "parametre-belirsizligi"
 SEBEP_TASIMA = "tasima-belirsizligi"
 SEBEP_EKONOMIK = "maliyet-yutuyor"
+SEBEP_BEKLENTI_YOK = "beklenti-yok"
+SEBEP_BEKLENTI_YETERSIZ = "beklenti-yetersiz"
 
 # Hangi boyut hangi alanlari sinaniyor. Kapsam denetiminin dayanagi bu.
 BOYUT_ALANLARI = {
@@ -81,7 +89,9 @@ class VarlikDuyarliligi:
     minimum_pozisyon_kotumser: float | None = None
     kapsam_disi_parametreler: list[str] = field(default_factory=list)
     tutma_kararlari: dict[str, str] = field(default_factory=dict)
-    basabas: dict[str, float] = field(default_factory=dict)
+    gereken_getiri: dict[str, float] = field(default_factory=dict)
+    maliyet_paylari: dict[str, float] = field(default_factory=dict)
+    beklenti: float | None = None
     planlanan_yil: float | None = None
     tasima_belirsiz_parametreler: list[str] = field(default_factory=list)
 
@@ -100,17 +110,33 @@ class VarlikDuyarliligi:
 
     @property
     def tutma_dayanikli(self) -> bool:
-        """Basabas suresi UC senaryoda da planlanan sureden kisa mi?
+        """Beyan edilen beklenti UC senaryoda da gereken getirinin ustunde mi?
 
-        Tek senaryoda bile asiyorsa sinyal bastirilir: bir varligi
+        Tek senaryoda bile altina duserse sinyal bastirilir: bir varligi
         "muhtemelen" maliyetini cikaracak diye almak, maliyeti kesinlikle
-        odemek demektir. Boyut hic kosulamadiysa (tutma varsayimi yok)
-        DAYANIKLI SAYILMAZ - kosulmamis bir testi gecmis saymak, kapsami
-        oldugundan genis gostermenin en kolay yolu.
+        odemek demektir. Boyut hic kosulamadiysa DAYANIKLI SAYILMAZ -
+        kosulmamis bir testi gecmis saymak, kapsami oldugundan genis
+        gostermenin en kolay yolu.
         """
         if not self.tutma_kararlari:
             return False
         return set(self.tutma_kararlari.values()) == {TUTMA_MANTIKLI}
+
+    @property
+    def beklenti_beyan_edildi(self) -> bool:
+        return self.beklenti is not None
+
+    @property
+    def hurdle_hakim(self) -> bool:
+        """Baglayici kisit maliyet mi, TL risksiz getiri mi?
+
+        Maliyet payi esigin altindaysa maliyeti tamamen sifirlamak bile
+        gereken getiriyi kayda deger olcude dusurmez. O varlikta sorulacak
+        soru "daha ucuza nasil alirim" degil, "bu varlik mevduati gercekten
+        gecebilir mi".
+        """
+        pay = self.maliyet_paylari.get(TEMEL)
+        return pay is not None and pay < HURDLE_HAKIMIYET_ESIGI
 
     @property
     def tutma_olculdu(self) -> bool:
@@ -194,6 +220,11 @@ class VarlikDuyarliligi:
             return SEBEP_PARAMETRE
         if self.kararlar.get(TEMEL) != ISLEM_MANTIKLI:
             return SEBEP_EKONOMIK
+        kararlar = set(self.tutma_kararlari.values())
+        if kararlar == {BEKLENTI_YOK}:
+            return SEBEP_BEKLENTI_YOK
+        if kararlar == {BEKLENTI_YETERSIZ}:
+            return SEBEP_BEKLENTI_YETERSIZ
         return SEBEP_TASIMA
 
     @property
@@ -210,7 +241,14 @@ class VarlikDuyarliligi:
         if self.sinyal_acik:
             return "karar dayanikli"
         if not self.tutma_olculdu:
-            return "tutma varsayimi yok - basabas suresi olculemedi"
+            return "tutma plani yok - gereken getiri hesaplanamadi"
+        kararlar = set(self.tutma_kararlari.values())
+        if kararlar == {BEKLENTI_YOK}:
+            gereken = self.gereken_getiri.get(TEMEL)
+            return ("beklenti beyan edilmemis - gereken yillik getiri "
+                    + (f"%{gereken * 100:.1f}" if gereken is not None else "?"))
+        if kararlar == {BEKLENTI_YETERSIZ}:
+            return "beyan edilen beklenti gereken getirinin altinda"
         return ("tasima maliyeti belirsizligi: "
                 + ", ".join(self.tasima_belirsiz_parametreler))
 
@@ -240,6 +278,21 @@ class DuyarlilikRaporu:
         """Blokaji sinanmamis bir tahminle kalkan varliklar."""
         return {s: v for s, v in sorted(self.varliklar.items())
                 if v.dogrulanmamis_acilim}
+
+    @property
+    def beklenti_bekleyenler(self) -> dict[str, VarlikDuyarliligi]:
+        """Beklenti beyan edilmedigi icin sinyal uretmeyen varliklar."""
+        return {s: v for s, v in sorted(self.varliklar.items())
+                if v.tutma_olculdu and not v.beklenti_beyan_edildi}
+
+    @property
+    def beklentisi_yetersizler(self) -> dict[str, VarlikDuyarliligi]:
+        return {s: v for s, v in sorted(self.varliklar.items())
+                if set(v.tutma_kararlari.values()) == {BEKLENTI_YETERSIZ}}
+
+    @property
+    def hurdle_hakimler(self) -> dict[str, VarlikDuyarliligi]:
+        return {s: v for s, v in sorted(self.varliklar.items()) if v.hurdle_hakim}
 
     @property
     def tasima_belirsizleri(self) -> dict[str, list[str]]:
@@ -348,6 +401,9 @@ def kapsam_denetimi() -> list[str]:
     """
     kapsanan = set().union(*BOYUT_ALANLARI.values())
     ihlaller = []
+    # `beklenen_getiri_yillik` de sinyali bloke eder ama BEYANDIR: uc
+    # senaryosu olamaz, cunku sistem onu uretmiyor. Yapisal alanlarla ayni
+    # muafiyet - tahminle doldurulamayan bir alan, tahminle sinyal acamaz.
     for alan in BLOKE_EDEBILEN_ALANLAR:
         if alan in YAPISAL_ALANLAR or alan in kapsanan:
             continue
@@ -371,19 +427,20 @@ def _karar(model: MaliyetModeli, sembol: str, pozisyon_try: float,
 
 
 def _tutma_karari(model: MaliyetModeli, sembol: str, pozisyon_try: float,
-                  usdtry: float, planlanan_yil: float | None) -> str:
-    """Basabas tutma suresi planlanan sureyi asiyor mu?
+                  usdtry: float, senaryo: str = TEMEL) -> str:
+    """Beyan edilen beklenti, gereken getiriyi karsiliyor mu?
 
-    Asiyorsa varlik, tutmayi planladigin surede islem maliyetini CIKARMIYOR -
-    beklenen getiri gerceklesse bile. Sonsuz sure (payda <= 0) bu kontrolu
-    dogal olarak gecemez.
+    Sistem beklenen getiriyi URETMEZ; gerekeni HESAPLAR ve beyanla
+    karsilastirir. Beyan yoksa karsilastiracak bir sey de yoktur - sinyal
+    uretilmez ama gereken getiri yine de raporlanir, cunku asil bilgi odur.
     """
-    if planlanan_yil is None:
+    gereken = model.gereken_getiri(sembol, pozisyon_try, usdtry, senaryo)
+    if gereken is None:
         return OLCULEMEDI
-    sure = model.basabas_yil(sembol, pozisyon_try, usdtry)
-    if sure is None:
-        return OLCULEMEDI
-    return TUTMA_MANTIKLI if sure <= planlanan_yil else TUTMA_UZUN
+    beklenti = model.beklenti(sembol)
+    if beklenti is None:
+        return BEKLENTI_YOK
+    return TUTMA_MANTIKLI if beklenti >= gereken else BEKLENTI_YETERSIZ
 
 
 def _sorumlulari_bul(kararlar: dict[str, str], varlik, karar_fn,
@@ -475,24 +532,25 @@ def duyarliligi_olc(model: MaliyetModeli, esik: float,
             kararlar, varlik, lambda m: _karar(m, sembol, pozisyon, usdtry, esik),
             model)
 
-        # --- Boyut 2: basabas tutma suresi ---
+        # --- Boyut 2: gereken getiri ---
         planlanan = model.planlanan_yil(sembol)
         tutma_kararlari: dict[str, str] = {}
-        basabas: dict[str, float] = {}
-        if planlanan is not None:
-            for ad in SENARYOLAR:
-                sure = model.basabas_yil(sembol, pozisyon, usdtry, ad)
-                if sure is None:
-                    tutma_kararlari = {}
-                    basabas = {}
-                    break
-                basabas[ad] = sure
-                tutma_kararlari[ad] = (
-                    TUTMA_MANTIKLI if sure <= planlanan else TUTMA_UZUN)
+        gereken_getiri: dict[str, float] = {}
+        maliyet_paylari: dict[str, float] = {}
+        for ad in SENARYOLAR:
+            gereken = model.gereken_getiri(sembol, pozisyon, usdtry, ad)
+            if gereken is None:
+                tutma_kararlari, gereken_getiri, maliyet_paylari = {}, {}, {}
+                break
+            gereken_getiri[ad] = gereken
+            pay = model.maliyet_payi(sembol, pozisyon, usdtry, ad)
+            if pay is not None:
+                maliyet_paylari[ad] = pay
+            tutma_kararlari[ad] = _tutma_karari(
+                model.senaryoyla(ad), sembol, pozisyon, usdtry)
         tasima_sorumlulari = _sorumlulari_bul(
             tutma_kararlari, varlik,
-            lambda m: _tutma_karari(m, sembol, pozisyon, usdtry, planlanan),
-            model)
+            lambda m: _tutma_karari(m, sembol, pozisyon, usdtry), model)
 
         # Boyut 2 kosulamadiysa tasima tahminleri SINANMAMIS kalir; kosulduysa
         # kapsam icindedir. "Sinanmadi" ile "sinandi ve gecti" ayri seyler.
@@ -509,8 +567,9 @@ def duyarliligi_olc(model: MaliyetModeli, esik: float,
             minimum_pozisyon_kotumser=model.minimum_pozisyon(
                 sembol, esik, usdtry, KOTUMSER),
             kapsam_disi_parametreler=kapsam_disi,
-            tutma_kararlari=tutma_kararlari, basabas=basabas,
-            planlanan_yil=planlanan,
+            tutma_kararlari=tutma_kararlari,
+            gereken_getiri=gereken_getiri, maliyet_paylari=maliyet_paylari,
+            beklenti=model.beklenti(sembol), planlanan_yil=planlanan,
             tasima_belirsiz_parametreler=tasima_sorumlulari)
 
     return DuyarlilikRaporu(varliklar=varliklar, esik=esik)

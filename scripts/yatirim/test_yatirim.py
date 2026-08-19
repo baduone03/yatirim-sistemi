@@ -50,9 +50,11 @@ from duyarlilik import (
     BOYUT_ALANLARI,
     GERCEK,
     HEDEF,
+    BEKLENTI_YETERSIZ,
+    BEKLENTI_YOK,
+    HURDLE_HAKIMIYET_ESIGI,
     SEBEP_TASIMA,
     TUTMA_MANTIKLI,
-    TUTMA_UZUN,
     YEDEK,
     kapsam_denetimi,
     ISLEM_MANTIKLI,
@@ -67,6 +69,7 @@ from fetch import (
     kurumsal_olay_supheleri,
 )
 from kaynaklar import (
+    TcmbKaydi,
     DURDUR,
     OLCULEMEDI,
     PRIM,
@@ -83,8 +86,10 @@ from kaynaklar import (
 )
 from kurumsal_olay import KurumsalOlay, olaylari_oku
 from ledger import durumu_hesapla, islemleri_oku
+from main import hurdle_engeli  # noqa: E402
 from maliyet import (
     BLOKE_EDEBILEN_ALANLAR,
+    TEMEL,
     TAHMINLI_ISLEM_ALANLARI,
     TAHMINLI_TASIMA_ALANLARI,
     YAPISAL_ALANLAR,
@@ -143,7 +148,7 @@ from portfolio import (
     sinif_sapmalari,
 )
 from rapor_maliyet import (
-    basabas_bolumu,
+    gereken_getiri_bolumu,
     duyarlilik_bolumu,
     kapsam_dokumu_bolumu,
     ekonomik_olmayanlar_bolumu,
@@ -166,6 +171,8 @@ from risk import (
 )
 from sinyal import (
     ARTIR,
+    BEKLENTI_YETERSIZ as SINYAL_BEKLENTI_YETERSIZ,
+    BEKLENTI_YOK as SINYAL_BEKLENTI_YOK,
     MALIYET_YUTUYOR,
     PARAMETRE_BELIRSIZLIGI,
     TASIMA_BELIRSIZLIGI,
@@ -1716,7 +1723,7 @@ class TcmbOranTesti(unittest.TestCase):
 
     def test_yuzde_ondalik_orana_cevrilir(self):
         """47.91 yuzdedir; 47.91 kat getiri degil %47.91."""
-        oran, kaynak = tcmb_yuzde_orani(
+        oran, kaynak, tarih = tcmb_yuzde_orani(
             self._kayitlar(), "TP.TRY.MT02", 21, date(2026, 8, 17))
         self.assertAlmostEqual(oran, 0.4791)
         self.assertIn("TP.TRY.MT02", kaynak)
@@ -3238,99 +3245,234 @@ class KapsamDenetimiTesti(unittest.TestCase):
         self.assertIn("yeni_gizli_alan", ihlaller[0])
 
 
-class BasabasDuyarliligiTesti(unittest.TestCase):
-    """Ikinci boyut: tasima parametreleri basabas suresini nasil oynatiyor."""
+class GerekenGetiriTesti(unittest.TestCase):
+    """Ikinci boyut: sistem beklenen getiri URETMEZ, gerekeni HESAPLAR."""
 
     SINIFLAR = {"A.IS": "bist"}
     ESIK = 0.03
+    RISKSIZ = 0.48
 
-    def _ham(self, verim, stopaj=(0.10, 0.15, 0.20), planlanan=1.0,
-             beklenen=0.65):
-        def tahmin(ucer):
-            return {"tahmin": True, "iyimser": ucer[0], "temel": ucer[1],
-                    "kotumser": ucer[2]}
+    def _ham(self, beklenti=None, planlanan=1.0, verim=(0.0, 0.02, 0.04),
+             komisyon=0.0015, spread=0.001):
+        tutma = {"planlanan_yil": planlanan}
+        if beklenti is not None:
+            tutma["beklenen_getiri_yillik"] = beklenti
+            tutma["kaynak"] = "kullanici-beyani"
         return {
             "maliyet": {
                 "sinif_profili": {"bist": "bist"},
                 "islem": {"bist": {"komisyon_tip": "oransal",
-                                   "komisyon_oran": 0.0015,
+                                   "komisyon_oran": komisyon,
                                    "kur_cevrimi": False,
-                                   "menkul_spread": 0.001}},
-                "tasima": {"A.IS": {"gider_orani_yillik": 0.0,
-                                    "temettu_verimi": tahmin(verim),
-                                    "temettu_stopaji": tahmin(stopaj)}},
-                "firsat": {"tl_risksiz_yillik": 0.48},
-                "tutma": {"bist": {"planlanan_yil": planlanan,
-                                   "beklenen_getiri_yillik": beklenen}},
+                                   "menkul_spread": spread}},
+                "tasima": {"A.IS": {
+                    "gider_orani_yillik": 0.0,
+                    "temettu_verimi": {"tahmin": True, "iyimser": verim[0],
+                                       "temel": verim[1], "kotumser": verim[2]},
+                    "temettu_stopaji": 0.15}},
+                "firsat": {"tl_risksiz_yillik": self.RISKSIZ,
+                           "tl_risksiz_tarih": "2026-08-17"},
+                "tutma": tutma and {"bist": tutma},
             },
         }
 
+    def _model(self, **kwargs):
+        return modeli_kur(self._ham(**kwargs), self.SINIFLAR)
+
     def _rapor(self, **kwargs):
-        model = modeli_kur(self._ham(**kwargs), self.SINIFLAR)
-        return duyarliligi_olc(model, self.ESIK, {"A.IS": 10_000.0}, 41.0)
+        return duyarliligi_olc(self._model(**kwargs), self.ESIK,
+                               {"A.IS": 10_000.0}, 41.0)
 
-    def test_basabas_uc_senaryoda_da_kisaysa_sinyal(self):
-        varlik = self._rapor(verim=(0.0, 0.02, 0.04)).varliklar["A.IS"]
-        self.assertTrue(varlik.tutma_olculdu)
-        self.assertTrue(varlik.tutma_dayanikli)
-        self.assertTrue(varlik.sinyal_acik)
-        self.assertEqual(varlik.etiket, "karar dayanikli")
-        self.assertEqual(set(varlik.tutma_kararlari.values()), {TUTMA_MANTIKLI})
+    def test_gereken_getiri_formulu(self):
+        """gereken = risksiz + tasima + gidis_donus / planlanan_yil
 
-    def test_basabas_bir_senaryoda_asarsa_bastiriliyor(self):
-        """Beklenen getiri risksize cok yakin -> kotumser temettu payda'yi
-        negatife itiyor ve basabas SONSUZ oluyor."""
-        rapor = self._rapor(verim=(0.0, 0.02, 0.30), beklenen=0.50)
+        Formulun her girdisi olculebilir; hicbiri fiyat tahmini degil.
+        """
+        model = self._model(planlanan=2.0)
+        gidis_donus = model.gidis_donus("A.IS", 10_000.0, 41.0)
+        tasima = model.yillik_tasima("A.IS")
+        beklenen = self.RISKSIZ + tasima + gidis_donus / 2.0
+
+        self.assertAlmostEqual(model.gereken_getiri("A.IS", 10_000.0, 41.0),
+                               beklenen)
+
+        # Islem maliyeti planlanan sureye YAYILIR: uzun plan gerekeni dusurur.
+        kisa = self._model(planlanan=1.0).gereken_getiri("A.IS", 10_000.0, 41.0)
+        uzun = self._model(planlanan=5.0).gereken_getiri("A.IS", 10_000.0, 41.0)
+        self.assertGreater(kisa, uzun)
+        self.assertAlmostEqual(kisa - uzun, gidis_donus * (1 / 1.0 - 1 / 5.0))
+
+        # Gereken getiri risksizin ALTINA inemez - maliyet negatif olamaz.
+        self.assertGreaterEqual(uzun, self.RISKSIZ)
+
+    def test_gereken_getiri_basabasin_tersi(self):
+        """Cebirsel ozdeslik: beyan tam gerekene esitse basabas = planlanan."""
+        model = self._model(planlanan=2.0)
+        gereken = model.gereken_getiri("A.IS", 10_000.0, 41.0)
+        beyanli = self._model(beklenti=gereken, planlanan=2.0)
+        self.assertAlmostEqual(beyanli.basabas_yil("A.IS", 10_000.0, 41.0), 2.0,
+                               places=9)
+
+    def test_beklenti_null_ise_sinyal_yok(self):
+        """Sistemin bu sayiyi uydurmasi fiyat tahmini uretmek olurdu."""
+        rapor = self._rapor(beklenti=None)
         varlik = rapor.varliklar["A.IS"]
 
-        self.assertTrue(varlik.tutma_olculdu)
-        self.assertFalse(varlik.tutma_dayanikli)
+        self.assertFalse(varlik.beklenti_beyan_edildi)
         self.assertFalse(varlik.sinyal_acik)
-        self.assertIn(TUTMA_UZUN, varlik.tutma_kararlari.values())
+        self.assertFalse(rapor.sinyal_acik_mi("A.IS"))
+        self.assertEqual(set(varlik.tutma_kararlari.values()), {BEKLENTI_YOK})
+        # Gereken getiri YINE DE hesaplanir - asil bilgi odur.
+        self.assertIn(TEMEL, varlik.gereken_getiri)
+        self.assertIn("gereken yillik getiri", varlik.etiket)
+        self.assertIn("A.IS", rapor.beklenti_bekleyenler)
+
+        karar = karar_ver(risk=_riskler(VarlikRiski("A.IS", 0.3, -0.2, 0.9, 0.5)),
+                          duyarlilik=rapor)
+        self.assertEqual(karar.sonuc(SEMBOL, "A.IS").sebep, SINYAL_BEKLENTI_YOK)
+
+    def test_beyan_gereken_altindaysa_bastiriliyor(self):
+        model = self._model()
+        gereken = model.gereken_getiri("A.IS", 10_000.0, 41.0)
+
+        dusuk = self._rapor(beklenti=gereken - 0.05)
+        varlik = dusuk.varliklar["A.IS"]
+        self.assertFalse(varlik.sinyal_acik)
+        self.assertEqual(set(varlik.tutma_kararlari.values()),
+                         {BEKLENTI_YETERSIZ})
+        self.assertEqual(varlik.etiket,
+                         "beyan edilen beklenti gereken getirinin altinda")
+        self.assertIn("A.IS", dusuk.beklentisi_yetersizler)
+
+        karar = karar_ver(risk=_riskler(VarlikRiski("A.IS", 0.3, -0.2, 0.9, 0.5)),
+                          duyarlilik=dusuk)
+        self.assertEqual(karar.sonuc(SEMBOL, "A.IS").sebep,
+                         SINYAL_BEKLENTI_YETERSIZ)
+
+        # Yeterli beyan -> sinyal acilir.
+        yuksek = self._rapor(beklenti=gereken + 0.10)
+        self.assertTrue(yuksek.varliklar["A.IS"].sinyal_acik)
+        self.assertEqual(yuksek.varliklar["A.IS"].etiket, "karar dayanikli")
+
+    def test_beyan_senaryolar_arasinda_kalirsa_tasima_belirsizligi(self):
+        """Iyimserde yetiyor, kotumserde yetmiyor -> hangi parametre sorumlu."""
+        model = self._model(verim=(0.0, 0.02, 0.40))
+        iyimser = model.gereken_getiri("A.IS", 10_000.0, 41.0, "iyimser")
+        kotumser = model.gereken_getiri("A.IS", 10_000.0, 41.0, "kotumser")
+        self.assertLess(iyimser, kotumser)
+
+        rapor = self._rapor(beklenti=(iyimser + kotumser) / 2,
+                            verim=(0.0, 0.02, 0.40))
+        varlik = rapor.varliklar["A.IS"]
+        self.assertFalse(varlik.tutma_dayanikli)
         self.assertIn("tasima maliyeti belirsizligi", varlik.etiket)
         self.assertIn("temettu_verimi", varlik.tasima_belirsiz_parametreler)
         self.assertIn("temettu_verimi", rapor.tasima_belirsizleri)
 
-        # Islem boyutu SORUNSUZ - iki boyut birbirinden bagimsiz.
-        self.assertTrue(varlik.dayanikli)
-        self.assertEqual(varlik.kararlar.get("temel"), ISLEM_MANTIKLI)
+    def test_maliyet_payi_hesabi(self):
+        """pay = (tasima + gidis_donus/planlanan) / gereken"""
+        model = self._model(planlanan=1.0)
+        tasima = model.yillik_tasima("A.IS")
+        gidis_donus = model.gidis_donus("A.IS", 10_000.0, 41.0)
+        gereken = model.gereken_getiri("A.IS", 10_000.0, 41.0)
 
-    def test_bastirma_sebebi_tasima_olarak_isaretlenir(self):
-        rapor = self._rapor(verim=(0.0, 0.02, 0.30), beklenen=0.50)
-        self.assertEqual(rapor.sebep_kodu("A.IS"), SEBEP_TASIMA)
+        pay = model.maliyet_payi("A.IS", 10_000.0, 41.0)
+        self.assertAlmostEqual(pay, (tasima + gidis_donus) / gereken)
+        # Ozdeslik: risksiz payi + maliyet payi = 1
+        self.assertAlmostEqual(pay + self.RISKSIZ / gereken, 1.0)
 
-        karar = karar_ver(risk=_riskler(VarlikRiski("A.IS", 0.3, -0.2, 0.9, 0.5)),
-                          duyarlilik=rapor)
-        sonuc = karar.sonuc(SEMBOL, "A.IS")
-        self.assertFalse(sonuc.acik)
-        self.assertEqual(sonuc.sebep, TASIMA_BELIRSIZLIGI)
-        self.assertIn("temettu_verimi", sonuc.etiket)
+        varlik = self._rapor().varliklar["A.IS"]
+        self.assertAlmostEqual(varlik.maliyet_paylari[TEMEL], pay)
 
-    def test_tutma_varsayimi_yoksa_boyut_kosmaz(self):
-        ham = self._ham(verim=(0.0, 0.02, 0.04))
-        del ham["maliyet"]["tutma"]
-        rapor = duyarliligi_olc(modeli_kur(ham, self.SINIFLAR), self.ESIK,
-                                {"A.IS": 10_000.0}, 41.0)
-        varlik = rapor.varliklar["A.IS"]
+    def test_hurdle_hakimiyeti_isaretlenir(self):
+        """Pay %10'un altindaysa baglayici kisit maliyet DEGIL, risksiz oran."""
+        ucuz = self._rapor(komisyon=0.0005, spread=0.0002).varliklar["A.IS"]
+        self.assertLess(ucuz.maliyet_paylari[TEMEL], HURDLE_HAKIMIYET_ESIGI)
+        self.assertTrue(ucuz.hurdle_hakim)
 
-        self.assertFalse(varlik.tutma_olculdu)
-        # Kosulmamis bir testi gecmis saymamak icin sinyal ACIK kalir ama
-        # tasima tahminleri KAPSAM DISI isaretlenir ve acilim dogrulanmamis olur.
-        self.assertIn("temettu_verimi", varlik.kapsam_disi_parametreler)
-        self.assertTrue(varlik.dogrulanmamis_acilim)
-        self.assertIn("A.IS", rapor.dogrulanmamis_acilimlar)
+        pahali = self._rapor(komisyon=0.03, spread=0.02).varliklar["A.IS"]
+        self.assertGreater(pahali.maliyet_paylari[TEMEL], HURDLE_HAKIMIYET_ESIGI)
+        self.assertFalse(pahali.hurdle_hakim)
 
-    def test_payda_negatifse_basabas_sonsuz(self):
-        """Beklenen getiri risksizin ALTINDA - varlik maliyetini hic cikarmaz."""
-        model = modeli_kur(self._ham(verim=(0.0, 0.0, 0.0), beklenen=0.30),
-                           self.SINIFLAR)
-        self.assertEqual(model.basabas_yil("A.IS", 10_000.0, 41.0), math.inf)
+        metin = " ".join(gereken_getiri_bolumu(
+            self._rapor(komisyon=0.0005, spread=0.0002)))
+        self.assertIn("Baglayici kisit: TL risksiz getiri", metin)
+        self.assertIn("karari degistirmez", metin)
 
-    def test_rapor_basabas_bolumunu_yazar(self):
-        metin = " ".join(basabas_bolumu(self._rapor(verim=(0.0, 0.02, 0.04))))
-        self.assertIn("Basabas tutma suresi", metin)
+    def test_beklenti_yapisal_alan_kapsam_disi_degil(self):
+        """Beyan tahminle DOLDURULAMAZ, yani tahminle sinyal de ACAMAZ.
+
+        Kapsam denetiminin muafiyeti bu gerekceye dayaniyor.
+        """
+        self.assertIn("beklenen_getiri_yillik", YAPISAL_ALANLAR)
+        self.assertEqual(kapsam_denetimi(), [])
+
+    def test_rapor_gereken_getiriyi_varlik_basina_yazar(self):
+        metin = " ".join(gereken_getiri_bolumu(self._rapor()))
+        self.assertIn("Gereken getiri", metin)
         self.assertIn("A.IS", metin)
-        self.assertIn("BEYANDIR", metin)
+        self.assertIn("BEYAN YOK", metin)
+        self.assertIn("TAHMIN ETMEZ", metin)
+
+
+class HurdleTazeligiTesti(unittest.TestCase):
+    """Bayat hurdle rate eksik olmaktan tehlikeli: eksiklik gorunur, bayatlik gorunmez."""
+
+    def _model(self, tarih="2026-08-17", oran=0.48, esik=7):
+        return modeli_kur({
+            "maliyet": {"firsat": {"tl_risksiz_yillik": oran,
+                                   "tl_risksiz_tarih": tarih,
+                                   "bayatlik_gun": esik}},
+        }, {})
+
+    def test_tl_risksiz_bayat_ise_rapor_yok(self):
+        bugun = date(2026, 8, 19)
+        taze = self._model(tarih="2026-08-17")
+        bayat = self._model(tarih="2026-08-01")
+
+        self.assertTrue(taze.risksiz_taze_mi(bugun))
+        self.assertFalse(bayat.risksiz_taze_mi(bugun))
+
+        self.assertIsNone(hurdle_engeli(taze, "Test", bugun))
+        engel = hurdle_engeli(bayat, "Test", bugun)
+        self.assertIsNotNone(engel)
+        self.assertIn("BAYAT", engel.gerekce)
+        self.assertIn("RAPOR URETILMEDI", engel.mesaj)
+        self.assertIn("2026-08-01", engel.mesaj)
+
+    def test_tarihsiz_yedek_taze_sayilmaz(self):
+        """Elle yazilmis bir sayinin ne zamandan kaldigi bilinmiyorsa guvenilmez."""
+        model = self._model(tarih="")
+        self.assertFalse(model.risksiz_taze_mi(date(2026, 8, 19)))
+        self.assertIsNotNone(hurdle_engeli(model, "Test", date(2026, 8, 19)))
+
+    def test_oran_yoksa_da_engel(self):
+        model = self._model(oran=None, tarih="2026-08-19")
+        engel = hurdle_engeli(model, "Test", date(2026, 8, 19))
+        self.assertIn("yok", engel.gerekce)
+        self.assertNotIn("BAYAT", engel.mesaj)
+
+    def test_esik_tam_sinirda_taze(self):
+        model = self._model(tarih="2026-08-12", esik=7)
+        self.assertTrue(model.risksiz_taze_mi(date(2026, 8, 19)))
+        self.assertFalse(model.risksiz_taze_mi(date(2026, 8, 20)))
+
+    def test_tcmb_orani_tarihi_de_tasir(self):
+        """Tarih modele kadar gelmezse bayatlik hic olculemez."""
+        kayitlar = {"S": TcmbKaydi(seri="S", deger=47.91, tarih=date(2026, 8, 17))}
+        sonuc = tcmb_yuzde_orani(kayitlar, "S", 21, date(2026, 8, 19))
+        self.assertEqual(len(sonuc), 3)
+        self.assertEqual(sonuc[2], "2026-08-17")
+
+        model = self._model(tarih="2026-01-01").oranlarla(sonuc, None, [])
+        self.assertEqual(model.risksiz_tarih, "2026-08-17")
+        self.assertTrue(model.risksiz_taze_mi(date(2026, 8, 19)))
+
+    def test_gercek_yapilandirmada_tarih_var(self):
+        """Yedek degerin tarihi yazilmamissa sistem hicbir zaman rapor uretmez."""
+        maliyet = yapilandirmayi_oku().maliyet
+        self.assertTrue(maliyet.risksiz_tarih, "tl_risksiz_tarih bos")
+        self.assertEqual(maliyet.risksiz_bayatlik_gun, 7)
 
 
 class KapsamDokumuRaporuTesti(unittest.TestCase):

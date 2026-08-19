@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -96,6 +97,37 @@ def _sistem_ozetini_guncelle(ozet: str) -> None:
         )
         return
     SISTEM_DOSYASI.write_text(desen.sub(lambda _: ozet, icerik), encoding="utf-8")
+
+
+@dataclass(frozen=True)
+class HurdleEngeli:
+    gerekce: str
+    mesaj: str
+
+
+def hurdle_engeli(maliyet, baslik: str, bugun: date | None = None
+                  ) -> HurdleEngeli | None:
+    """Hurdle rate rapor uretmeye YETERLI mi? Degilse engeli doner.
+
+    Iki ayri kusur, tek sonuc: yok da olmaz, BAYAT da olmaz. Bayatlik daha
+    sinsi - rapor uretilir, sayilar makul gorunur, kararlar sessizce yanlis
+    cikar. Bu sayi gereken getiriyi, asiri getiriyi, nakit getirisini ve
+    sinyal kapisini birden belirliyor.
+
+    Ayri fonksiyon olmasinin sebebi test edilebilirlik: kapinin kendisi
+    sinanabilmeli, "main.py'de bir yerde bir if var" yeterli degil.
+    """
+    if maliyet.risksiz_taze_mi(bugun):
+        return None
+    bayat = maliyet.tl_risksiz_yillik is not None
+    return HurdleEngeli(
+        gerekce=("TL risksiz getiri (hurdle rate) BAYAT" if bayat
+                 else "TL risksiz getiri (hurdle rate) yok"),
+        mesaj=hurdle_eksik_mesaji(
+            baslik, maliyet.risksiz_serisi,
+            maliyet.risksiz_tarih if bayat else "",
+            maliyet.risksiz_bayatlik_gun),
+    )
 
 
 def _durumu_yukle(sim: bool, olaylar, nakit_getirisi_yillik: float | None,
@@ -253,15 +285,15 @@ def main() -> int:
     # Hurdle rate ZORUNLU: yoksa getiri sifira gore olculur ve her pozitif
     # sonuc "basari" gorunur. Once canli TCMB, olmazsa varliklar.yaml yedegi.
     maliyet = maliyet_modelini_coz(yapilandirma)
-    if maliyet.tl_risksiz_yillik is None:
-        print("HATA - TL risksiz getiri (hurdle rate) yok, rapor uretilmedi.",
-              file=sys.stderr)
+    engel = hurdle_engeli(maliyet, baslik)
+    if engel:
+        print(f"HATA - {engel.gerekce}, rapor uretilmedi.", file=sys.stderr)
         print(f"  Canli seri: {maliyet.risksiz_serisi or '(tanimsiz)'}",
               file=sys.stderr)
         print("  Yedek: varliklar.yaml -> maliyet.firsat.tl_risksiz_yillik",
               file=sys.stderr)
         try:
-            mesaj_gonder(hurdle_eksik_mesaji(baslik, maliyet.risksiz_serisi), ortam)
+            mesaj_gonder(engel.mesaj, ortam)
         except TelegramHatasi as hata:
             print(f"UYARI - Telegram uyarisi da gonderilemedi: {hata}",
                   file=sys.stderr)

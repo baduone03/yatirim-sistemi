@@ -50,6 +50,7 @@ from duyarlilik import (  # noqa: E402
 from fetch import fiyatlari_getir, maliyet_modelini_coz  # noqa: E402
 from kurumsal_olay import bilinen_olay_anahtarlari, olaylari_oku  # noqa: E402
 from ledger import durumu_hesapla, islemleri_oku  # noqa: E402
+from maliyet import TEMEL  # noqa: E402
 from mesaj import kacis  # noqa: E402
 from notify import API_KOKU, ZAMAN_ASIMI, env_oku  # noqa: E402
 from portfolio import (  # noqa: E402
@@ -409,6 +410,38 @@ def komut_param(baglam: Baglam, arguman: str) -> str:
         satirlar.append(
             f"{kacis(sembol)}: {tl(varlik.pozisyon_try)} "
             f"({kacis(POZISYON_KAYNAGI.get(varlik.pozisyon_kaynagi, ''))})")
+
+    # Gereken getiri: formulun her girdisi olculebilir, tahmin yok.
+    # Beklenti beyan edilmediyse asil bilgi zaten bu sayidir.
+    satirlar += ["", "<b>Gereken yillik getiri</b>",
+                 "gereken = TL risksiz + tasima + gidis-donus / planlanan yil"]
+    for sembol, varlik in sorted(duyarlilik.varliklar.items()):
+        gereken = varlik.gereken_getiri.get(TEMEL)
+        if gereken is None:
+            continue
+        pay = varlik.maliyet_paylari.get(TEMEL)
+        beklenti = (oran(varlik.beklenti, 1) if varlik.beklenti_beyan_edildi
+                    else "BEYAN YOK")
+        satirlar.append(
+            f"{kacis(sembol)}: {varlik.planlanan_yil:.0f} yil tutmak icin "
+            f"{oran(gereken, 1)} | beklenti {kacis(beklenti)}"
+            + (f" | maliyet payi {oran(pay, 1)}" if pay is not None else ""))
+
+    hakimler = duyarlilik.hurdle_hakimler
+    if hakimler:
+        satirlar += [
+            "",
+            "Baglayici kisit MALIYET DEGIL, TL risksiz getiri: "
+            + kacis(", ".join(hakimler))
+            + ". Maliyet optimizasyonu bu varliklarda karari degistirmez."]
+
+    bekleyenler = duyarlilik.beklenti_bekleyenler
+    if bekleyenler:
+        satirlar += [
+            "",
+            "BEKLENTI BEYAN EDILMEMIS - sinyal yok: "
+            + kacis(", ".join(bekleyenler))
+            + ". varliklar.yaml -> maliyet.tutma icine kendi beklentini yaz."]
 
     satirlar += ["", "<b>Olculmesi gereken parametreler</b>"]
     gerekenler = duyarlilik.olculmesi_gerekenler

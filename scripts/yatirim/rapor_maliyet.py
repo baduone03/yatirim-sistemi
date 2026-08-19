@@ -10,7 +10,13 @@ from __future__ import annotations
 import math
 
 from bicim import oran, tl, yuzde
-from duyarlilik import GERCEK, HEDEF, YEDEK, DuyarlilikRaporu
+from duyarlilik import (
+    GERCEK,
+    HEDEF,
+    HURDLE_HAKIMIYET_ESIGI,
+    YEDEK,
+    DuyarlilikRaporu,
+)
 from maliyet import (
     SENARYOLAR,
     TEMEL,
@@ -304,60 +310,100 @@ def kapsam_dokumu_bolumu(rapor: DuyarlilikRaporu) -> list[str]:
     return satirlar
 
 
-def basabas_bolumu(rapor: DuyarlilikRaporu) -> list[str]:
-    """Ikinci duyarlilik boyutu: basabas tutma suresi.
+def gereken_getiri_bolumu(rapor: DuyarlilikRaporu) -> list[str]:
+    """Ikinci duyarlilik boyutu: gereken yillik getiri.
 
-    Birinci boyut "islem maliyeti sapmayi yutuyor mu" diye sorar; bu boyut
-    "bu varlik planladigim surede o maliyeti CIKARIYOR mu" diye sorar.
-    Ikisi farkli sorular: dusuk islem maliyetli ama getirisi risksiz orani
-    zor asan bir varlik birinciyi gecer, ikinciyi gecemez.
+        gereken = TL risksiz + yillik tasima + gidis-donus / planlanan yil
+
+    Sistem beklenen getiri URETMEZ - gerekeni HESAPLAR. Formulun her girdisi
+    olculebilir; hicbiri fiyat tahmini degil. Cikti tek bir cumleye iner:
+    "bu varligi X yil tutmaya deger kilmak icin yilda en az %Y kazanmasi
+    gerekir".
     """
     olculenler = {s: v for s, v in sorted(rapor.varliklar.items())
                   if v.tutma_olculdu}
     if not olculenler:
         return []
     satirlar = [
-        "## Basabas tutma suresi (tasima duyarliligi)",
+        "## Gereken getiri (tasima duyarliligi)",
         "",
-        "T = gidis-donus / (beklenen getiri - yillik tasima - TL risksiz). "
-        "Payda ASIRI getiridir: getirinin risksiz orani asan kismi. Islem "
-        "maliyeti yalnizca o fazladan geri odenir.",
+        "`gereken = TL risksiz + yillik tasima + gidis-donus / planlanan yil`",
         "",
-        "> `beklenen getiri` bir TAHMIN DEGIL, `varliklar.yaml -> maliyet.tutma` "
-        "icindeki BEYANDIR. Sistem fiyat tahmini uretmez.",
+        "Islem maliyeti planlanan sureye YAYILIR: bir kez odenir, tutuldugu "
+        "surece amorti edilir. Kisa tutma plani ayni maliyeti daha agir kilar.",
         "",
-        "| Varlik | Planlanan | T iyimser | T temel | T kotumser | Sonuc |",
-        "|---|---:|---:|---:|---:|---|",
+        "> Sistem beklenen getiri TAHMIN ETMEZ. `beklenti` sutunu SENIN "
+        "beyanindir (`varliklar.yaml -> maliyet.tutma`); bos ise sinyal "
+        "uretilmez ama gereken getiri yine de hesaplanir - asil bilgi odur.",
+        "",
+        "| Varlik | Plan | Gereken (iyimser) | Gereken (temel) | Gereken (kotumser) "
+        "| Beklenti | Maliyet payi | Sonuc |",
+        "|---|---:|---:|---:|---:|---:|---:|---|",
     ]
     for sembol, varlik in olculenler.items():
-        sureler = " | ".join(_sure(varlik.basabas.get(ad)) for ad in SENARYOLAR)
-        sonuc = ("gecti" if varlik.tutma_dayanikli
-                 else "tasima maliyeti belirsizligi: "
-                      + ", ".join(varlik.tasima_belirsiz_parametreler))
+        gerekenler = " | ".join(
+            oran(varlik.gereken_getiri[ad], 1) if ad in varlik.gereken_getiri
+            else "-" for ad in SENARYOLAR)
+        beklenti = (oran(varlik.beklenti, 1) if varlik.beklenti_beyan_edildi
+                    else "BEYAN YOK")
+        pay = varlik.maliyet_paylari.get(TEMEL)
         satirlar.append(
-            f"| `{sembol}` | {varlik.planlanan_yil:.1f} yil | {sureler} | {sonuc} |")
+            f"| `{sembol}` | {varlik.planlanan_yil:.0f} yil | {gerekenler} | "
+            f"{beklenti} | {oran(pay, 1) if pay is not None else '-'} | "
+            f"{varlik.etiket} |")
     satirlar.append("")
 
-    belirsizler = rapor.tasima_belirsizleri
-    if belirsizler:
+    bekleyenler = rapor.beklenti_bekleyenler
+    if bekleyenler:
         satirlar += [
-            "> Bir senaryoda bile planlanan sureyi asan varlikta sinyal "
-            "BASTIRILIR. \"Muhtemelen cikarir\" diye almak, maliyeti kesin "
-            "olarak odemek demektir. Cozum: parametreyi olc ya da "
-            "`maliyet.tutma` icindeki planlanan sureyi gercekci hale getir.",
+            "> **BEKLENTI BEYAN EDILMEMIS** - bu varliklarda sinyal "
+            "URETILMEZ: " + ", ".join(f"`{s}`" for s in bekleyenler) + ". "
+            "`varliklar.yaml -> maliyet.tutma.<sinif>.beklenen_getiri_yillik` "
+            "alanina kendi beklentini yaz. Sistemin bu sayiyi senin yerine "
+            "doldurmasi, uretmedigi bir fiyat tahminini uretiyormus gibi "
+            "yapmak olurdu.",
             "",
         ]
-    return satirlar
+    yetersizler = rapor.beklentisi_yetersizler
+    if yetersizler:
+        satirlar += [
+            "> **BEYAN GEREKENIN ALTINDA**: "
+            + ", ".join(f"`{s}`" for s in yetersizler)
+            + ". Beklentin bu varligi tutmayi hakli cikarmiyor - ya beklenti "
+            "gercekci degil ya da varlik portfoyde olmamali.",
+            "",
+        ]
+    return satirlar + _hurdle_hakimiyeti(rapor)
 
 
-def _sure(yil: float | None) -> str:
-    if yil is None:
-        return "-"
-    if not math.isfinite(yil):
-        return "hicbir zaman"
-    if yil < 1:
-        return f"{yil * 365:.0f} gun"
-    return f"{yil:.2f} yil"
+def _hurdle_hakimiyeti(rapor: DuyarlilikRaporu) -> list[str]:
+    """Baglayici kisit maliyet mi, TL risksiz getiri mi?
+
+    Maliyet payi kucukse maliyeti tamamen sifirlamak bile gereken getiriyi
+    kayda deger olcude dusurmez. Bunu yazmamak, komisyon pazarligina
+    harcanan emegin karari degistirmedigini gizlemek olur.
+    """
+    hakimler = rapor.hurdle_hakimler
+    if not hakimler:
+        return []
+    return [
+        "### Baglayici kisit: TL risksiz getiri",
+        "",
+        f"Asagidaki varliklarda maliyetin gereken getiri icindeki payi "
+        f"{oran(HURDLE_HAKIMIYET_ESIGI, 0)} altinda:",
+        "",
+        *[f"- `{s}` - maliyet payi {oran(v.maliyet_paylari[TEMEL], 1)}, "
+          f"gereken {oran(v.gereken_getiri[TEMEL], 1)}"
+          for s, v in hakimler.items()],
+        "",
+        "**Bu varliklarda baglayici kisit maliyet degil, TL risksiz getiri. "
+        "Maliyet optimizasyonu karari degistirmez.** Komisyonu sifirlasan "
+        "bile gereken getiri neredeyse ayni kalir; sorulacak soru \"daha "
+        "ucuza nasil alirim\" degil, \"bu varlik mevduati gercekten gecebilir "
+        "mi\".",
+        "",
+    ]
+
 
 
 def maliyet_kalemleri(portfoy: Portfoy, durum, maliyet: MaliyetModeli,

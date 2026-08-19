@@ -73,18 +73,31 @@ def ucgenleme_durdurma_mesaji(durduranlar, baslik: str) -> str:
     return "\n".join(satirlar)
 
 
-def hurdle_eksik_mesaji(baslik: str, seri: str) -> str:
-    """Hurdle rate yoksa rapor uretilmez - sessiz kalmak en kotu secenek."""
-    return "\n".join([
+def hurdle_eksik_mesaji(baslik: str, seri: str, tarih: str = "",
+                        esik_gun: int = 0) -> str:
+    """Hurdle rate yok VEYA bayat - rapor uretilmez.
+
+    Bayatlik eksiklikten daha tehlikeli: eksiklik gorunur, bayatlik gorunmez.
+    Bu sayi gereken getiriyi, asiri getiriyi, nakit getirisini ve sinyal
+    kapisini birden belirliyor; eski bir degerle uretilen rapor "calisti"
+    diye guvenilir olmaz.
+    """
+    bayat = bool(tarih)
+    satirlar = [
         f"<b>🛑 {kacis(baslik)} - RAPOR URETILMEDI</b>",
         "",
-        "TL risksiz getiri (hurdle rate) yok.",
+        (f"TL risksiz getiri (hurdle rate) BAYAT: {kacis(tarih)} tarihli, "
+         f"esik {esik_gun} gun."
+         if bayat else "TL risksiz getiri (hurdle rate) yok."),
         f"Canli seri: {kacis(seri) or '(tanimsiz)'}",
-        "Yedek: varliklar.yaml -> maliyet.firsat.tl_risksiz_yillik",
+        "Yedek: varliklar.yaml -> maliyet.firsat.tl_risksiz_yillik "
+        "(+ tl_risksiz_tarih)",
         "",
-        "Bu deger olmadan getiri sifira gore olculur ve risksiz getirinin "
-        "altinda kalan her portfoy 'basarili' gorunur.",
-    ])
+        "Bu deger gereken getiriyi, asiri getiriyi ve nakit getirisini birden "
+        "belirliyor; " + ("bayat" if bayat else "eksik")
+        + " haliyle uretilen rapor sessizce yanlis olur.",
+    ]
+    return "\n".join(satirlar)
 
 
 @dataclass(frozen=True)

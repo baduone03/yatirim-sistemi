@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field, replace
+from datetime import date
 
 ORANSAL = "oransal"
 SABIT = "sabit"
@@ -90,9 +91,11 @@ def _senaryo_sec(senaryo: str, yalniz: str, alan: str) -> str:
 # Bir alan `null` birakildiginda o varligin sinyalini KAPATIYORSA "bloke
 # edebilen" alandir. Duyarlilik testinin bu alanlarin HEPSINI kapsamasi
 # zorunlu - kapsanmayan bir alan, sinanmamis bir tahminle sinyal acabilir.
-# Tek istisna YAPISAL alanlar: bool bir alan (kur_cevrimi) aralik alamaz,
-# uc senaryosu olamaz. Bkz. duyarlilik.kapsam_denetimi.
-YAPISAL_ALANLAR = ("kur_cevrimi",)
+# Tek istisna YAPISAL alanlar: tahminle DOLDURULAMAYAN alanlar. `kur_cevrimi`
+# bool oldugu icin, `beklenen_getiri_yillik` ise BEYAN oldugu icin uc
+# senaryosu olamaz. Tahminle doldurulamayan bir alan, tahminle sinyal de
+# acamaz - muafiyetin gerekcesi bu. Bkz. duyarlilik.kapsam_denetimi.
+YAPISAL_ALANLAR = ("kur_cevrimi", "beklenen_getiri_yillik")
 
 TAHMINLI_ISLEM_ALANLARI = ("komisyon_oran", "komisyon_usd",
                            "kur_spread_tek_yon", "kambiyo_vergisi",
@@ -296,20 +299,31 @@ class TasimaKalemleri:
 # Varlik basina birlesik durum
 # --------------------------------------------------------------------------
 
+BEYAN = "kullanici-beyani"
+
+
 @dataclass(frozen=True)
 class TutmaVarsayimi:
-    """Sinif bazli tutma plani ve getiri BEYANI.
+    """Sinif bazli tutma plani ve (varsa) getiri BEYANI.
 
-    `beklenen_getiri_yillik` bir TAHMIN DEGIL, BEYANDIR: sistem fiyat tahmini
-    uretmez, uretmeyecek. Bu sayi "bu varligi bu getiriyi bekleyerek
-    tutuyorum" demenin karsiligidir ve basabas hesabinin paydasidir. Yanlissa
-    basabas suresi yanlis cikar - ama en azindan varsayim GORUNUR olur;
-    kafadaki ornuk bir beklentiyle islem yapmak yerine yazili bir sayiyla
-    yapilir.
+    `beklenen_getiri_yillik` VARSAYILANI YOKTUR ve olamaz. Sistemin bu sayiyi
+    uydurmasi, bir fiyat tahmini uretmesi demek olurdu; uretmez. `null` ise
+    GEREKEN getiri hesaplanir ve gosterilir, sinyal URETILMEZ - "su varligi
+    tutmak icin yilda en az su kadar kazanmasi gerekiyor, sen ne bekliyorsun"
+    sorusu cevapsiz birakilamaz.
+
+    Bir deger girildiginde o KULLANICININ BEYANIDIR (`kaynak: kullanici-beyani`),
+    modelin tahmini degil. Ayrim etikette tutuluyor ki raporda kimin sayisi
+    oldugu belli olsun.
     """
 
     planlanan_yil: float
-    beklenen_getiri_yillik: float
+    beklenen_getiri_yillik: float | None = None
+    kaynak: str = ""
+
+    @property
+    def beyan_edildi(self) -> bool:
+        return self.beklenen_getiri_yillik is not None
 
 
 @dataclass(frozen=True)
@@ -352,8 +366,9 @@ class MaliyetModeli:
     varliklar: dict[str, VarlikMaliyeti] = field(default_factory=dict)
     tl_risksiz_yillik: float | None = None
     risksiz_kaynagi: str = "yapilandirma"
+    risksiz_tarih: str = ""          # ISO. Bos = tazeligi BILINMIYOR.
     risksiz_serisi: str = ""
-    risksiz_bayatlik_gun: int = 21
+    risksiz_bayatlik_gun: int = 7
     enflasyon_yillik: float | None = None
     enflasyon_kaynagi: str = "yapilandirma"
     enflasyon_serisi: str = ""
@@ -390,6 +405,26 @@ class MaliyetModeli:
         varlik = self.varliklar.get(sembol)
         return bool(varlik and varlik.tahminler)
 
+    def risksiz_taze_mi(self, bugun: date | None = None) -> bool:
+        """Hurdle rate yeterince guncel mi?
+
+        Bu sayi HER SEYI belirliyor: gereken getiri, asiri getiri, nakit
+        getirisi ve sinyal kapisi. Bayat bir hurdle rate, butun bu kararlari
+        sessizce yanlis yapar - eksik olmasindan daha tehlikelidir, cunku
+        eksiklik gorunur, bayatlik gorunmez.
+
+        Tarihi BILINMEYEN deger (bos `risksiz_tarih`) taze SAYILMAZ: elle
+        yazilmis bir yedegin ne zamandan kaldigi bilinmiyorsa guncel olduguna
+        guvenilemez.
+        """
+        if self.tl_risksiz_yillik is None or not self.risksiz_tarih:
+            return False
+        try:
+            tarih = date.fromisoformat(self.risksiz_tarih)
+        except ValueError:
+            return False
+        return ((bugun or date.today()) - tarih).days <= self.risksiz_bayatlik_gun
+
     def oranlarla(self, risksiz: tuple[float, str] | None,
                   enflasyon: tuple[float, str] | None,
                   uyarilar: list[str]) -> MaliyetModeli:
@@ -401,7 +436,10 @@ class MaliyetModeli:
         """
         yeni = replace(self, uyarilar=[*self.uyarilar, *uyarilar])
         if risksiz is not None:
-            yeni = replace(yeni, tl_risksiz_yillik=risksiz[0], risksiz_kaynagi=risksiz[1])
+            yeni = replace(yeni, tl_risksiz_yillik=risksiz[0],
+                           risksiz_kaynagi=risksiz[1],
+                           risksiz_tarih=(risksiz[2] if len(risksiz) > 2
+                                          else yeni.risksiz_tarih))
         if enflasyon is not None:
             yeni = replace(yeni, enflasyon_yillik=enflasyon[0],
                            enflasyon_kaynagi=enflasyon[1])
@@ -457,6 +495,66 @@ class MaliyetModeli:
         varlik = self.varliklar.get(sembol)
         return None if varlik is None else varlik.tasima.yillik
 
+    def gereken_getiri(self, sembol: str, pozisyon_try: float, usdtry: float,
+                       senaryo: str = TEMEL) -> float | None:
+        """Bu varligi planlanan sure tutmaya DEGER kilan en dusuk yillik getiri.
+
+            gereken = tl_risksiz + yillik_tasima + gidis_donus / planlanan_yil
+
+        Basabas suresinin cebirsel TERSI, ama onemli bir farkla: her girdisi
+        OLCULEBILIR. Basabas formulu beklenen getiriyi paydada istiyordu ve o
+        sayi sistemin uretemeyecegi bir tahmindi; bu formul ayni bilgiyi
+        tahmin gerektirmeden verir. Sistem "ne kazanacak" demez, "en az ne
+        kazanmasi gerekir" der.
+
+        Islem maliyeti planlanan sureye YAYILIR: bir kez odenir, tutuldugu
+        surece amorti edilir. Kisa tutma plani ayni maliyeti daha agir kilar.
+        """
+        varlik = self.varliklar.get(sembol)
+        tutma = self.tutma.get(varlik.sinif) if varlik else None
+        if tutma is None or self.tl_risksiz_yillik is None or tutma.planlanan_yil <= 0:
+            return None
+        maliyet = self.tutma_maliyeti(sembol, pozisyon_try, usdtry, senaryo)
+        return None if maliyet is None else self.tl_risksiz_yillik + maliyet
+
+    def tutma_maliyeti(self, sembol: str, pozisyon_try: float, usdtry: float,
+                       senaryo: str = TEMEL) -> float | None:
+        """Gereken getirinin MALIYETTEN gelen kismi (risksiz oran haric).
+
+            tasima + gidis_donus / planlanan_yil
+        """
+        varlik = self.varliklar.get(sembol)
+        tutma = self.tutma.get(varlik.sinif) if varlik else None
+        if tutma is None or tutma.planlanan_yil <= 0:
+            return None
+        model = self.senaryoyla(senaryo)
+        gidis_donus = model.gidis_donus(sembol, pozisyon_try, usdtry)
+        tasima = model.yillik_tasima(sembol)
+        if gidis_donus is None or tasima is None:
+            return None
+        return tasima + gidis_donus / tutma.planlanan_yil
+
+    def maliyet_payi(self, sembol: str, pozisyon_try: float, usdtry: float,
+                     senaryo: str = TEMEL) -> float | None:
+        """Maliyetin gereken getiri icindeki payi.
+
+        Bu oran kucukse baglayici kisit MALIYET DEGIL, TL risksiz getiridir:
+        komisyonu sifirlasan bile gereken getiri neredeyse ayni kalir. O
+        durumda maliyet optimizasyonuna harcanan emek karari degistirmez -
+        soru "daha ucuza nasil alirim" degil, "bu varlik mevduati gercekten
+        gecebilir mi".
+        """
+        maliyet = self.tutma_maliyeti(sembol, pozisyon_try, usdtry, senaryo)
+        gereken = self.gereken_getiri(sembol, pozisyon_try, usdtry, senaryo)
+        if maliyet is None or not gereken:
+            return None
+        return maliyet / gereken
+
+    def beklenti(self, sembol: str) -> float | None:
+        varlik = self.varliklar.get(sembol)
+        tutma = self.tutma.get(varlik.sinif) if varlik else None
+        return None if tutma is None else tutma.beklenen_getiri_yillik
+
     def basabas_yil(self, sembol: str, pozisyon_try: float, usdtry: float,
                     senaryo: str = TEMEL) -> float | None:
         """Gidis-donus maliyetini cikaran tutma suresi (yil).
@@ -474,7 +572,8 @@ class MaliyetModeli:
         """
         varlik = self.varliklar.get(sembol)
         tutma = self.tutma.get(varlik.sinif) if varlik else None
-        if tutma is None or self.tl_risksiz_yillik is None:
+        if (tutma is None or self.tl_risksiz_yillik is None
+                or tutma.beklenen_getiri_yillik is None):
             return None
         model = self.senaryoyla(senaryo)
         gidis_donus = model.gidis_donus(sembol, pozisyon_try, usdtry)
@@ -549,8 +648,9 @@ def modeli_kur(ham: dict, sinif_haritasi: dict[str, str]) -> MaliyetModeli:
     return MaliyetModeli(
         varliklar=varliklar,
         tl_risksiz_yillik=_sayi(firsat_ham.get("tl_risksiz_yillik")),
+        risksiz_tarih=str(firsat_ham.get("tl_risksiz_tarih", "")),
         risksiz_serisi=str(firsat_ham.get("tcmb_serisi", "")),
-        risksiz_bayatlik_gun=int(firsat_ham.get("bayatlik_gun", 21)),
+        risksiz_bayatlik_gun=int(firsat_ham.get("bayatlik_gun", 7)),
         enflasyon_yillik=_sayi(enflasyon_ham.get("yillik")),
         enflasyon_serisi=str(enflasyon_ham.get("tcmb_serisi", "")),
         enflasyon_bayatlik_gun=int(enflasyon_ham.get("bayatlik_gun", 45)),
@@ -560,7 +660,11 @@ def modeli_kur(ham: dict, sinif_haritasi: dict[str, str]) -> MaliyetModeli:
         tutma={
             sinif: TutmaVarsayimi(
                 planlanan_yil=float(kayit["planlanan_yil"]),
-                beklenen_getiri_yillik=float(kayit["beklenen_getiri_yillik"]),
+                # VARSAYILAN YOK: eksik anahtar da None demektir.
+                # Sistemin bu sayiyi uydurmasi fiyat tahmini uretmek olurdu.
+                beklenen_getiri_yillik=_sayi(
+                    kayit.get("beklenen_getiri_yillik")),
+                kaynak=str(kayit.get("kaynak", "")),
             )
             for sinif, kayit in (maliyet_ham.get("tutma") or {}).items()
         },

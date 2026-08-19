@@ -253,10 +253,38 @@ Bu vault'ta her token para. Ciktilari su kurallara gore uret:
   kambiyo vergisi + 2*menkul spread). Taban esigi asiyorsa `math.inf` doner -
   hicbir buyukluk yetmez, o varliktan cikmaktan baska secenek yok.
 - **duyarlilik IKI BOYUTLU**: (1) islem maliyeti - `gidis_donus` sapma
-  esigini asiyor mu; (2) tasima maliyeti - `basabas_yil` planlanan tutma
-  suresini asiyor mu. Ayri sorular: dusuk islem maliyetli ama getirisi risksiz
-  orani zor asan bir varlik birinciyi gecer, ikinciyi gecemez. Ikisi de
-  gecmeden sinyal acilmaz (`VarlikDuyarliligi.sinyal_acik`).
+  esigini asiyor mu; (2) tasima - beyan edilen beklenti GEREKEN getiriyi
+  karsiliyor mu. Ikisi de gecmeden sinyal acilmaz.
+- **sistem beklenen getiri URETMEZ, GEREKENI hesaplar**:
+  `gereken = tl_risksiz + yillik_tasima + gidis_donus / planlanan_yil`.
+  Her girdisi olculebilir. Basabas formulunun cebirsel tersi ama onemli
+  farkla: basabas beklenen getiriyi PAYDADA istiyordu ve o sayi sistemin
+  uretemeyecegi bir tahmindi. Islem maliyeti planlanan sureye YAYILIR - kisa
+  plan ayni maliyeti daha agir kilar.
+- **`beklenen_getiri_yillik` VARSAYILANI YOK**: `null` ise gereken getiri
+  hesaplanir ve GOSTERILIR ama sinyal URETILMEZ. Bir sayi girilirse o
+  KULLANICI BEYANIDIR (`kaynak: kullanici-beyani`), modelin tahmini degil.
+  Beyan gerekenin altindaysa sinyal bastirilir. Sistemin bu alani kendi
+  doldurmasi, uretmedigi bir fiyat tahminini uretiyormus gibi yapmak olurdu -
+  bir kez yapildi (0.65/0.55/0.80/0.55) ve silindi.
+- **maliyet payi = (tasima + gidis_donus/planlanan) / gereken**. Ozdeslik:
+  `maliyet_payi + risksiz/gereken = 1`. Pay `HURDLE_HAKIMIYET_ESIGI`nin (%10)
+  altindaysa baglayici kisit maliyet DEGIL, TL risksiz getiridir - komisyonu
+  sifirlasan bile gereken getiri neredeyse ayni kalir. Su an 12 varligin
+  HEPSI bu durumda: %48 risksiz oran her seyi domine ediyor.
+- **hurdle rate hem VAR hem TAZE olmali**: `maliyet.risksiz_taze_mi()`,
+  esik `firsat.bayatlik_gun` (7). Bayatsa RAPOR URETILMEZ (`main.hurdle_engeli`).
+  Bayatlik eksiklikten TEHLIKELI: eksiklik gorunur, bayatlik gorunmez - rapor
+  uretilir, sayilar makul gorunur, kararlar sessizce yanlis cikar.
+  DIKKAT: `TP.TRY.MT02` HAFTALIK seri. 7 gunluk esik normal yayim ritminde
+  ancak yetisir; bir yayim gecikmesi raporu tumden durdurur. Durursa esigi
+  10'a cikarmak makul - ama 21'e donmek bayatligi yeniden gorunmez yapar.
+- **tarihsiz yedek TAZE SAYILMAZ**: `firsat.tl_risksiz_tarih` bos birakilirsa
+  sistem hicbir zaman rapor uretmez. Bilincli: elle yazilmis bir sayinin ne
+  zamandan kaldigi bilinmiyorsa guncel olduguna guvenilemez. Tarih serinin
+  YAYIM tarihidir, dosyaya yazildigi gun degil.
+- **`tcmb_yuzde_orani` UC deger doner** `(oran, kaynak, tarih)`: tarih modele
+  kadar gelmezse bayatlik hic olculemez.
 - **KAPSAM KURALI, kodla zorlanir**: bloke edebilen (yani `null` birakilinca
   sinyali kapatan) her alan bir duyarlilik boyutu tarafindan kapsanmak
   ZORUNDA. `duyarlilik.kapsam_denetimi()` ihlalleri dondurur ve

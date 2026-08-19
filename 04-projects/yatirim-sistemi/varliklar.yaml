@@ -483,28 +483,30 @@ maliyet:
       gider_orani_yillik: 0.0
       temettu_verimi: 0.0          # endeks, satin alinmaz (izleme: true)
 
-  # Tutma plani - basabas tutma suresi hesabinin girdileri. Sinif bazli.
+  # Tutma plani. Sinif bazli.
   #
-  #   T = gidis_donus / (beklenen_getiri - yillik_tasima - tl_risksiz)
+  # Sistem beklenen getiri TAHMIN ETMEZ. Gerekeni HESAPLAR:
   #
-  # `beklenen_getiri_yillik` BIR TAHMIN DEGIL, SENIN BEYANIN. Sistem fiyat
-  # tahmini uretmez; bu sayi "bu varligi bu getiriyi bekleyerek tutuyorum"
-  # demenin yazili karsiligidir. Yanlissa basabas suresi yanlis cikar - ama
-  # varsayim GORUNUR olur, kafadaki ornuk bir beklentiyle islem yapilmaz.
+  #   gereken_getiri = tl_risksiz + yillik_tasima + gidis_donus / planlanan_yil
   #
-  # DIKKAT: payda ASIRI getiridir. TL risksiz oran %48 civarinda; beklenen
-  # getiri bunun altindaysa payda negatif olur ve basabas suresi SONSUZ
-  # cikar - yani o varlik islem maliyetini hicbir surede cikarmaz. Bu bir
-  # hata degil, dogru cevap: mevduattan az kazandiran varlikta islem yapmak
-  # maliyeti hic geri odemez.
+  # Bu formulun her girdisi olculebilir. Cikti "bu varligi planladigim sure
+  # tutmaya deger kilmak icin yilda en az ne kazanmasi gerekir" sorusunun
+  # cevabidir ve raporda varlik basina yazilir.
   #
-  # CLAUDE TAHMINI - Dodo deger vermedi. Asagidaki sayilar TL bazli nominal
-  # beklentidir (kur etkisi dahil) ve OLCUM DEGIL. Kendi beklentini yaz.
+  # `beklenen_getiri_yillik` VARSAYILANI YOKTUR ve olmayacak:
+  #   null      -> gereken getiri hesaplanir ve GOSTERILIR, sinyal URETILMEZ.
+  #   bir sayi  -> SENIN BEYANINDIR (kaynak: kullanici-beyani). Modelin
+  #                tahmini degil; raporda kimin sayisi oldugu belli olur.
+  #   beyan < gereken -> sinyal bastirilir, rapor sebebini yazar.
+  #
+  # Buraya bir sayi yazmak "su getiriyi bekliyorum" demektir. Sistemin bunu
+  # senin yerine doldurmasi, uretmedigi bir fiyat tahminini uretiyormus gibi
+  # yapmak olurdu.
   tutma:
-    bist:   {planlanan_yil: 1.0, beklenen_getiri_yillik: 0.65}
-    nasdaq: {planlanan_yil: 3.0, beklenen_getiri_yillik: 0.55}
-    kripto: {planlanan_yil: 1.0, beklenen_getiri_yillik: 0.80}
-    maden:  {planlanan_yil: 5.0, beklenen_getiri_yillik: 0.55}
+    bist:   {planlanan_yil: 1.0, beklenen_getiri_yillik: null}
+    nasdaq: {planlanan_yil: 3.0, beklenen_getiri_yillik: null}
+    kripto: {planlanan_yil: 1.0, beklenen_getiri_yillik: null}
+    maden:  {planlanan_yil: 5.0, beklenen_getiri_yillik: null}
 
   # Firsat maliyeti - hurdle rate. ZORUNLU.
   # Deger yoksa (ne canli ne yedek) RAPOR URETILMEZ: sifira gore olculen
@@ -513,10 +515,16 @@ maliyet:
   firsat:
     # Canli kaynak: TCMB sk-seriler ucu, ANAHTARSIZ. Yuzde cinsinden doner.
     tcmb_serisi: "TP.TRY.MT02"     # Mevduat Faiz TL Orani (3 aya kadar vadeli)
-    bayatlik_gun: 21               # haftalik seri - 21 gun makul tolerans
-    # Canli okuma basarisiz/bayat olursa bu deger kullanilir ve raporda
-    # "yedek" olarak isaretlenir. Guncelleme: yukaridaki seriye bak.
-    tl_risksiz_yillik: 0.4791      # TCMB TP.TRY.MT02, 07-08-2026 = %47.91
+    # BAYATLIK 7 GUN. Bu sayi her seyi belirliyor: gereken getiri, asiri
+    # getiri, nakit getirisi ve sinyal kapisi. Bayat bir hurdle rate butun
+    # bu kararlari SESSIZCE yanlis yapar - eksik olmasindan tehlikelidir,
+    # cunku eksiklik gorunur, bayatlik gorunmez. Bayatsa RAPOR URETILMEZ.
+    bayatlik_gun: 7
+    # Canli okuma basarisizsa bu deger kullanilir - ama TARIHI de bayatlik
+    # kontrolune girer. Tarihsiz bir yedek TAZE SAYILMAZ: elle yazilmis bir
+    # sayinin ne zamandan kaldigi bilinmiyorsa guncel olduguna guvenilemez.
+    tl_risksiz_yillik: 0.4791      # TCMB TP.TRY.MT02
+    tl_risksiz_tarih: "2026-08-07" # serinin YAYIM tarihi, yazildigi gun degil
 
 # Nakit modellemesi.
 # Yatirilmamis TL sifir getiriyle DURMAZ; duruyormus gibi modellersen sistem

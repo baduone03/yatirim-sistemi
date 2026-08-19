@@ -230,16 +230,22 @@ def tcmb_usdtry(url: str, seri: str, getir=http_json) -> KurKotasyonu:
 
 def tcmb_yuzde_orani(kayitlar: dict[str, TcmbKaydi], seri: str,
                      bayatlik_gun: int, bugun: date | None = None,
-                     ) -> tuple[float, str] | None:
+                     ) -> tuple[float, str, str] | None:
     """Yuzde cinsinden yayimlanan seriyi ONDALIK orana cevirir (47.91 -> 0.4791).
 
+    Doner: (oran, kaynak etiketi, YAYIM TARIHI ISO). Tarih ucuncu deger olarak
+    tasinir cunku degerin kendisi kadar KAC GUNLUK oldugu da karar girdisidir:
+    hurdle rate bayatsa rapor uretilmez ve bunu bilebilmek icin tarihin
+    modele kadar gelmesi gerekir.
+
     Ag'a CIKMAZ - onceden cekilmis kayitlar uzerinde calisir. Seri yoksa veya
-    bayatsa None doner; cagiran yapilandirmadaki yedek degere duser.
+    bayatsa None doner.
     """
     kayit = kayitlar.get(seri)
     if kayit is None or kayit.bayat_mi(bayatlik_gun, bugun):
         return None
-    return kayit.deger / 100.0, f"tcmb {seri} ({kayit.tarih.isoformat()})"
+    tarih = kayit.tarih.isoformat()
+    return kayit.deger / 100.0, f"tcmb {seri} ({tarih})", tarih
 
 
 # --------------------------------------------------------------------------
