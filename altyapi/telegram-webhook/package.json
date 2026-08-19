@@ -1,0 +1,9 @@
+{
+  "name": "yatirim-telegram-webhook",
+  "private": true,
+  "type": "module",
+  "description": "Telegram webhook -> GitHub Actions koprusu. Bagimlilik YOK.",
+  "scripts": {
+    "test": "node --test"
+  }
+}

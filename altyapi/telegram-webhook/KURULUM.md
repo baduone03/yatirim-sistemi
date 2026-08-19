@@ -51,17 +51,30 @@ istiyor. Classic token kullanma — kapsamı tüm hesabı kapsar.
 
 ## 4. Secret'ları Cloudflare'e gir
 
+Dört secret + bir değişken. `IZINLI_CHAT_ID` **secret olarak** giriliyor,
+`wrangler.toml`'a yazılmıyor: `vars` bölümü Cloudflare panelinde açık metin
+görünür ve bu dosya git'te izleniyor.
+
 ```bash
 cd altyapi/telegram-webhook
 
 wrangler secret put TELEGRAM_BOT_TOKEN       # mevcut bot token'ın
 wrangler secret put TELEGRAM_WEBHOOK_SECRET  # 2. adımdaki dize
 wrangler secret put GITHUB_PAT               # 3. adımdaki token
-wrangler secret put IZINLI_CHAT_ID           # senin chat id'in
+wrangler secret put IZINLI_CHAT_ID           # senin chat id'in (virgülle çoklu)
 ```
 
 Her komut değeri **sorarak** alır; hiçbiri dosyaya yazılmaz, komut
 geçmişine düşmez.
+
+`GITHUB_REPO` gizli değil (PAT'in kapsamında zaten belli) — `wrangler.toml`
+içindeki `vars` bölümünde duruyor.
+
+**Chat id'ini bilmiyorsan:** Telegram'da `@userinfobot`'a yaz, sana söyler.
+
+`IZINLI_CHAT_ID` boş bırakılırsa **kimse** geçemez — "ayar yoksa herkese
+açık" değil, "kimseye kapalı". Bot tarafındaki
+`TELEGRAM_IZINLI_CHAT_ID` secret'ıyla aynı mantık.
 
 ## 5. Deploy et ve webhook'u bağla
 
@@ -99,13 +112,33 @@ wrangler tail
 
 ## Güvenlik notları
 
+Yetki kontrolü **Worker'da** yapılıyor, Actions'ta değil. Telegram botları
+herkese açıktır: bot adını bilen herkes mesaj yazabilir. Süzme Actions
+tarafında kalsaydı her yabancı mesaj bir koşu başlatır ve 1 dakika kota
+yakardı — yani botun adını bilen biri kotayı tüketebilirdi.
+
+Sıra (her adım bir öncekini geçmeden çalışmaz):
+
+| # | kontrol | geçmezse |
+|---|---|---|
+| 1 | `secret_token` başlığı | **401**, dispatch yok |
+| 2 | chat id beyaz listesi | 200 sessiz, dispatch yok, **cevap da yok** |
+| 3 | `/` ile başlayan komut | 200, dispatch yok |
+| 4 | 90 sn soğuma | "N dakika sonra tekrar sor" |
+| 5 | aylık kota tavanı | "kota doldu" |
+| 6 | `repository_dispatch` | — |
+
+- **401 neden güvenli:** Telegram'ın kendi istekleri her zaman doğru başlığı
+  taşır, yani 401 alan istek zaten sahtedir. Ayrıca `setWebhook`'ta
+  `secret_token` unutulmuşsa bu Telegram tarafında görünür hata olarak
+  birikir; sessizce 200 dönmek yanlış kurulumu her mesajın kaybolması
+  şeklinde gizlerdi.
+- **Yetkisiz chat'e cevap dönmez.** "Yetkin yok" demek bile botun orada
+  olduğunu doğrular.
 - Worker'da **hiçbir anahtar yazılı değil**; hepsi Cloudflare secret'ı.
-  `worker.js` ve `wrangler.toml` git'te izleniyor, ikisi de temiz.
-- Üç katmanlı doğrulama: Telegram secret header → chat id beyaz listesi →
-  yalnızca `/` ile başlayan komutlar. İlk iki katman olmasaydı Worker
-  URL'ini bulan biri sınırsız Actions dakikası yakabilirdi.
-- Bot workflow'u chat id'yi **tekrar** kontrol eder. Sebep: repo'ya yazma
-  yetkisi olan biri Worker'ı atlayıp doğrudan `repository_dispatch`
+  `worker.js`, `wrangler.toml` ve `package.json` git'te izleniyor, üçü de temiz.
+- Bot workflow'u chat id'yi **tekrar** kontrol eder — ikinci savunma. Repo'ya
+  yazma yetkisi olan biri Worker'ı atlayıp doğrudan `repository_dispatch`
   atabilir; yetki kontrolü tek katmana bırakılamaz.
 - Worker Telegram hatalarını yutar ve loglamaz — hata gövdesi istek URL'ini,
   yani bot token'ını taşıyabilir.
@@ -117,8 +150,25 @@ wrangler tail
 | ayar | değer | ne yapar |
 |---|---|---|
 | `ASGARI_ARALIK_SN` | 90 | Bu süreden sık tetiklenmez; "N dakika sonra tekrar sor" der. |
-| `UYARI_ORANI` | 0.80 | %80 kullanımda haber verir, çalışmaya devam eder. |
 | `TAVAN_ORANI` | 0.92 | %92'de sorgu botunu durdurur. Günlük rapor korunur — öncelik onda. |
 
-Kullanım GitHub API'sinden ölçülüyor (ay başından bu yana koşu sayısı × 1 dk).
-Ölçüm başarısız olursa fren **açılır**, sistem kilitlenmez.
+Kullanım **gerçek koşu sürelerinden** hesaplanıyor, "koşu başına 1 dakika"
+varsayılmıyor. GitHub yukarı yuvarlar: 39 saniyelik koşu 1 dakika, 61
+saniyelik koşu **2 dakika**. Sabit 1 dk varsaymak, koşular yavaşladığında
+kotayı gerçeğin yarısı gösterir ve fren hiç devreye girmez.
+
+Ölçüm başarısız olursa fren **açılır**, sistem kilitlenmez — GitHub API'sinin
+bir hıçkırığı botu tümden susturmamalı.
+
+Ayrıca Actions tarafında `kosu_suresi.py` son 10 koşunun ortalamasını izliyor;
+50 saniyeyi aşarsa günde bir kez Telegram'a uyarı düşüyor.
+
+## Testler
+
+```bash
+node --test altyapi/telegram-webhook/worker.test.js
+```
+
+Bağımlılık yok — Node'un yerleşik koşucusu. Ağa çıkmaz, `fetch` sahteyle
+değiştirilir. Günlük rapor workflow'u da bu testleri koşuyor: kırık bir fren
+sessizce kota tüketir.

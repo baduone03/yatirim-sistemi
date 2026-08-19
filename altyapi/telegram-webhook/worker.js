@@ -9,28 +9,36 @@
  * Bu Worker mesaj geldigi ANDA `repository_dispatch` atar. Cevap ~40 saniyeye
  * iner ve yalnizca gercekten mesaj oldugunda dakika yanar.
  *
+ * YETKI KONTROLU BURADA YAPILIR, Actions'ta DEGIL. Telegram botlari herkese
+ * aciktir: bot adini bilen herkes mesaj yazabilir. Suzme Actions tarafinda
+ * kalsaydi her yabanci mesaj bir kosu baslatir ve 1 dakika kota yakardi -
+ * yani botun adini bilen biri kotayi tuketebilirdi. Actions tarafindaki
+ * kontrol KALDI ama artik ikincil savunma: repo'ya yazma yetkisi olan biri
+ * Worker'i atlayip dogrudan dispatch atabilir.
+ *
+ * SIRA (her adim bir oncekini gecmeden calismaz):
+ *   1. secret_token basligi     -> yoksa 401, dispatch YOK
+ *   2. chat id beyaz listesi    -> yoksa 200 (sessiz), dispatch YOK
+ *   3. komut bicimi ("/" ile)   -> degilse 200, dispatch YOK
+ *   4. sogutma (asgari aralik)  -> gecmezse Telegram'a "N dk sonra"
+ *   5. kota tavani              -> gecmezse Telegram'a "kota doldu"
+ *   6. repository_dispatch
+ *
  * GUVENLIK: burada hicbir anahtar YAZILI DEGIL. Hepsi Cloudflare secret'i
- * olarak enjekte edilir (`wrangler secret put`). Dogrulama zinciri:
- *   1. Telegram'in `X-Telegram-Bot-Api-Secret-Token` basligi - istegin
- *      gercekten Telegram'dan geldigini kanitlar. Yoksa URL'i bilen herkes
- *      Actions dakikasi yakabilirdi.
- *   2. chat_id beyaz listesi - yabanci mesaji dispatch ETMEZ. Bot zaten
- *      cevap vermiyordu ama kosu yine de baslar ve dakika yakardi.
- *   3. Komut filtresi - yalnizca "/" ile baslayan metin kosu tetikler.
- *      Sohbet metni bir sey tetiklemez.
+ * olarak enjekte edilir (`wrangler secret put`).
  */
 
-const AYAR = {
+export const AYAR = {
   // Aylik Actions dakika butcesi (private repo, GitHub Free).
   AYLIK_DAKIKA: 2000,
-  // Bu oranin ustunde UYARI eklenir ama istek yine de calisir.
-  UYARI_ORANI: 0.8,
   // Bu oranin ustunde dispatch ATILMAZ. Rapor workflow'u korunur:
   // sorgu botu lukstur, gunluk rapor degil.
   TAVAN_ORANI: 0.92,
   // Ayni kullanicidan pes pese gelen mesajlar icin en kucuk aralik (saniye).
   // Olmasaydi 20 mesajlik bir seri 20 kosu = 20 dakika yakardi.
   ASGARI_ARALIK_SN: 90,
+  // Kota tahmini icin ornekleme genisligi (tek sayfa, tek istek).
+  ORNEK_KOSU: 100,
 };
 
 export default {
@@ -40,11 +48,16 @@ export default {
     }
 
     // 1. Istek gercekten Telegram'dan mi?
+    //
+    // 401 dondurmek guvenli: Telegram'in KENDI istekleri her zaman dogru
+    // basligi tasir, yani 401 alan istek zaten sahtedir. Ustelik secret
+    // yanlis kurulmussa (setWebhook'ta secret_token unutulmus) bu durum
+    // Telegram tarafinda GORUNUR hata olarak birikir - sessizce 200 donmek
+    // yanlis kurulumu her mesajin kaybolmasi seklinde gizlerdi.
     const baslik = istek.headers.get("X-Telegram-Bot-Api-Secret-Token");
     if (!ortam.TELEGRAM_WEBHOOK_SECRET || baslik !== ortam.TELEGRAM_WEBHOOK_SECRET) {
-      // 401 degil 200: Telegram 401 alirsa webhook'u devre disi birakabilir.
-      // Sessizce yut, hicbir sey yapma.
-      return new Response("ok", { status: 200 });
+      console.log("reddedildi: secret_token gecersiz");
+      return new Response("unauthorized", { status: 401 });
     }
 
     let guncelleme;
@@ -59,26 +72,28 @@ export default {
     const metin = (mesaj?.text || "").trim();
     if (!chatId || !metin) return new Response("ok", { status: 200 });
 
-    // 2. Yalnizca izinli chat. Beyaz liste BOSSA kimseye acilmaz.
-    const izinliler = (ortam.IZINLI_CHAT_ID || "")
-      .split(",").map((s) => s.trim()).filter(Boolean);
-    if (!izinliler.includes(String(chatId))) {
+    // 2. Beyaz liste. CEVAP DONULMEZ - "yetkin yok" demek bile botun orada
+    // oldugunu dogrular. Beyaz liste BOSSA kimseye acilmaz.
+    if (!izinliMi(ortam.IZINLI_CHAT_ID, chatId)) {
+      console.log(`reddedildi: izinsiz chat id ${chatId}`);
       return new Response("ok", { status: 200 });
     }
 
-    // 3. Yalnizca komutlar kosu tetikler.
+    // 3. Yalnizca komutlar kosu tetikler. Sohbet metni dakika yakmaz.
     if (!metin.startsWith("/")) {
       await telegramaYaz(ortam, chatId,
         "Komut degil. /yardim yazarsan ne sorabilecegini listelerim.");
       return new Response("ok", { status: 200 });
     }
 
+    // 4-5. Frenler.
     const fren = await frenKontrol(ortam);
     if (fren) {
       await telegramaYaz(ortam, chatId, fren);
       return new Response("ok", { status: 200 });
     }
 
+    // 6. Calistir.
     const gonderildi = await dispatchAt(ortam, chatId, metin);
     if (!gonderildi) {
       await telegramaYaz(ortam, chatId,
@@ -88,61 +103,101 @@ export default {
   },
 };
 
+/** Beyaz liste kontrolu. Liste bos/tanimsizsa HERKES reddedilir. */
+export function izinliMi(ham, chatId) {
+  const izinliler = String(ham || "")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  if (izinliler.length === 0) return false;
+  return izinliler.includes(String(chatId));
+}
+
 /**
- * Kota ve hiz freni. Doner: kullaniciya gidecek metin, ya da gecerse null.
+ * Kosu listesinden kota ozeti cikarir.
  *
- * Iki ayri fren, ayni yerde: aylik butce (uzun vadeli) ve ardisik istek
- * araligi (anlik). Ikisi de "kac kosu oldu" sorusunun cevabindan turuyor,
- * yani tek API cagrisiyla olculuyor.
+ * GERCEK SURE kullanilir, "kosu basina 1 dakika" VARSAYILMAZ. GitHub kosu
+ * basina YUKARI YUVARLAR: 39 saniyelik kosu 1 dakika, 61 saniyelik kosu
+ * 2 dakikadir. Sabit 1 dk varsaymak, kosular yavaslamaya basladiginda
+ * kotayi oldugundan YARI kadar gosterir ve fren hic devreye girmez.
+ *
+ * `kosular` GitHub'in dondugu sirada, yani EN YENI ONCE.
  */
-async function frenKontrol(ortam) {
-  const simdi = new Date();
+export function kotaOzeti(kosular, toplamSayi, simdiMs = Date.now()) {
+  const sureler = kosular
+    .map((k) => (new Date(k.updated_at) - new Date(k.created_at)) / 1000)
+    // Negatif (henuz bitmemis) ve absurt uzun (takilmis) kosular disarida:
+    // ikisi de ortalamayi bozar.
+    .filter((s) => Number.isFinite(s) && s >= 0 && s < 3600);
+  if (sureler.length === 0) return null;
+
+  const faturali = sureler.map((s) => Math.max(1, Math.ceil(s / 60)));
+  const ortalamaFaturaDk =
+    faturali.reduce((a, b) => a + b, 0) / faturali.length;
+
+  const son10 = sureler.slice(0, 10);
+  const ortalamaSaniye = son10.reduce((a, b) => a + b, 0) / son10.length;
+
+  const sonKosu = kosular[0]?.created_at;
+  return {
+    tahminiDakika: Math.round(ortalamaFaturaDk * toplamSayi),
+    ortalamaFaturaDk,
+    ortalamaSaniye,
+    ornekSayisi: sureler.length,
+    sonKosuSaniye: sonKosu
+      ? Math.floor((simdiMs - new Date(sonKosu).getTime()) / 1000)
+      : null,
+  };
+}
+
+/**
+ * Sogutma ve kota freni. Doner: kullaniciya gidecek metin, ya da gecerse null.
+ *
+ * Olcum BASARISIZ olursa null doner, yani istek GECER. Olcememeyi "kota
+ * dolmus" saymak, GitHub API'sinin bir hikkirigini botun tumden susmasina
+ * cevirirdi.
+ */
+export async function frenKontrol(ortam, getir = fetch, simdi = new Date()) {
   const ayBasi = new Date(Date.UTC(simdi.getUTCFullYear(), simdi.getUTCMonth(), 1));
-  const kosular = await kosulariSay(ortam, ayBasi);
-  if (kosular === null) return null;   // olculemedi -> gecir, sistemi kilitleme
+  const ham = await kosulariCek(ortam, ayBasi, getir);
+  if (!ham) return null;
 
-  // Her kosu en az 1 dakika faturalanir (yukari yuvarlama).
-  const oran = kosular.toplam / AYAR.AYLIK_DAKIKA;
+  const ozet = kotaOzeti(ham.kosular, ham.toplam, simdi.getTime());
+  if (!ozet) return null;
 
+  // 4. Sogutma - kota tavanindan ONCE. Sebep: sogutma ANLIK korumadir
+  // (pes pese 20 mesaj), tavan ise AYLIK. Kota bolgesinde olmayan ama hizli
+  // yazan biri once sogutmaya takilmali, "kota %40" hesabina degil.
+  if (ozet.sonKosuSaniye !== null &&
+      ozet.sonKosuSaniye < AYAR.ASGARI_ARALIK_SN) {
+    const bekle = Math.ceil((AYAR.ASGARI_ARALIK_SN - ozet.sonKosuSaniye) / 60);
+    return `Az once bir analiz calistirildi. Her kosu kotadan dusuyor, ` +
+      `bu yuzden ${AYAR.ASGARI_ARALIK_SN} saniyeden sik tetiklenmiyor.\n\n` +
+      `En erken ${bekle} dakika sonra tekrar sor.`;
+  }
+
+  // 5. Aylik tavan.
+  const oran = ozet.tahminiDakika / AYAR.AYLIK_DAKIKA;
   if (oran >= AYAR.TAVAN_ORANI) {
-    const kalan = sonrakiAyaKalan(simdi);
     return `KOTA TAVANI - Actions kullanimi %${(oran * 100).toFixed(0)} ` +
-      `(${kosular.toplam}/${AYAR.AYLIK_DAKIKA} dk).\n\n` +
+      `(~${ozet.tahminiDakika}/${AYAR.AYLIK_DAKIKA} dk, ` +
+      `kosu ort. ${ozet.ortalamaSaniye.toFixed(0)} sn).\n\n` +
       `Sorgu botu durduruldu; gunluk rapor calismaya devam ediyor ` +
-      `(oncelik onda). Kota ${kalan} sonra sifirlanacak.`;
-  }
-
-  if (kosular.sonKosuSaniye !== null &&
-      kosular.sonKosuSaniye < AYAR.ASGARI_ARALIK_SN) {
-    const bekle = Math.ceil((AYAR.ASGARI_ARALIK_SN - kosular.sonKosuSaniye) / 60);
-    return `Az once bir analiz calistirildi. Her kosu 1 dakika kotadan ` +
-      `dusuyor, bu yuzden ${AYAR.ASGARI_ARALIK_SN} saniyeden sik ` +
-      `tetiklenmiyor.\n\nEn erken ${bekle} dakika sonra tekrar sor.`;
-  }
-
-  if (oran >= AYAR.UYARI_ORANI) {
-    // Uyari FREN DEGIL: istek calisir, yalnizca haber verilir. Burada
-    // durdurmak, kota daha bitmemisken botu erkenden susturmak olurdu.
-    return null;
+      `(oncelik onda). Kota ${sonrakiAyaKalan(simdi)} sonra sifirlanacak.`;
   }
   return null;
 }
 
-/** Ay basindan bu yana kac kosu oldu ve sonuncusu kac saniye once. */
-async function kosulariSay(ortam, ayBasi) {
+/** Ay basindan bu yana kosular + toplam sayi. Tek istek. */
+async function kosulariCek(ortam, ayBasi, getir) {
   const tarih = ayBasi.toISOString().slice(0, 10);
   const url = `https://api.github.com/repos/${ortam.GITHUB_REPO}` +
-    `/actions/runs?created=%3E%3D${tarih}&per_page=1`;
+    `/actions/runs?created=%3E%3D${tarih}&per_page=${AYAR.ORNEK_KOSU}`;
   try {
-    const cevap = await fetch(url, { headers: githubBasliklari(ortam) });
+    const cevap = await getir(url, { headers: githubBasliklari(ortam) });
     if (!cevap.ok) return null;
     const govde = await cevap.json();
-    const sonKosu = govde.workflow_runs?.[0]?.created_at;
     return {
       toplam: govde.total_count ?? 0,
-      sonKosuSaniye: sonKosu
-        ? Math.floor((Date.now() - new Date(sonKosu).getTime()) / 1000)
-        : null,
+      kosular: govde.workflow_runs ?? [],
     };
   } catch {
     return null;
@@ -157,10 +212,7 @@ async function dispatchAt(ortam, chatId, metin) {
       headers: { ...githubBasliklari(ortam), "Content-Type": "application/json" },
       body: JSON.stringify({
         event_type: "telegram-mesaj",
-        // Metin yalnizca Actions logunda ne oldugunu gormek icin. Bot
-        // mesaji buradan DEGIL, getUpdates'ten okur - tek dogruluk kaynagi
-        // Telegram'in kendi kuyrugu olsun, yoksa offset defteri ile bu
-        // yuk arasinda tutarsizlik cikar.
+        // Metin yalnizca komutu tasimak icin, 64 karakterle sinirli.
         client_payload: { chat_id: String(chatId), komut: metin.slice(0, 64) },
       }),
     });
@@ -192,7 +244,7 @@ async function telegramaYaz(ortam, chatId, metin) {
   }
 }
 
-function sonrakiAyaKalan(simdi) {
+export function sonrakiAyaKalan(simdi) {
   const sonraki = new Date(Date.UTC(simdi.getUTCFullYear(), simdi.getUTCMonth() + 1, 1));
   const saat = Math.ceil((sonraki - simdi) / 3_600_000);
   return saat >= 48 ? `${Math.floor(saat / 24)} gun` : `${saat} saat`;

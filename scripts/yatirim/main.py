@@ -132,6 +132,44 @@ def hurdle_engeli(maliyet, baslik: str, bugun: date | None = None
     )
 
 
+HATA_KODU_DOSYASI = Path("hata-kodu.txt")
+
+
+def _hatayi_bildir(kod: str, mesaj: str, ortam: dict) -> None:
+    """Bilinen bir engeli TEK mesajla bildirir ve kodunu diske birakir.
+
+    Iki sey birden cozuluyor:
+
+    1. TEKRAR. Ayni engel her kosuda ayni mesaji uretiyordu; iki saatlik
+       gridde gunde 12 ayni bildirim. `hata_takip` ayni kodu 24 saatte bir
+       bildirir.
+
+    2. CIFT MESAJ. Buradan gonderilen mesajin ustune workflow'un `failure()`
+       adimi bir de "BASARISIZ" yolluyordu. Daha kotusu: iki farkli kod her
+       kosuda birbirini "yeni hata" yapar ve bastirma HIC calismazdi. Kod
+       dosyaya yaziliyor, workflow bunu gorunce kendi genel bildirimini
+       atliyor.
+
+    Dosya `.gitignore`'da degil ama commit de EDILMEZ - Actions calisma
+    alaninda kalir, kosu bitince yok olur. Kalici olan tek sey
+    `simulasyon/hata-durumu.yaml`.
+    """
+    from hata_takip import bildir
+
+    def gonder(metin: str) -> None:
+        try:
+            mesaj_gonder(metin, ortam)
+            print("Telegram uyarisi gonderildi.")
+        except TelegramHatasi as hata:
+            print(f"UYARI - Telegram uyarisi da gonderilemedi: {hata}",
+                  file=sys.stderr)
+
+    karar = bildir(kod, mesaj, gonder)
+    if not karar.bildirilecek:
+        print(f"Ayni hata ({kod}) 24 saat icinde bildirildi, tekrar edilmedi.")
+    HATA_KODU_DOSYASI.write_text(kod, encoding="utf-8")
+
+
 def _durumu_yukle(sim: bool, olaylar, nakit_getirisi_yillik: float | None,
                   bugun: str):
     if not sim:
@@ -294,11 +332,7 @@ def main() -> int:
               file=sys.stderr)
         print("  Yedek: varliklar.yaml -> maliyet.firsat.tl_risksiz_yillik",
               file=sys.stderr)
-        try:
-            mesaj_gonder(engel.mesaj, ortam)
-        except TelegramHatasi as hata:
-            print(f"UYARI - Telegram uyarisi da gonderilemedi: {hata}",
-                  file=sys.stderr)
+        _hatayi_bildir("hurdle-bayat", engel.mesaj, ortam)
         return 1
     for uyari in maliyet.uyarilar:
         print(f"UYARI - {uyari}")
@@ -319,12 +353,7 @@ def main() -> int:
         print("HATA - ucgenleme durdurdu, rapor uretilmedi:", file=sys.stderr)
         for sonuc in fiyatlar.ucgenleme.durduranlar:
             print(f"  {sonuc.sembol}: {sonuc.gerekce}", file=sys.stderr)
-        try:
-            mesaj_gonder(mesaj, ortam)
-            print("Telegram uyarisi gonderildi.")
-        except TelegramHatasi as hata:
-            print(f"UYARI - Telegram uyarisi da gonderilemedi: {hata}",
-                  file=sys.stderr)
+        _hatayi_bildir("ucgenleme-durdurdu", mesaj, ortam)
         return 1
 
     portfoy = (

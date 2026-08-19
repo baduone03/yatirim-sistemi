@@ -40,6 +40,7 @@ on:
 
 permissions:
   contents: write             # uretilen raporu repoya geri commit etmek icin
+  actions: read               # kosu suresi izleme (kosu_suresi.py)
 
 concurrency:
   group: gunluk-rapor
@@ -65,6 +66,12 @@ jobs:
       - name: Testler
         # Cevrimdisi testler. Kirikken rapor uretip Telegram'a yollamayalim.
         run: python -m unittest discover -s scripts/yatirim -p "test_*.py" -v
+
+      - name: Worker testleri
+        # Node ubuntu-latest'te ONCEDEN KURULU, `node --test` yerlesik -
+        # ek kurulum ve bagimlilik yok, ~0.2 saniye. Worker yetki ve kota
+        # frenlerini tutuyor; kirik bir fren sessizce kota tuketir.
+        run: node --test altyapi/telegram-webhook/worker.test.js
 
       - name: Rapor uret ve Telegram'a gonder
         env:
@@ -106,29 +113,70 @@ jobs:
             git push
           fi
 
-      - name: Hata bildirimi
-        if: failure()
+      - name: Kosu suresini izle
+        # 60 saniyeyi asan kosu 1 degil 2 dakika faturalanir, yani butce bir
+        # anda IKIYE katlanir - ve bu sessizce olur. Esik 50 sn, uyari gunde
+        # bir kez (gunluk idempotency anahtari).
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/yatirim/kosu_suresi.py
+
+      - name: Hata cozuldu bildirimi
+        # Kosu BASARILI bittiyse aktif hata kaydi temizlenir ve (varsa)
+        # "cozuldu" mesaji gider. Bu adim olmasaydi ariza duzelse bile durum
+        # dosyasinda asili kalir ve bir sonraki FARKLI hata "ayni hata"
+        # sanilip bastirilabilirdi.
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/yatirim/hata_takip.py --kod ""
+
+      - name: Hata bildirimi
+        if: failure()
+        # AYNI hata 24 saatte bir kez bildirilir (hata_takip.py). Iki saatlik
+        # gridde kalici bir ariza gunde 12 ayni mesaj uretiyordu; sonuc
+        # paradoksaldi - bildirim ne kadar cok gelirse o kadar az okunuyor
+        # ve gercekten yeni bir ariza gurultunun icinde kayboluyordu.
+        #
+        # Kod SABIT bir etiket ("rapor-basarisiz"), mesaj metni degil: metinde
+        # kosu URL'i var ve o her kosuda degisir - metne bakan bir
+        # karsilastirma her seferinde "yeni hata" gorurdu.
+        #
+        # main.py BILINEN bir engelde (bayat hurdle, ucgenleme durdurma)
+        # kendi ozel kodunu bildirip `hata-kodu.txt` birakir. O dosya varsa
+        # burasi SUSAR: yoksa ayni ariza icin iki mesaj gider ve - daha
+        # kotusu - iki farkli kod her kosuda birbirini "yeni hata" yapip
+        # bastirmayi tumden etkisiz kilardi.
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          CALISMA: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          python - <<'PY'
-          import os
-          import sys
+          if [ -s hata-kodu.txt ]; then
+            echo "main.py zaten bildirdi ($(cat hata-kodu.txt)), atlaniyor."
+            exit 0
+          fi
+          python scripts/yatirim/hata_takip.py \
+            --kod "rapor-basarisiz" \
+            --mesaj "<b>Yatirim raporu BASARISIZ</b>
+          Gunluk calisma hata verdi, rapor uretilmedi.
+          Detay: $CALISMA"
 
-          sys.path.insert(0, "scripts/yatirim")
-          from notify import TelegramHatasi, mesaj_gonder
-
-          calisma = (
-              f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
-              f"/actions/runs/{os.environ['GITHUB_RUN_ID']}"
-          )
-          try:
-              mesaj_gonder(
-                  "<b>Yatirim raporu BASARISIZ</b>\n"
-                  "Gunluk calisma hata verdi, rapor uretilmedi.\n"
-                  f"Detay: {calisma}"
-              )
-          except TelegramHatasi as hata:
-              print(f"Hata bildirimi de gonderilemedi: {hata}", file=sys.stderr)
-          PY
+      - name: Hata durumunu commit et
+        # HER ZAMAN calisir (basarili da basarisiz da). Commit edilmezse
+        # Actions'in temiz checkout'u yuzunden her kosu "yeni hata" sanir ve
+        # bastirma hicbir zaman devreye girmez.
+        if: always()
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add 04-projects/yatirim-sistemi/simulasyon/hata-durumu.yaml || true
+          if git diff --staged --quiet; then
+            echo "Hata durumu degismedi."
+          else
+            git commit -m "chore: hata durumu $(date -u +'%Y-%m-%d %H:%M') UTC"
+            git pull --rebase --autostash
+            git push
+          fi

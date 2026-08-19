@@ -435,3 +435,49 @@ Bu vault'ta her token para. Ciktilari su kurallara gore uret:
 ## memory.md Kullanimi
 - Oturumlar arasi bilgileri memory.md'ye yaz.
 - Format: Tarih + kisa madde.
+
+## Gotchas (webhook ve hata bildirimi)
+- **yetki kontrolu WORKER'da, Actions'ta degil**: Telegram botlari herkese
+  aciktir. Suzme Actions'ta kalsaydi her yabanci mesaj bir kosu baslatir ve
+  1 dakika kota yakardi - botun adini bilen biri kotayi tuketebilirdi.
+  Actions tarafindaki kontrol (`tek_komutu_cevapla`) KALDI ama ikincil:
+  repo'ya yazma yetkisi olan biri Worker'i atlayip dogrudan dispatch atabilir.
+- **Worker sirasi sabit**: secret_token (401) -> chat id (200 sessiz) ->
+  komut bicimi -> sogutma -> kota tavani -> dispatch. Sogutma tavandan ONCE:
+  sogutma ANLIK korumadir (pes pese mesaj), tavan AYLIK. Sirasi tersine
+  cevrilirse hizli yazan biri "kota %40" hesabina takilmaz ve 20 kosu acar.
+- **`secret_token` yoksa 401, 200 DEGIL**: Telegram'in kendi istekleri her
+  zaman dogru basligi tasir, yani 401 alan istek sahtedir. Ayrica setWebhook'ta
+  secret unutulmussa 401 Telegram tarafinda GORUNUR hata olarak birikir;
+  sessiz 200 bu yanlis kurulumu "her mesaj kayboluyor" seklinde gizlerdi.
+- **yetkisiz chat'e CEVAP DONMEZ**: "yetkin yok" demek bile botun orada
+  oldugunu dogrular.
+- **kota GERCEK kosu suresinden hesaplanir**: `kotaOzeti` sureyi olcup
+  `ceil(sn/60)` uygular. "Kosu basina 1 dk" varsaymak, kosular yavasladiginda
+  kotayi gercegin YARISI gosterir ve fren hic devreye girmez. 39 sn = 1 dk,
+  61 sn = 2 dk.
+- **kota olcumu basarisizsa fren ACILIR**: `frenKontrol` null doner, istek
+  gecer. Olcememeyi "kota dolmus" saymak, GitHub API hikkirigini botun
+  tumden susmasina cevirirdi. Ayni felsefe `kosu_suresi.kosulari_cek`'te:
+  hicbir sekilde yukari patlamaz, `[]` doner.
+- **hata bildirimi kod bazinda 24 saatte bir** (`hata_takip.py`): iki saatlik
+  gridde kalici bir ariza gunde 12 ayni mesaj uretiyordu. Yeni kod HEMEN,
+  ayni kod 24 saat sonra "hala devam ediyor", cozulunce HEMEN.
+- **bastirilan bildirim `son_bildirim`'i ILERLETMEZ**: ilerletseydi her kosu
+  24 saatlik sayaci sifirlar ve "hala devam ediyor" ozeti hicbir zaman
+  gitmezdi. Sinyal bekleme latch'indeki ayni tuzak.
+- **hata KODU karsilastirilir, MESAJ degil**: mesajda kosu URL'i ve tarih
+  var, her kosuda degisir. Metne bakan karsilastirma her seferinde "yeni
+  hata" gorur ve bastirma hic calismaz.
+- **`main.py` bilinen engelde `hata-kodu.txt` birakir**, workflow'un genel
+  `failure()` adimi onu gorunce SUSAR. Yoksa ayni ariza icin iki mesaj gider
+  ve - daha kotusu - iki farkli kod ("hurdle-bayat" / "rapor-basarisiz") her
+  kosuda birbirini "yeni hata" yapip bastirmayi tumden etkisiz kilar.
+- **`hata-durumu.yaml` COMMIT EDILMEK ZORUNDA** ve commit adimi
+  `if: always()`: Actions temiz checkout aliyor, commit edilmezse her kosu
+  "yeni hata" sanir. Basarisiz kosuda da yazilmali - hatanin oldugu kosu tam
+  da kaydin guncellenmesi gereken kosudur.
+- **Worker testleri `node --test`**: bagimlilik YOK, `npm install`
+  gerekmiyor. Python'daki "pytest YOK, stdlib unittest" kuralinin karsiligi.
+  Dizin yolu yerine DOSYA yolu ver (`worker.test.js`) - dizin bicimi bu Node
+  surumunde modul cozumleme hatasi veriyor.
