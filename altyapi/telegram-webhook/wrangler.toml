@@ -1,0 +1,19 @@
+# Cloudflare Worker yapilandirmasi.
+#
+# BURAYA HICBIR ANAHTAR YAZILMAZ. `vars` bolumu Cloudflare panelinde ACIK
+# METIN gorunur ve bu dosya git'te izlenir - token'lar `wrangler secret put`
+# ile girilir, dosyaya hic dusmez. Bkz. KURULUM.md.
+
+name = "yatirim-telegram-webhook"
+main = "worker.js"
+compatibility_date = "2026-08-19"
+
+[vars]
+# Gizli DEGIL - repo adi zaten PAT'in kapsaminda. Kendi repona gore degistir.
+GITHUB_REPO = "baduone03/yatirim-sistemi"
+
+# secret olarak girilecekler (wrangler secret put <AD>):
+#   TELEGRAM_BOT_TOKEN       - mevcut bot token'i
+#   TELEGRAM_WEBHOOK_SECRET  - kendi uretecegin rastgele dize
+#   GITHUB_PAT               - fine-grained PAT, yalnizca bu repo, Contents: RW
+#   IZINLI_CHAT_ID           - senin chat id'in (virgulle birden fazla)

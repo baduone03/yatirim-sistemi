@@ -28,6 +28,7 @@ saatte bir bos commit uretmek repo gecmisini okunmaz yapar.
 
 from __future__ import annotations
 
+import argparse
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -673,16 +674,64 @@ def guncellemeleri_isle(guncellemeler: list[dict], izinliler: set[str],
     return son_id, cevaplanan
 
 
+def tek_komutu_cevapla(komut: str, chat_id: str,
+                       env: dict[str, str] | None = None,
+                       gonder=None, yukleyici=None) -> int:
+    """Webhook yolu: komut Telegram'dan DEGIL, dispatch yukunden gelir.
+
+    Neden ayri yol: Telegram'da webhook aktifken `getUpdates` HTTP 409 doner -
+    ikisi ayni anda KULLANILAMAZ. Webhook'a gecince yoklama yolu fiilen
+    kapaniyor, o yuzden komutun govdesi Worker tarafindan tasiniyor.
+
+    Offset defteri bu yolda KULLANILMAZ ve gerekmez: her mesaj icin tam bir
+    dispatch atiliyor, yani "hangi mesaji islemistim" sorusu yok. Tekrar
+    gonderim riski de yok - Worker her zaman HTTP 200 doner, Telegram
+    yeniden denemez.
+    """
+    env = env if env is not None else env_oku()
+    token = env.get("TELEGRAM_BOT_TOKEN") or env.get("TELEGRAM_TOKEN")
+    if not token:
+        print("HATA - TELEGRAM_BOT_TOKEN yok.", file=sys.stderr)
+        return 1
+
+    # Worker de suzuyor ama burada TEKRAR suzuluyor: Worker atlanip dispatch
+    # dogrudan atilabilir (repo yazma yetkisi olan herkes atabilir), yani
+    # yetki kontrolu tek bir katmana birakilamaz.
+    izinliler = izinli_kimlikler(env)
+    if not izinliler:
+        print("HATA - TELEGRAM_IZINLI_CHAT_ID tanimli degil, bot cevap vermez.",
+              file=sys.stderr)
+        return 1
+    if str(chat_id) not in izinliler:
+        print(f"UYARI - izinsiz chat id reddedildi: {chat_id}", file=sys.stderr)
+        return 0
+
+    gonder = gonder or (lambda hedef, metin: cevap_gonder(token, hedef, metin))
+    try:
+        gonder(str(chat_id), cevabi_uret(komut, Baglam(env=env, yukleyici=yukleyici)))
+    except Exception as hata:                     # noqa: BLE001
+        print(f"HATA - cevap gonderilemedi: {type(hata).__name__}", file=sys.stderr)
+        return 1
+    print(f"Webhook komutu cevaplandi: {komut[:32]}")
+    return 0
+
+
 def calistir(env: dict[str, str] | None = None, getir=None, gonder=None,
              offset_dosyasi: Path = OFFSET_DOSYASI, yukleyici=None,
-             ayarlar: BotAyarlari | None = None, simdi=None) -> int:
+             ayarlar: BotAyarlari | None = None, simdi=None,
+             pencereyi_atla: bool = False) -> int:
     """Bir kosu. Doner: surec cikis kodu.
 
     Ag katmani enjekte edilir (`kaynaklar.py` ile ayni kalip) - testler sahte
     getir/gonder gecirir ve paket tamamen cevrimdisi kalir.
+
+    `pencereyi_atla`: kosu penceresi/aralik kapisini gec. Webhook ile gelen
+    kosular icin ZORUNLU - o kosu zaten gelmis bir mesaj yuzunden basladi,
+    "sirasi degil" diye kesmek mesaji cevapsiz birakirdi. Kapi yalnizca
+    ZAMANLANMIS kosularin bosa dakika yakmasini engellemek icindir.
     """
     ayarlar = ayarlar if ayarlar is not None else bot_ayarlarini_oku()
-    if not ayarlar.kosulacak_mi(simdi or simdi_utc()):
+    if not pencereyi_atla and not ayarlar.kosulacak_mi(simdi or simdi_utc()):
         print("Kosu penceresi disinda, cikiliyor.")
         return 0
 
@@ -721,7 +770,24 @@ def calistir(env: dict[str, str] | None = None, getir=None, gonder=None,
 
 
 def main() -> int:
-    return calistir()
+    ayristirici = argparse.ArgumentParser(
+        description="Telegram sorgu botu - salt okunur")
+    ayristirici.add_argument(
+        "--zorla", action="store_true",
+        help="kosu penceresi/aralik kapisini atla (elle tetiklenen kosu)")
+    ayristirici.add_argument(
+        "--komut", default="",
+        help="webhook yolu: cevaplanacak komut (getUpdates kullanilmaz)")
+    ayristirici.add_argument(
+        "--chat-id", default="", help="webhook yolu: cevabin gidecegi chat")
+    argumanlar = ayristirici.parse_args()
+
+    if argumanlar.komut:
+        if not argumanlar.chat_id:
+            print("HATA - --komut ile --chat-id zorunlu.", file=sys.stderr)
+            return 1
+        return tek_komutu_cevapla(argumanlar.komut, argumanlar.chat_id)
+    return calistir(pencereyi_atla=argumanlar.zorla)
 
 
 if __name__ == "__main__":

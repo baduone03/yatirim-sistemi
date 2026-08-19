@@ -454,6 +454,28 @@ class KomutGovdesiTesti(unittest.TestCase):
             cevap = self._cevap(komut)
             self.assertTrue(cevap.strip(), komut)
 
+    def test_webhook_yolu_tek_komutu_cevaplar(self):
+        """Webhook aktifken getUpdates 409 doner - komut yukten gelmeli."""
+        gonderilen = []
+        kod = bot_sorgu.tek_komutu_cevapla(
+            "/portfoy", "123456", env=ENV,
+            gonder=lambda chat, metin: gonderilen.append((chat, metin)),
+            yukleyici=lambda env: self.veri)
+        self.assertEqual(kod, 0)
+        self.assertEqual(len(gonderilen), 1)
+        self.assertEqual(gonderilen[0][0], "123456")
+        self.assertIn("Pozisyonlar", gonderilen[0][1])
+
+    def test_webhook_yolu_izinsiz_chat_i_reddeder(self):
+        """Worker de suzuyor ama dispatch dogrudan da atilabilir."""
+        gonderilen = []
+        kod = bot_sorgu.tek_komutu_cevapla(
+            "/portfoy", "999999", env=ENV,
+            gonder=lambda chat, metin: gonderilen.append((chat, metin)),
+            yukleyici=lambda env: self.veri)
+        self.assertEqual(kod, 0)
+        self.assertEqual(gonderilen, [])
+
     def test_durum_bayat_hurdle_rate_i_bildirir(self):
         """Gun sonu ozetinde gorunen uyari /durum'da da gorunmeli.
 

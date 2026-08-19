@@ -408,6 +408,30 @@ Bu vault'ta her token para. Ciktilari su kurallara gore uret:
 - **sessiz saat TIPE bakar**: `biriktirilir_mi(tip, an)`, `sessiz_mi(an)` degil. 01:00-08:00 arasi BIST de Nasdaq da kapali, yani o saatte sinyal uretebilen tek sey kripto - islem karari gece de GIDER, ozet ve uyari birikir. Biriken bir "AL" mesaji tavsiye degil, kacirilan firsatin tutanagidir. `bildirim.yaml -> sessiz_saatler.istisna_tipler`, bos birakilirsa gece tamamen susar.
 - **sessiz saatte istisna tip hiz siniri BIRLESTIRMESINI atlar**: birlestirme bekleyen kuyrugu da yollar. Atlamasaydi 01:05'teki tek kripto sinyali, 00:55'te dolan saatlik sinir yuzunden tum gece kuyrugunu bosaltir ve sessiz saat kuralini fiilen kaldirirdi.
 
+- **webhook aktifken `getUpdates` HTTP 409 doner**: Telegram ikisini ayni
+  anda kullandirmaz. Bu yuzden webhook'a gecerken yoklama yolu fiilen
+  kapandi ve `bot-sorgu.yml`den cron KALDIRILDI - zamanlanmis kosu bekleyen
+  mesaji okuyamaz, sadece hata verip 1 dakika yakardi. Emniyet agi
+  Telegram'in kendisinde: webhook 200 donmezse guncelleme kuyrukta kalir ve
+  yeniden denenir. Geri donus tek satir: `deleteWebhook`.
+- **Worker HER ZAMAN HTTP 200 doner**: 401/500 donerse Telegram webhook'u
+  devre disi birakabilir veya sonsuz yeniden deneme baslatir. Yetkisiz istek
+  sessizce yutulur - reddedildigi belli EDILMEZ.
+- **chat id IKI yerde suzuluyor** (Worker + `tek_komutu_cevapla`): repo'ya
+  yazma yetkisi olan biri Worker'i atlayip dogrudan `repository_dispatch`
+  atabilir. Yetki kontrolu tek katmana birakilamaz.
+- **komut metni workflow'da `${{ }}` ile GOMULMEZ**: kullanici yazdigi metin
+  dogrudan `run:` icine gomulseydi kabuk enjeksiyonu olurdu. Ortam
+  degiskeni (`KOMUT`) uzerinden gecer, tirnak icinde okunur.
+- **webhook maliyeti KULLANIMA bagli**: yoklama sabit ~1095 dk/ay yakiyordu,
+  webhook ~10 mesaj/gunde ~300 dk. Ama gunde 40 komut ~1200 dk eder.
+  `worker.js -> AYAR` iki fren tutuyor: `ASGARI_ARALIK_SN` (90 sn) ve
+  `TAVAN_ORANI` (0.92). Tavanda sorgu botu durur, gunluk rapor DURMAZ -
+  oncelik onda.
+- **kota olcumu basarisizsa fren ACILIR**: `kosulariSay` null donunce istek
+  gecer. Olcememeyi "kota dolmus" saymak, GitHub API'sinin bir hikkirigini
+  botun tumden susmasina cevirirdi.
+
 ## memory.md Kullanimi
 - Oturumlar arasi bilgileri memory.md'ye yaz.
 - Format: Tarih + kisa madde.

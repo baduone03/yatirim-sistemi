@@ -8,29 +8,43 @@ name: Telegram Sorgu Botu
 # Repoya yazilan tek sey `simulasyon/bot_offset.txt` - son islenen
 # Telegram update_id. Degismediyse commit ATILMAZ.
 #
-# ARALIK: cron burada SABIT 30 dakikadir - GitHub Actions zamanlamasi YAML
-# okuyamaz. Gercek aralik `bildirim.yaml -> bot.aralik_dakika` icinde ve
-# script fazladan kosuyu hicbir sey yapmadan keser. Sikligi degistirmek icin
-# bu dosyaya dokunmak gerekmiyor.
+# TETIKLEME: asil yol WEBHOOK. Telegram mesaji Cloudflare Worker'a duser,
+# Worker `repository_dispatch` atar, bu workflow ~40 saniyede cevap verir.
+# Bkz. altyapi/telegram-webhook/ - kurulum ve Worker kodu orada.
 #
 # DAKIKA BUTCESI (private repo, GitHub Free = 2000 dk/ay, kosu basina
 # YUKARI YUVARLANIR):
-#   30 dk aralik x 18 saat = 36 kosu/gun x 30.4 = ~1095 kosu = ~1095 dk (%55)
-#   gunluk-rapor.yml ~400 dk (%20) ustune toplam ~%75.
-# Butce sikisirsa ilk cevrilecek dugme `bot.aralik_dakika: 60` (~550 dk).
-# Mesaj YOKKEN kosu getUpdates'ten sonra hemen cikar; asil maliyet checkout
-# ve pip adimlaridir, bu yuzden pip cache acik.
+#   webhook  ~10 mesaj/gun x 30.4      = ~300 dk    (kullanima gore degisir)
+#   gunluk-rapor.yml                   = ~400 dk
+#   toplam                             = ~700 dk = %35
+#
+# Eski 30 dakikalik yoklama tek basina ~1095 dk yakiyordu (%55) ve cevap
+# 30 dakika gecikebiliyordu. Webhook hem daha hizli hem daha ucuz cunku
+# yalnizca GERCEKTEN mesaj oldugunda dakika yaniyor.
+#
+# DIKKAT: maliyet artik KULLANIMA bagli. Gunde 40 komut = ~1200 dk. Worker
+# tarafinda iki fren var (asgari aralik + aylik tavan), ama sinirsiz degil.
+#
+# Worker kota korumasi: aylik kosu sayisi esigi asarsa Worker dispatch ATMAZ,
+# dogrudan Telegram'dan "kota %X, N dakika sonra" cevabi doner. Yani bu
+# workflow'un onunde bir fren var - bkz. altyapi/telegram-webhook/worker.js.
 
 on:
-  schedule:
-    # Saatler UTC, Turkiye kalici UTC+3. TR 07:00-01:00 = UTC 04:00-22:00.
-    # Gece penceresi disi bilincli: kimse soru sormazken dakika yakmak,
-    # butcenin yarisini uyuyan bir bota harcamak demek.
-    #
-    # Dakika 3 ve 33, 0/30 DEGIL: GitHub zamanlanmis kosulari best-effort
-    # calistirir ve tam saat/yarim saat kuyrugun en kalabalik anidir.
-    - cron: '3,33 4-21 * * *'
+  repository_dispatch:
+    types: [telegram-mesaj]   # Cloudflare Worker bunu atar
   workflow_dispatch:          # elle tetikleme - test icin
+
+# CRON YOK - bilincli.
+#
+# Telegram'da webhook aktifken `getUpdates` HTTP 409 doner; ikisi ayni anda
+# KULLANILAMAZ. Yani zamanlanmis bir yoklama kosusu bekleyen mesaji zaten
+# okuyamaz, sadece hata verip 1 dakika yakardi.
+#
+# Emniyet agi Telegram'in KENDISINDE: webhook 200 donmezse Telegram
+# guncellemeyi kuyrukta tutar ve yeniden dener. Cloudflare kesintisi mesaji
+# dusurmez, geciktirir. Kuyrukta ne kaldigini gormek icin:
+#   curl "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"
+# (pending_update_count ve last_error_message alanlarina bak)
 
 permissions:
   contents: write             # yalnizca bot_offset.txt commit'i icin
@@ -63,10 +77,25 @@ jobs:
         run: git pull --rebase --autostash
 
       - name: Sorgulari cevapla
+        # Webhook yolu: komut dispatch yukunden gelir, getUpdates CAGRILMAZ
+        # (webhook aktifken 409 doner). Elle tetiklemede yuk olmadigi icin
+        # eski yoklama yoluna dusulur - webhook henuz kurulmamissa da
+        # calissin diye.
+        #
+        # Komut metni kabuk degiskeni uzerinden geciyor, `${{ }}` ile
+        # dogrudan komut satirina GOMULMUYOR: kullanicinin yazdigi metin
+        # dogrudan gomulseydi kabuk enjeksiyonu olurdu.
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_IZINLI_CHAT_ID: ${{ secrets.TELEGRAM_IZINLI_CHAT_ID }}
-        run: python scripts/yatirim/bot_sorgu.py
+          KOMUT: ${{ github.event.client_payload.komut }}
+          CHAT_ID: ${{ github.event.client_payload.chat_id }}
+        run: |
+          if [ -n "$KOMUT" ]; then
+            python scripts/yatirim/bot_sorgu.py --komut "$KOMUT" --chat-id "$CHAT_ID"
+          else
+            python scripts/yatirim/bot_sorgu.py --zorla
+          fi
 
       - name: Offset defterini commit et
         # YALNIZCA offset dosyasi. `git add 04-projects/yatirim-sistemi/`

@@ -18,6 +18,11 @@
 !/README.md
 !/scripts/
 
+# Telegram webhook'unu karsilayan Cloudflare Worker. Yalnizca KOD ve
+# kurulum notu; hicbir anahtar burada durmaz - token'lar `wrangler secret
+# put` ile Cloudflare'e girilir ve dosyaya hic yazilmaz.
+!/altyapi/
+
 # Terfi kapisini gecmis, dogrulanmis notlar. 03-wiki calisma alanidir ve
 # GitHub'a CIKMAZ; buraya yalnizca 7 kontrolu gecen not kopyalanir.
 !/07-dogrulanmis/
