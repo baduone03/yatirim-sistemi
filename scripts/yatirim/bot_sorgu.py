@@ -332,6 +332,18 @@ def komut_durum(baglam: Baglam, arguman: str) -> str:
     engellenen = veri.maliyet.engellenenler
     if engellenen:
         satirlar.append(f"Eksik maliyet: {len(engellenen)} varlikta sinyal yok.")
+    # Hurdle bayatligi BURAYA DA yazilir. /durum'un isi veri tazeligi ve bu
+    # sayi gereken getiriyi, asiri getiriyi ve nakit getirisini belirliyor.
+    # Gun sonu ozetinde gorunup burada gorunmemesi, iki ayri uyari yuzeyi
+    # olmasindan kaynaklanan klasik boslugun ta kendisi olurdu.
+    if not veri.maliyet.risksiz_taze_mi():
+        yas = veri.maliyet.risksiz_gun_yasi()
+        satirlar.append(
+            f"UYARI - hurdle rate {yas} gunluk "
+            f"({kacis(veri.maliyet.risksiz_tarih)}), taze esigi "
+            f"{veri.maliyet.risksiz_bayatlik_gun} gun."
+            if yas is not None else
+            "UYARI - hurdle rate tarihi bilinmiyor.")
     return "\n".join(satirlar + _belirsizlik_uyarisi(veri))
 
 

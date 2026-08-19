@@ -454,6 +454,24 @@ class KomutGovdesiTesti(unittest.TestCase):
             cevap = self._cevap(komut)
             self.assertTrue(cevap.strip(), komut)
 
+    def test_durum_bayat_hurdle_rate_i_bildirir(self):
+        """Gun sonu ozetinde gorunen uyari /durum'da da gorunmeli.
+
+        Iki ayri uyari yuzeyi var (mesaj.uyarilari_topla ve bot_sorgu); yeni
+        bir uyari turunun birine girip digerine girmemesi bu sistemde daha
+        once yasandi.
+        """
+        import dataclasses
+        bayat = dataclasses.replace(self.veri.maliyet,
+                                    risksiz_tarih="2026-08-07",
+                                    risksiz_bayatlik_gun=7,
+                                    risksiz_durdurma_gun=30)
+        self.baglam = Baglam(env=ENV, yukleyici=lambda env: dataclasses.replace(
+            self.veri, maliyet=bayat))
+        cevap = self._cevap("/durum")
+        self.assertIn("hurdle rate", cevap.lower())
+        self.assertIn("2026-08-07", cevap)
+
     def test_veri_zamani_mesaj_zamani_degil(self):
         """Her fiyat/deger ciktisi VERI gununu tasimali.
 
