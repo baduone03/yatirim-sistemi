@@ -15,8 +15,9 @@ name: Telegram Sorgu Botu
 # DAKIKA BUTCESI (private repo, GitHub Free = 2000 dk/ay, kosu basina
 # YUKARI YUVARLANIR):
 #   webhook  ~10 mesaj/gun x 30.4      = ~300 dk    (kullanima gore degisir)
+#   emniyet agi 2 kosu/gun x 30.4      =  ~61 dk
 #   gunluk-rapor.yml                   = ~400 dk
-#   toplam                             = ~700 dk = %35
+#   toplam                             = ~760 dk = %38
 #
 # Eski 30 dakikalik yoklama tek basina ~1095 dk yakiyordu (%55) ve cevap
 # 30 dakika gecikebiliyordu. Webhook hem daha hizli hem daha ucuz cunku
@@ -32,19 +33,21 @@ name: Telegram Sorgu Botu
 on:
   repository_dispatch:
     types: [telegram-mesaj]   # Cloudflare Worker bunu atar
+  schedule:
+    # EMNIYET AGI - gunde 2 kez, ~61 dk/ay. TR 09:07 ve 21:07.
+    #
+    # Webhook AKTIFKEN bu kosu hicbir sey yapmaz: getUpdates HTTP 409 doner
+    # ve script "Webhook aktif - yoklamaya gerek yok" deyip BASARIYLA cikar.
+    # Yani kurulu sistemde gunde 2 dakikalik sigorta primi.
+    #
+    # Webhook YOKKEN (veya Worker/Cloudflare cokmusken) eski yoklama yolu
+    # devreye girer ve bekleyen mesajlar cevaplanir. Bu sayede webhook
+    # kurulumu ile kod arasinda SIRA BAGIMLILIGI yok - hangisi once olursa
+    # olsun bot cevap veriyor.
+    #
+    # Webhook aylarca sorunsuz calistiktan sonra bu blok silinebilir.
+    - cron: '7 6,18 * * *'
   workflow_dispatch:          # elle tetikleme - test icin
-
-# CRON YOK - bilincli.
-#
-# Telegram'da webhook aktifken `getUpdates` HTTP 409 doner; ikisi ayni anda
-# KULLANILAMAZ. Yani zamanlanmis bir yoklama kosusu bekleyen mesaji zaten
-# okuyamaz, sadece hata verip 1 dakika yakardi.
-#
-# Emniyet agi Telegram'in KENDISINDE: webhook 200 donmezse Telegram
-# guncellemeyi kuyrukta tutar ve yeniden dener. Cloudflare kesintisi mesaji
-# dusurmez, geciktirir. Kuyrukta ne kaldigini gormek icin:
-#   curl "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"
-# (pending_update_count ve last_error_message alanlarina bak)
 
 permissions:
   contents: write             # yalnizca bot_offset.txt commit'i icin

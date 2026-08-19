@@ -454,6 +454,20 @@ class KomutGovdesiTesti(unittest.TestCase):
             cevap = self._cevap(komut)
             self.assertTrue(cevap.strip(), komut)
 
+    def test_webhook_aktifken_yoklama_basariyla_cikar(self):
+        """409 hata DEGIL: webhook kuruluysa yoklamanin isi yoktur.
+
+        Hata sayilsaydi emniyet agi croni her gun kirmizi kosu uretir ve
+        gercek bir ariza o gurultunun icinde kaybolurdu.
+        """
+        def patlat(_offset):
+            raise bot_sorgu.WebhookAktif()
+
+        kod = bot_sorgu.calistir(
+            env=ENV, getir=patlat, gonder=lambda *a: None,
+            offset_dosyasi=gecici_dosya(), ayarlar=AYARLAR_ACIK, simdi=AN)
+        self.assertEqual(kod, 0)
+
     def test_webhook_yolu_tek_komutu_cevaplar(self):
         """Webhook aktifken getUpdates 409 doner - komut yukten gelmeli."""
         gonderilen = []

@@ -621,12 +621,21 @@ def offset_yaz(deger: int, dosya: Path = OFFSET_DOSYASI) -> bool:
 # Telegram tasima
 # --------------------------------------------------------------------------
 
+class WebhookAktif(Exception):
+    """getUpdates 409 dondu: webhook kurulu, yoklama yoluna gerek yok."""
+
+
 def guncellemeleri_getir(token: str, offset: int) -> list[dict]:
     yanit = requests.get(
         f"{API_KOKU}/bot{token}/getUpdates",
         params={"offset": offset + 1, "timeout": 0, "allowed_updates": '["message"]'},
         timeout=ZAMAN_ASIMI,
     )
+    if yanit.status_code == 409:
+        # Webhook aktif. Telegram getUpdates ile webhook'u ayni anda
+        # kullandirmaz. Bu HATA DEGIL, dogru yapilandirmanin isareti:
+        # mesajlar Worker uzerinden dispatch olarak geliyor demektir.
+        raise WebhookAktif()
     if not yanit.ok:
         # Token URL yolunda - ham hata metnini yukari birakmak sizinti olur.
         raise RuntimeError(f"getUpdates reddedildi (HTTP {yanit.status_code})")
@@ -753,6 +762,13 @@ def calistir(env: dict[str, str] | None = None, getir=None, gonder=None,
 
     try:
         guncellemeler = getir(offset)
+    except WebhookAktif:
+        # BASARI olarak cikilir. Bu kosu yalnizca emniyet agi croni; webhook
+        # calisiyorsa yapacak isi yoktur. Hata sayilsaydi webhook kurulu olan
+        # her sistemde gunluk kirmizi kosular birikirdi ve gercek bir ariza
+        # o gurultunun icinde kaybolurdu.
+        print("Webhook aktif - yoklamaya gerek yok, cikiliyor.")
+        return 0
     except Exception as hata:                     # noqa: BLE001
         print(f"HATA - getUpdates: {type(hata).__name__}", file=sys.stderr)
         return 1
