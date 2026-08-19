@@ -369,6 +369,7 @@ class MaliyetModeli:
     risksiz_tarih: str = ""          # ISO. Bos = tazeligi BILINMIYOR.
     risksiz_serisi: str = ""
     risksiz_bayatlik_gun: int = 7
+    risksiz_durdurma_gun: int = 30
     enflasyon_yillik: float | None = None
     enflasyon_kaynagi: str = "yapilandirma"
     enflasyon_serisi: str = ""
@@ -417,13 +418,50 @@ class MaliyetModeli:
         yazilmis bir yedegin ne zamandan kaldigi bilinmiyorsa guncel olduguna
         guvenilemez.
         """
+        yas = self.risksiz_gun_yasi(bugun)
+        return yas is not None and yas <= self.risksiz_bayatlik_gun
+
+    def risksiz_gun_yasi(self, bugun: date | None = None) -> int | None:
+        """Hurdle rate kac gunluk? Oran veya tarih yoksa None.
+
+        None "olculemedi" demektir, "0 gunluk" degil - cagiran taraf ikisini
+        ayirmak zorunda.
+        """
         if self.tl_risksiz_yillik is None or not self.risksiz_tarih:
-            return False
+            return None
         try:
             tarih = date.fromisoformat(self.risksiz_tarih)
         except ValueError:
-            return False
-        return ((bugun or date.today()) - tarih).days <= self.risksiz_bayatlik_gun
+            return None
+        return ((bugun or date.today()) - tarih).days
+
+    def risksiz_durduruyor_mu(self, bugun: date | None = None) -> bool:
+        """Hurdle rate rapor uretimini DURDURACAK kadar bozuk mu?
+
+        Bayatlikta iki ayri kusur var, ayni muameleyi hak etmiyorlar:
+
+          1. YAYIM GECIKMESI (bayatlik_gun < yas <= durdurma_gun). TCMB
+             `TP.TRY.MT02`'yi haftalik yayimliyor ve gecikebiliyor. Ama olculen
+             sey POLITIKA FAIZINE bagli mevduat orani - 12 gunde onda birkac
+             puan oynar. %48'lik bir hurdle'da bu gurultu. Rapor URETILIR,
+             bayatlik her yerde ISARETLENIR.
+
+          2. YAPISAL KOPUKLUK (yas > durdurma_gun, ya da oran/tarih hic yok).
+             Rapor URETILMEZ.
+
+        Durdurma esigi 30 gun keyfi degil: TCMB Para Politikasi Kurulu ~6
+        haftada bir toplaniyor. 30 gunu asan bir oran, arada bir faiz karari
+        gecmis OLABILECEGI anlamina gelir - yani sayi artik gecikmis degil,
+        yanlis olabilir.
+
+        Eski surumde tek esik vardi ve yayim gecikmesi tum raporu
+        durduruyordu: 2026-08-19'da TCMB 12 gundur yayim yapmayinca sistem
+        arka arkaya 6 kosuda coktu ve yalnizca "BASARISIZ" alarmi uretti.
+        Asil korkulan sey bayatligin GORUNMEMESIYDI; cozumu susmak degil,
+        isaretlemek.
+        """
+        yas = self.risksiz_gun_yasi(bugun)
+        return yas is None or yas > self.risksiz_durdurma_gun
 
     def oranlarla(self, risksiz: tuple[float, str] | None,
                   enflasyon: tuple[float, str] | None,
@@ -651,6 +689,7 @@ def modeli_kur(ham: dict, sinif_haritasi: dict[str, str]) -> MaliyetModeli:
         risksiz_tarih=str(firsat_ham.get("tl_risksiz_tarih", "")),
         risksiz_serisi=str(firsat_ham.get("tcmb_serisi", "")),
         risksiz_bayatlik_gun=int(firsat_ham.get("bayatlik_gun", 7)),
+        risksiz_durdurma_gun=int(firsat_ham.get("durdurma_gun", 30)),
         enflasyon_yillik=_sayi(enflasyon_ham.get("yillik")),
         enflasyon_serisi=str(enflasyon_ham.get("tcmb_serisi", "")),
         enflasyon_bayatlik_gun=int(enflasyon_ham.get("bayatlik_gun", 45)),

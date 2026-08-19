@@ -520,6 +520,21 @@ maliyet:
     # bu kararlari SESSIZCE yanlis yapar - eksik olmasindan tehlikelidir,
     # cunku eksiklik gorunur, bayatlik gorunmez. Bayatsa RAPOR URETILMEZ.
     bayatlik_gun: 7
+    # Bu esigi asan hurdle rate ISARETLENIR ama rapor URETILIR; durdurma_gun'u
+    # asan durdurur. Iki esik olmasinin sebebi 2026-08-19'da yasandi: TCMB
+    # TP.TRY.MT02'yi 12 gun yayimlamadi, tek esikli kural arka arkaya 6 kosuyu
+    # dusurdu ve gunun tek ciktisi "BASARISIZ" alarmi oldu.
+    #
+    # Ayrim su: olculen sey POLITIKA FAIZINE bagli mevduat orani, fiyat degil.
+    # Bitcoin 12 gunde iki katina cikabilir, mevduat faizi onda birkac puan
+    # oynar - %48'lik hurdle'da gurultu. Yani yayim gecikmesi kararlari
+    # degistirmez, ama gorunmez kalmasi tehlikelidir; cozum susmak degil
+    # isaretlemek.
+    #
+    # 30 gun keyfi degil: TCMB Para Politikasi Kurulu ~6 haftada bir
+    # toplaniyor. 30 gunu asan bir oran, arada faiz karari gecmis OLABILECEGI
+    # anlamina gelir - sayi artik "gecikmis" degil, YANLIS olabilir.
+    durdurma_gun: 30
     # Canli okuma basarisizsa bu deger kullanilir - ama TARIHI de bayatlik
     # kontrolune girer. Tarihsiz bir yedek TAZE SAYILMAZ: elle yazilmis bir
     # sayinin ne zamandan kaldigi bilinmiyorsa guncel olduguna guvenilemez.

@@ -359,8 +359,15 @@ def maliyet_modelini_coz(yapilandirma: Yapilandirma, getir=http_json,
 
     uyarilar: list[str] = []
     canli: dict[str, tuple[float, str] | None] = {}
+    # Hurdle rate'te KABUL esigi taze esigi degil DURDURMA esigidir. Sebep:
+    # canli deger reddedilirse yerine elle yazilmis YAML yedegi geciyor ve o
+    # yedek daha da eski olabilir. Taze esigiyle elenseydi 12 gunluk canli
+    # sayiyi atip 60 gunluk yedegi kullanabilirdik - tam tersi. Canli deger
+    # kullanilabilir oldugu surece alinir; kac gunluk oldugu tarihiyle birlikte
+    # modele tasinir ve bayatlik kararini tek yerde `risksiz_durduruyor_mu`
+    # verir.
     for alan, seri, esik, etiket in (
-        ("risksiz", model.risksiz_serisi, model.risksiz_bayatlik_gun, "hurdle rate"),
+        ("risksiz", model.risksiz_serisi, model.risksiz_durdurma_gun, "hurdle rate"),
         ("enflasyon", model.enflasyon_serisi, model.enflasyon_bayatlik_gun, "enflasyon"),
     ):
         canli[alan] = tcmb_yuzde_orani(kayitlar, seri, esik, bugun) if seri else None

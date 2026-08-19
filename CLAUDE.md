@@ -272,13 +272,23 @@ Bu vault'ta her token para. Ciktilari su kurallara gore uret:
   altindaysa baglayici kisit maliyet DEGIL, TL risksiz getiridir - komisyonu
   sifirlasan bile gereken getiri neredeyse ayni kalir. Su an 12 varligin
   HEPSI bu durumda: %48 risksiz oran her seyi domine ediyor.
-- **hurdle rate hem VAR hem TAZE olmali**: `maliyet.risksiz_taze_mi()`,
-  esik `firsat.bayatlik_gun` (7). Bayatsa RAPOR URETILMEZ (`main.hurdle_engeli`).
-  Bayatlik eksiklikten TEHLIKELI: eksiklik gorunur, bayatlik gorunmez - rapor
-  uretilir, sayilar makul gorunur, kararlar sessizce yanlis cikar.
-  DIKKAT: `TP.TRY.MT02` HAFTALIK seri. 7 gunluk esik normal yayim ritminde
-  ancak yetisir; bir yayim gecikmesi raporu tumden durdurur. Durursa esigi
-  10'a cikarmak makul - ama 21'e donmek bayatligi yeniden gorunmez yapar.
+- **hurdle bayatliginda IKI esik var**: `firsat.bayatlik_gun` (7) ve
+  `firsat.durdurma_gun` (30). Arada kalan bant ISARETLENIR, rapor URETILIR
+  (`uyarilari_topla` -> "Hurdle rate N GUNLUK"); yalnizca durdurma esigi
+  asilinca rapor durur. Kapi `main.hurdle_engeli` -> `risksiz_durduruyor_mu`,
+  `risksiz_taze_mi` DEGIL - ikincisi artik sadece isaretleme sorusudur.
+  Tek esikle basladi ve 2026-08-19'da patladi: TCMB `TP.TRY.MT02`'yi 12 gun
+  yayimlamadi, sistem arka arkaya 6 kosuda coktu, o gunun tek ciktisi
+  "BASARISIZ" alarmi oldu. Asil korkulan sey bayatligin GORUNMEMESIYDI;
+  cozumu susmak degil isaretlemek. Olculen sey politika faizine bagli mevduat
+  orani - 12 gunde onda birkac puan oynar, %48'lik hurdle'da gurultudur.
+  30 gun keyfi degil: PPK ~6 haftada bir toplaniyor, 30 gunu asan oran arada
+  faiz karari gecmis OLABILECEGI anlamina gelir (gecikmis degil, YANLIS).
+- **canli TCMB orani DURDURMA esigiyle kabul edilir, taze esigiyle degil**
+  (`fetch.maliyet_modelini_coz`): canli deger reddedilirse yerine elle
+  yazilmis YAML yedegi geciyor ve o yedek DAHA ESKI olabilir. Taze esigiyle
+  eleseydik 12 gunluk canli sayiyi atip 60 gunluk yedegi kullanabilirdik -
+  tam tersi. Enflasyon satiri bu kuralin disinda: onun durdurma katmani yok.
 - **tarihsiz yedek TAZE SAYILMAZ**: `firsat.tl_risksiz_tarih` bos birakilirsa
   sistem hicbir zaman rapor uretmez. Bilincli: elle yazilmis bir sayinin ne
   zamandan kaldigi bilinmiyorsa guncel olduguna guvenilemez. Tarih serinin

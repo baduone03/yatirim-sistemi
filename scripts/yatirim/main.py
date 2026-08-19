@@ -109,15 +109,17 @@ def hurdle_engeli(maliyet, baslik: str, bugun: date | None = None
                   ) -> HurdleEngeli | None:
     """Hurdle rate rapor uretmeye YETERLI mi? Degilse engeli doner.
 
-    Iki ayri kusur, tek sonuc: yok da olmaz, BAYAT da olmaz. Bayatlik daha
-    sinsi - rapor uretilir, sayilar makul gorunur, kararlar sessizce yanlis
-    cikar. Bu sayi gereken getiriyi, asiri getiriyi, nakit getirisini ve
-    sinyal kapisini birden belirliyor.
+    Kapi `risksiz_durduruyor_mu`ya bakar, `risksiz_taze_mi`ye DEGIL. Ikisinin
+    arasinda kalan bant (yayim gecikmesi) raporu durdurmaz, yalnizca
+    isaretlenir - bkz. MaliyetModeli.risksiz_durduruyor_mu. Tek esikle
+    calisirken TCMB'nin 12 gunluk gecikmesi sistemi bir gun boyunca tumden
+    susturdu; olculen sey politika faizine bagli bir oran oldugu icin o
+    gecikme kararlari degistirecek buyuklukte degildi.
 
     Ayri fonksiyon olmasinin sebebi test edilebilirlik: kapinin kendisi
     sinanabilmeli, "main.py'de bir yerde bir if var" yeterli degil.
     """
-    if maliyet.risksiz_taze_mi(bugun):
+    if not maliyet.risksiz_durduruyor_mu(bugun):
         return None
     bayat = maliyet.tl_risksiz_yillik is not None
     return HurdleEngeli(

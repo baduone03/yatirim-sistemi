@@ -67,6 +67,7 @@ from fetch import (
     _serileri_hazirla,
     kripto_ucgenlemesi,
     kurumsal_olay_supheleri,
+    maliyet_modelini_coz,
 )
 from kaynaklar import (
     TcmbKaydi,
@@ -3418,17 +3419,18 @@ class GerekenGetiriTesti(unittest.TestCase):
 class HurdleTazeligiTesti(unittest.TestCase):
     """Bayat hurdle rate eksik olmaktan tehlikeli: eksiklik gorunur, bayatlik gorunmez."""
 
-    def _model(self, tarih="2026-08-17", oran=0.48, esik=7):
+    def _model(self, tarih="2026-08-17", oran=0.48, esik=7, durdurma=30):
         return modeli_kur({
             "maliyet": {"firsat": {"tl_risksiz_yillik": oran,
                                    "tl_risksiz_tarih": tarih,
-                                   "bayatlik_gun": esik}},
+                                   "bayatlik_gun": esik,
+                                   "durdurma_gun": durdurma}},
         }, {})
 
-    def test_tl_risksiz_bayat_ise_rapor_yok(self):
+    def test_tl_risksiz_cok_bayatsa_rapor_yok(self):
         bugun = date(2026, 8, 19)
         taze = self._model(tarih="2026-08-17")
-        bayat = self._model(tarih="2026-08-01")
+        bayat = self._model(tarih="2026-06-01")     # 79 gun - durdurma ustu
 
         self.assertTrue(taze.risksiz_taze_mi(bugun))
         self.assertFalse(bayat.risksiz_taze_mi(bugun))
@@ -3438,7 +3440,71 @@ class HurdleTazeligiTesti(unittest.TestCase):
         self.assertIsNotNone(engel)
         self.assertIn("BAYAT", engel.gerekce)
         self.assertIn("RAPOR URETILMEDI", engel.mesaj)
-        self.assertIn("2026-08-01", engel.mesaj)
+        self.assertIn("2026-06-01", engel.mesaj)
+
+    def test_yayim_gecikmesi_raporu_DURDURMAZ(self):
+        """TCMB'nin 12 gunluk gecikmesi 2026-08-19'da sistemi tumden susturdu.
+
+        Olculen sey politika faizine bagli mevduat orani; 12 gunde onda birkac
+        puan oynar ve %48'lik hurdle'da karar degistirmez. Bayatlik gorunmez
+        kalmamali ama raporu da durdurmamali.
+        """
+        bugun = date(2026, 8, 19)
+        gecikmis = self._model(tarih="2026-08-07")   # 12 gun: 7 < yas <= 30
+
+        self.assertFalse(gecikmis.risksiz_taze_mi(bugun))
+        self.assertFalse(gecikmis.risksiz_durduruyor_mu(bugun))
+        self.assertIsNone(hurdle_engeli(gecikmis, "Test", bugun))
+        self.assertEqual(gecikmis.risksiz_gun_yasi(bugun), 12)
+
+    def test_durdurma_esigi_tam_sinirda(self):
+        bugun = date(2026, 8, 19)
+        self.assertFalse(self._model(tarih="2026-07-20").risksiz_durduruyor_mu(bugun))
+        self.assertTrue(self._model(tarih="2026-07-19").risksiz_durduruyor_mu(bugun))
+
+    def test_isaretleme_bandindaki_canli_deger_yedege_dusmez(self):
+        """Kabul esigi DURDURMA esigi olmali, taze esigi degil.
+
+        Canli deger reddedilirse yerine elle yazilmis YAML yedegi geciyor.
+        Taze esigiyle (7 gun) elenseydi 12 gunluk CANLI sayiyi atip
+        yedege duserdik - yedek daha da eski olabilir. Bu test o yonu kilitler.
+        """
+        yapilandirma = yapilandirmayi_oku()
+        kayitlar = [{"seriKodu": yapilandirma.maliyet.risksiz_serisi,
+                     "tarih": "07-08-2026", "deger": 44.0}]
+        model = maliyet_modelini_coz(yapilandirma,
+                                     getir=lambda *a, **k: kayitlar,
+                                     bugun=date(2026, 8, 19))
+
+        self.assertEqual(model.risksiz_tarih, "2026-08-07")
+        self.assertAlmostEqual(model.tl_risksiz_yillik, 0.44)
+        self.assertIn("tcmb", model.risksiz_kaynagi)
+        self.assertFalse([u for u in model.uyarilar
+                          if model.risksiz_serisi in u])
+
+    def test_durdurma_ustundeki_canli_deger_reddedilir(self):
+        yapilandirma = yapilandirmayi_oku()
+        kayitlar = [{"seriKodu": yapilandirma.maliyet.risksiz_serisi,
+                     "tarih": "01-01-2026", "deger": 44.0}]
+        model = maliyet_modelini_coz(yapilandirma,
+                                     getir=lambda *a, **k: kayitlar,
+                                     bugun=date(2026, 8, 19))
+        self.assertNotAlmostEqual(model.tl_risksiz_yillik, 0.44)
+        self.assertTrue([u for u in model.uyarilar
+                         if model.risksiz_serisi in u])
+
+    def test_bayat_hurdle_uyari_olarak_gorunur(self):
+        """Durdurmuyorsa bile SESSIZ kalmamali - asil korkulan sey buydu."""
+        gecikmis = self._model(tarih=date.today().replace(day=1).isoformat(),
+                               esik=0, durdurma=3650)
+        uyarilar = uyarilari_topla(None, None, None, gecikmis, None)
+        self.assertTrue(any("Hurdle rate" in u and "GUNLUK" in u for u in uyarilar),
+                        f"bayatlik uyarisi yok: {uyarilar}")
+
+    def test_taze_hurdle_uyari_uretmez(self):
+        taze = self._model(tarih=date.today().isoformat())
+        uyarilar = uyarilari_topla(None, None, None, taze, None)
+        self.assertFalse([u for u in uyarilar if "Hurdle rate" in u])
 
     def test_tarihsiz_yedek_taze_sayilmaz(self):
         """Elle yazilmis bir sayinin ne zamandan kaldigi bilinmiyorsa guvenilmez."""
@@ -3473,6 +3539,10 @@ class HurdleTazeligiTesti(unittest.TestCase):
         maliyet = yapilandirmayi_oku().maliyet
         self.assertTrue(maliyet.risksiz_tarih, "tl_risksiz_tarih bos")
         self.assertEqual(maliyet.risksiz_bayatlik_gun, 7)
+        self.assertGreater(maliyet.risksiz_durdurma_gun,
+                           maliyet.risksiz_bayatlik_gun,
+                           "durdurma esigi taze esiginin ustunde olmali - "
+                           "esit olursa isaretleme bandi hic olusmaz")
 
 
 class KapsamDokumuRaporuTesti(unittest.TestCase):

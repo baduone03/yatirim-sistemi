@@ -317,6 +317,20 @@ def uyarilari_topla(fiyatlar, portfoy, karar, maliyet, bayatlik,
             f"(tavan {karar.gunluk_maks}). Sinyal uretimi DURDURULDU - bu "
             "genellikle portfoyun degil verinin bozuk oldugunu gosterir.")
 
+    # Hurdle rate durdurmayacak kadar ama guvenilecek kadar da taze degil.
+    # Rapor uretiliyor; bayatligin GORUNMEMESI asil tehlike oldugu icin
+    # gereken getiri / asiri getiri / nakit getirisi okunmadan once bu satir
+    # okunmali - bu yuzden listenin en ustune yakin.
+    if maliyet is not None and not maliyet.risksiz_taze_mi():
+        yas = maliyet.risksiz_gun_yasi()
+        if yas is not None:
+            uyarilar.append(
+                f"Hurdle rate {yas} GUNLUK ({maliyet.risksiz_serisi}, "
+                f"{maliyet.risksiz_tarih}) - taze esigi "
+                f"{maliyet.risksiz_bayatlik_gun} gun. Gereken getiri, asiri "
+                f"getiri ve nakit getirisi bu orandan turuyor; {maliyet.risksiz_durdurma_gun} "
+                "gunu asarsa rapor uretilmez.")
+
     engellenenler = maliyet.engellenenler if maliyet is not None else {}
     if engellenenler:
         kalemler = ", ".join(maliyet.eksik_kalem_ozeti)
