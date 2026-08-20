@@ -276,6 +276,12 @@ def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
         uyarilar=uyarilar,
         baslik=("🌅 Pazartesi acilis brifingi" if gorev == BRIFING
                 else "🌙 Gun sonu"),
+        # Anlati girdileri. karar: "islem yapildi mi" bolumu icin; adlar:
+        # mesajda 'GC=F' yerine 'Altin (gram)' yazabilmek icin; baslangic_try:
+        # getiriyi sermaye tabanina gore ifade edebilmek icin.
+        karar=karar,
+        adlar={v.sembol: v.ad for v in yapilandirma.varliklar},
+        baslangic_try=taban,
     )
     sonuc = gonder_gun_sonu(ozet, ayarlar, ortam, simdi, gun=rapor_adi)
     print(f"{ozet.baslik}: {sonuc.durum} ({giden} islem karari da gonderildi)")

@@ -90,8 +90,13 @@ def env_oku(dosya: Path = ENV_DOSYASI) -> dict[str, str]:
     return degerler
 
 
-def mesaj_gonder(metin: str, env: dict[str, str] | None = None) -> None:
-    """Telegram'a mesaj gonderir. Basarisizlikta TelegramHatasi firlatir."""
+def _kimlik_coz(env: dict[str, str] | None) -> tuple[str, str]:
+    """(token, chat_id) dondurur; eksikse sebebini yazan TelegramHatasi firlatir.
+
+    Ortak yardimci: mesaj_gonder ve dosya_gonder ayni eksik-yapilandirma
+    tanisini uretmeli. Iki yerde ayri yazilsaydi biri guncellenip digeri
+    unutulur ve "token yok" hatasi kanala gore farkli aciklama verirdi.
+    """
     env = env if env is not None else env_oku()
     token = env.get("TELEGRAM_BOT_TOKEN") or env.get("TELEGRAM_TOKEN")
     chat_id = env.get("TELEGRAM_CHAT_ID")
@@ -115,6 +120,26 @@ def mesaj_gonder(metin: str, env: dict[str, str] | None = None) -> None:
                  if not deger]
         raise TelegramHatasi(f"{ENV_DOSYASI} icinde eksik/bos: {', '.join(eksik)}")
 
+    return token, chat_id
+
+
+def _yaniti_dogrula(yanit, uc: str) -> None:
+    """Telegram yanitini denetler. Hata metnini ASLA ham birakmaz."""
+    if yanit.ok:
+        return
+    try:
+        aciklama = yanit.json().get("description", "bilinmeyen hata")
+    except ValueError:
+        # Proxy/gateway HTML donebilir - JSON bekleyip patlamayalim.
+        aciklama = "yanit JSON degil"
+    raise TelegramHatasi(
+        f"Telegram reddetti ({uc}, HTTP {yanit.status_code}): {aciklama}")
+
+
+def mesaj_gonder(metin: str, env: dict[str, str] | None = None) -> None:
+    """Telegram'a mesaj gonderir. Basarisizlikta TelegramHatasi firlatir."""
+    token, chat_id = _kimlik_coz(env)
+
     try:
         yanit = requests.post(
             f"{API_KOKU}/bot{token}/sendMessage",
@@ -130,13 +155,46 @@ def mesaj_gonder(metin: str, env: dict[str, str] | None = None) -> None:
             f"Telegram'a ulasilamadi ({type(hata).__name__})"
         ) from None
 
-    if not yanit.ok:
-        try:
-            aciklama = yanit.json().get("description", "bilinmeyen hata")
-        except ValueError:
-            # Proxy/gateway HTML donebilir - JSON bekleyip patlamayalim.
-            aciklama = "yanit JSON degil"
-        raise TelegramHatasi(f"Telegram reddetti (HTTP {yanit.status_code}): {aciklama}")
+    _yaniti_dogrula(yanit, "sendMessage")
+
+
+# Telegram belge basligi 1024 karakterle sinirli; anlati mesaji ayri gider,
+# baslik yalnizca dosyanin ne oldugunu soyler.
+BASLIK_SINIRI = 1024
+
+
+def dosya_gonder(dosya: Path, baslik: str = "",
+                 env: dict[str, str] | None = None) -> None:
+    """Telegram'a belge gonderir (sendDocument).
+
+    Anlati mesajinin yanindaki AYRINTI katmani. Mesaj "ne oldu"yu anlatir,
+    dosya tum sayilari tasir - biri digerinin yerine gecmez.
+    """
+    token, chat_id = _kimlik_coz(env)
+
+    if not dosya.exists():
+        raise TelegramHatasi(f"Gonderilecek dosya yok: {dosya.name}")
+
+    govde = dosya.read_bytes()
+    if not govde:
+        raise TelegramHatasi(f"Gonderilecek dosya bos: {dosya.name}")
+
+    try:
+        yanit = requests.post(
+            f"{API_KOKU}/bot{token}/sendDocument",
+            data={"chat_id": chat_id, "caption": baslik[:BASLIK_SINIRI],
+                  "parse_mode": "HTML"},
+            files={"document": (dosya.name, govde, "text/markdown")},
+            timeout=ZAMAN_ASIMI,
+        )
+    except requests.RequestException as hata:
+        # mesaj_gonder ile ayni gerekce: token URL yolunda, ham hata metni
+        # onu loga sizdirir. Yalnizca hata TURU aktarilir.
+        raise TelegramHatasi(
+            f"Telegram'a dosya gonderilemedi ({type(hata).__name__})"
+        ) from None
+
+    _yaniti_dogrula(yanit, "sendDocument")
 
 
 def idempotent_gonder(metin: str, anahtar: str, ek_anahtarlar: list[str] | None = None,

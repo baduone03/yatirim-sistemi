@@ -20,8 +20,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import notify
 
 from config import (
     RISK_DISLA,
@@ -737,6 +740,201 @@ class BildirimTesti(unittest.TestCase):
                                      karar_ver(sapmalar, rapor), None, None)))
         self.assertIn("Gun sonu", mesaj)
         self.assertNotIn("<script", mesaj.lower())
+
+
+class _SahteKarar:
+    def __init__(self, acik=(), devre=False, maks=6):
+        self._acik, self.devre_kesildi, self.gunluk_maks = acik, devre, maks
+
+    def sinyaller(self, tur: str = ""):
+        return list(self._acik)
+
+
+class _SahteAyrim:
+    def __init__(self, sembol, yerel, kur, toplam, para="USD"):
+        self.sembol, self.para_birimi = sembol, para
+        self.yerel_getiri, self.kur_getirisi, self.toplam_tl = yerel, kur, toplam
+
+
+class AnlatiTesti(unittest.TestCase):
+    """Gun sonu mesaji ANLATI uretmeli, sayi listesi degil.
+
+    Testlerin hepsi ayni soruyu soruyor: mesaj okuyana bir SEY soyluyor mu,
+    yoksa rakamlari yan yana dizip cikarimi ona mi birakiyor?
+    """
+
+    def _ozet(self, **degisiklik):
+        # toplam_deger_try turetilmis ozellik - dogrudan verilemez.
+        # Anlati pozisyon dokumunu kullanmadigi icin deger nakitte tutuluyor.
+        portfoy = Portfoy(pozisyonlar=[], nakit_try=20848.0,
+                          fiyatlanamayan=[])
+        varsayilan = dict(
+            portfoy=portfoy, risk=None, veri_zamani="2026-08-19",
+            degisim_24s=0.0043, asiri_getiri=0.0359, risksiz=0.0065,
+            donem_gun=6, karar=_SahteKarar(), baslangic_try=20000.0,
+            adlar={"QQQ": "Nasdaq 100 ETF"},
+            ayrimlar=[_SahteAyrim("QQQ", -0.035, 0.029, -0.007)])
+        varsayilan.update(degisiklik)
+        return GunSonuOzeti(**varsayilan)
+
+    def test_tarih_okunur_bicimde(self):
+        """Ham ISO tarih okuyana bir sey soylemez."""
+        self.assertIn("19 Agustos", gun_sonu_mesaji(self._ozet()))
+
+    def test_cozulemeyen_tarih_uydurulmaz(self):
+        mesaj = gun_sonu_mesaji(self._ozet(veri_zamani="bilinmiyor"))
+        self.assertIn("bilinmiyor", mesaj)
+
+    def test_kur_hakimse_sebep_yazilir(self):
+        """Asil is goren cumle: getiri varliktan mi kurdan mi geldi."""
+        mesaj = gun_sonu_mesaji(self._ozet(
+            ayrimlar=[_SahteAyrim("QQQ", -0.003, 0.030, 0.027)]))
+        self.assertIn("KUR", mesaj)
+        self.assertIn("Nasdaq 100 ETF", mesaj)     # sembol degil AD
+        self.assertNotIn("QQQ", mesaj)
+
+    def test_varlik_hakimse_kur_suclanmaz(self):
+        """Kur kucukken 'sebep kur' demek yanlis atif olurdu."""
+        mesaj = gun_sonu_mesaji(self._ozet(
+            ayrimlar=[_SahteAyrim("QQQ", 0.045, 0.001, 0.046)]))
+        self.assertNotIn("kaynagi varliklar degil KUR", mesaj)
+        self.assertIn("varliklarin kendisinden", mesaj)
+
+    def test_ikisi_birlikteyse_tek_sebebe_baglanmaz(self):
+        """Kur payi %40-60 arasindayken tek sebep secmek uydurma olurdu."""
+        mesaj = gun_sonu_mesaji(self._ozet(
+            ayrimlar=[_SahteAyrim("QQQ", -0.030, 0.029, -0.002)]))
+        self.assertIn("tek bir sebebe baglamak dogru olmaz", mesaj)
+        self.assertNotIn("kaynagi varliklar degil KUR", mesaj)
+
+    def test_olcek_alti_hareket_oranlanmaz(self):
+        """Iki taraf da ~0 iken pay hesabi anlamsiz buyur - cumle dusmeli."""
+        mesaj = gun_sonu_mesaji(self._ozet(
+            ayrimlar=[_SahteAyrim("QQQ", 0.0001, 0.0001, 0.0002)]))
+        for yasak in ("kaynagi varliklar degil KUR", "varliklarin kendisinden",
+                      "tek bir sebebe"):
+            self.assertNotIn(yasak, mesaj)
+
+    def test_olculemeyen_degisim_uydurulmaz(self):
+        mesaj = gun_sonu_mesaji(self._ozet(degisim_24s=None))
+        self.assertIn("olculemedi", mesaj)
+        self.assertNotIn("yatay kaldi", mesaj)
+
+    def test_islem_yoksa_SEBEBI_yazilir(self):
+        """'Islem yok' tek basina bilgi degil - neden yok?"""
+        mesaj = gun_sonu_mesaji(self._ozet())
+        self.assertIn("Islem yapilmadi", mesaj)
+        self.assertIn("sapmadi", mesaj)
+
+    def test_devre_kesici_islem_yoklugundan_ayrilir(self):
+        """Sessiz sistem ile frenlenmis sistem ayni mesaji vermemeli."""
+        mesaj = gun_sonu_mesaji(self._ozet(karar=_SahteKarar(devre=True)))
+        self.assertIn("devre kesici", mesaj)
+        self.assertNotIn("Islem yapilmadi:", mesaj)
+
+    def test_karar_yoksa_bolum_tumuyle_duser(self):
+        mesaj = gun_sonu_mesaji(self._ozet(karar=None))
+        self.assertNotIn("Islem yapildi mi", mesaj)
+
+    def test_getiri_risksize_gore_konumlanir(self):
+        """Ciplak '+4.2% kazandin' eksik: mevduat da kazandiriyordu."""
+        mesaj = gun_sonu_mesaji(self._ozet())
+        self.assertIn("mevduatta tutsaydin", mesaj)
+        self.assertIn("USTUNDE", mesaj)
+
+    def test_risksizin_altinda_kalmak_gizlenmez(self):
+        mesaj = gun_sonu_mesaji(self._ozet(asiri_getiri=-0.012))
+        self.assertIn("ALTINDA", mesaj)
+        self.assertIn("daha iyi sonuc vermedi", mesaj)
+
+    def test_risksiz_yoksa_yorum_uydurulmaz(self):
+        mesaj = gun_sonu_mesaji(self._ozet(asiri_getiri=None, risksiz=None))
+        self.assertIn("olculemedi", mesaj)
+        self.assertNotIn("USTUNDE", mesaj)
+
+    def test_simulasyon_ibaresi_her_mesajda(self):
+        """Kagit portfoy gercek gibi sunulmamali."""
+        self.assertIn("kagit para", gun_sonu_mesaji(self._ozet()))
+
+    def test_adi_bilinmeyen_sembol_uydurulmaz(self):
+        mesaj = gun_sonu_mesaji(self._ozet(
+            adlar={}, ayrimlar=[_SahteAyrim("QQQ", -0.003, 0.030, 0.027)]))
+        self.assertIn("QQQ", mesaj)
+
+    def test_telegram_sinirinin_altinda(self):
+        self.assertLess(len(gun_sonu_mesaji(self._ozet())), 4096)
+
+
+class DosyaGonderimiTesti(unittest.TestCase):
+    """sendDocument yolu: anlati mesajinin yanindaki ayrinti katmani.
+
+    Ag'a cikilmaz - requests.post sahtelenir. Test edilen sey Telegram'in
+    davranisi degil, BIZIM istegimizin dogru kurulmasi ve hatanin token
+    sizdirmadan yukari cikmasi.
+    """
+
+    ENV = {"TELEGRAM_BOT_TOKEN": "gizli-token", "TELEGRAM_CHAT_ID": "42"}
+
+    def _dosya(self, icerik: bytes = b"# Rapor\n") -> Path:
+        # write_bytes: Windows'ta write_text LF'yi CRLF'e cevirir ve
+        # test platforma bagimli hale gelirdi. Olculen sey dosyanin
+        # AYNEN gitmesi, satir sonu kuralimiz degil.
+        yol = Path(tempfile.mkdtemp()) / "2026-08-19.md"
+        yol.write_bytes(icerik)
+        return yol
+
+    def test_dosya_multipart_olarak_gider(self):
+        with unittest.mock.patch("notify.requests.post") as sahte:
+            sahte.return_value = unittest.mock.Mock(ok=True)
+            notify.dosya_gonder(self._dosya(), "Gun sonu ayrintisi", env=self.ENV)
+
+        cagri = sahte.call_args
+        self.assertIn("sendDocument", cagri.args[0])
+        self.assertEqual(cagri.kwargs["data"]["chat_id"], "42")
+        self.assertEqual(cagri.kwargs["data"]["caption"], "Gun sonu ayrintisi")
+        ad, govde, tur = cagri.kwargs["files"]["document"]
+        self.assertEqual(ad, "2026-08-19.md")
+        self.assertEqual(govde, b"# Rapor\n")
+        self.assertEqual(tur, "text/markdown")
+
+    def test_olmayan_dosya_anlamli_hata(self):
+        yok = Path(tempfile.mkdtemp()) / "yok.md"
+        with self.assertRaises(TelegramHatasi) as tuzak:
+            notify.dosya_gonder(yok, env=self.ENV)
+        self.assertIn("yok.md", str(tuzak.exception))
+
+    def test_bos_dosya_gonderilmez(self):
+        """Telegram bos belgeyi reddeder; sebebini BIZ soyleyelim."""
+        with self.assertRaises(TelegramHatasi) as tuzak:
+            notify.dosya_gonder(self._dosya(b""), env=self.ENV)
+        self.assertIn("bos", str(tuzak.exception))
+
+    def test_ag_hatasi_token_sizdirmaz(self):
+        """Token URL yolunda - ham hata metni yukari CIKMAMALI."""
+        with unittest.mock.patch("notify.requests.post",
+                                 side_effect=requests.ConnectionError(
+                                     "https://api.telegram.org/botgizli-token/x")):
+            with self.assertRaises(TelegramHatasi) as tuzak:
+                notify.dosya_gonder(self._dosya(), env=self.ENV)
+        self.assertNotIn("gizli-token", str(tuzak.exception))
+        self.assertIn("ConnectionError", str(tuzak.exception))
+
+    def test_reddedilen_yanit_ucu_yazar(self):
+        yanit = unittest.mock.Mock(ok=False, status_code=413)
+        yanit.json.return_value = {"description": "file is too big"}
+        with unittest.mock.patch("notify.requests.post", return_value=yanit):
+            with self.assertRaises(TelegramHatasi) as tuzak:
+                notify.dosya_gonder(self._dosya(), env=self.ENV)
+        self.assertIn("sendDocument", str(tuzak.exception))
+        self.assertIn("file is too big", str(tuzak.exception))
+
+    def test_uzun_baslik_kirpilir(self):
+        """Telegram belge basligi 1024 karakter - asarsa istek reddedilir."""
+        with unittest.mock.patch("notify.requests.post") as sahte:
+            sahte.return_value = unittest.mock.Mock(ok=True)
+            notify.dosya_gonder(self._dosya(), "x" * 2000, env=self.ENV)
+        self.assertEqual(len(sahte.call_args.kwargs["data"]["caption"]),
+                         notify.BASLIK_SINIRI)
 
 
 class SablonKorumasiTesti(unittest.TestCase):
