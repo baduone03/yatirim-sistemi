@@ -213,8 +213,10 @@ def islem_karari_mesaji(islem: IslemOnerisi, tetikleyen: list[Tetikleyici],
                    if ekonomik else
                    "USTUNDE - islem duzelttigi sapmadan pahali."))
 
-    satirlar += ["", f"<i>Veri: {_gun_adi(islem.veri_zamani)} "
-                 f"({kacis(islem.veri_kaynagi)}). Kagit portfoy.</i>"]
+    # Kaynak metni zaten parantez tasiyabiliyor ("yahoo (gunluk kapanis)");
+    # bir kez daha parantezlemek ic ice parantez uretiyordu.
+    satirlar += ["", f"<i>Veri: {_gun_adi(islem.veri_zamani)}, kaynak "
+                 f"{kacis(islem.veri_kaynagi)}. Kagit portfoy.</i>"]
 
     for uyari in uyarilar or []:
         satirlar.append(f"⚠️ {kacis(uyari)}")
