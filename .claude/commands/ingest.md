@@ -1,0 +1,1 @@
+﻿01-inbox/ klasorundeki tum status: inbox dosyalarini isle. Oku, analiz et, 02-sources/ altina ozet olustur, 03-wiki/ altinda sayfalari guncelle, [[baglantilar]] kur, status'u processed yap, memory.md'ye ozet ekle.
