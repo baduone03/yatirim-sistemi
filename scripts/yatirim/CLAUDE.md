@@ -287,13 +287,10 @@ A maddeleri kok `CLAUDE.md`'dedir ve buraya YAZILMAZ.
   arar. Esit veya ustunde olsaydi bant ya hic olusmaz ya latch bir daha kapanmazdi; ikisi de
   sessizce yanlis calisir. Varsayilanlar (0.025 / 0.22) tetik varsayilanlariyla (0.05 / 0.25)
   ayni sekle sahip.
-- **HAFTA SONU KUR TUZAGI (7/24'un on kosulu)**: forex Cuma 22:00 - Pazar 22:00 UTC kapali, TCMB
-  is gunu disinda kur yayimlamaz. Yani hafta sonu USD/TRY DONMUS, kripto hareketli. `beklenen_tl
-  = coingecko_usd x donmus_kur` ile BTCTurk'un canli TL fiyati arasindaki fark TR primi DEGIL,
-  kurun bayatligidir. `%8 durdurma esigi` asilirsa DURDUR cikar ve TUM raporun uretimi durur.
-  `ucgenle(..., kur_piyasasi_kapali=True)` bunu OLCULEMEDI'ye cevirir - degerleme BTCTurk TL
-  fiyatindan devam eder, yalnizca capraz kontrol yapilmaz. Hafta ici cron'da hic
-  tetiklenmiyordu; 7/24'te her hafta sonu canli.
+- **hafta sonu kur tuzagi** (B, 2026-08-20): hafta sonu USD/TRY DONMUS, kripto hareketli -
+  aradaki fark TR primi DEGIL, kurun bayatligi. Gercek kopukluk sayilirsa DURDUR cikar ve o
+  gun HIC rapor uretilmez. `kur_piyasasi_kapali=True` bunu OLCULEMEDI'ye cevirir; degerleme
+  devam eder, yalnizca capraz kontrol duser. Bkz. HaftaSonuUcgenlemeTesti
 - **rapor yalnizca gun sonu/brifing kosusunda yazilir**: tarama kosusu gunde 12 kez calisiyor ve
   rapor dosyasi tarihe gore adlandirildigi icin her kosu ayni dosyayi yeniden yazardi - 12
   anlamsiz commit, hepsi bir sonrakinin ustune. Taramanin isi sinyal tespiti.

@@ -289,8 +289,17 @@ Bu dosya her oturumda otomatik yuklenir; alt klasorlerdeki `CLAUDE.md` ise
 yalnizca o klasordeki dosyalara dokunuldugunda yuklenir. Kural bu ayrimi korumak
 icindir.
 
-- **Her `CLAUDE.md` en fazla 4k token** (~16 KB). Asan dosyada madde ya teste
-  cevrilir ya arsive iner. Sinir asilmissa yeni madde EKLENMEZ, once yer acilir.
+- **Boyut siniri**: kok `CLAUDE.md` 5k token (~20 KB), alt klasor `CLAUDE.md`
+  8k token (~32 KB). Kok sinirinin dusuk olmasinin sebebi kapsam: kok dosya
+  gotcha'nin yanina vault kurallarini da tasir ve HER oturumda yuklenir; alt
+  klasor dosyasi yalnizca o klasorde calisilirken yuklenir, o yuzden daha genis.
+- **Asim hata degildir, uyaridir**. Sinir asildi diye is durmaz ve madde
+  eklenmesi yasaklanmaz - eksik kural, uzun dosyadan daha pahalidir. `/audit`
+  uyari basar, o kadar.
+- **Asim %20'yi gecerse "kisaltma turu gerekli"** uyarisi duser (kok 6k, alt
+  klasor 9.6k). Bu, dosyanin kendi basina duzelmeyecegi ve planli bir kisaltma
+  turu istedigi esiktir: testi olan maddeler tek satira indirilir, olay
+  anlatilari `06-archive/gotcha-gecmisi.md`'ye iner.
 - **Kok dosyada yalnizca A kategorisi durur.** Alt klasor dosyalarinda A
   kategorisi madde OLAMAZ; bir madde A'ya terfi ediyorsa koke tasinir.
 - **Kategori testi**: "Bu kurali cignemek bu klasorun DISINDA bir seyi bozar mi?"
@@ -302,8 +311,8 @@ icindir.
   2026-08-20): ...`
 - **Testi yazilan madde tek satira iner** ve test adini tasir. Ornek:
   `- **simulasyon defteri append-only** (A, 2026-08-20). Bkz. LedgerTesti.`
-- **`/audit` her `CLAUDE.md` boyutunu olcer**, 4k token'i asani ve alt
-  klasorde duran A maddesini uyari olarak basar.
+- **`/audit` her `CLAUDE.md` boyutunu olcer**: sinirini asani, %20'yi asip
+  kisaltma turu isteyeni ve alt klasorde duran A maddesini uyari olarak basar.
 
 ## memory.md Kullanimi
 - Oturumlar arasi bilgileri memory.md'ye yaz.

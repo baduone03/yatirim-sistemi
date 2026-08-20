@@ -27,6 +27,19 @@
 # GitHub'a CIKMAZ; buraya yalnizca 7 kontrolu gecen not kopyalanir.
 !/07-dogrulanmis/
 
+# 06-archive icinden yalnizca gotcha gecmisi izlenir. Arsivin geri kalani
+# kisisel not, disarida kalir; bu dosya CLAUDE.md'den cikarilan kurallarin
+# tek kaydi oldugu icin yedeklenmesi gerekiyor.
+!/06-archive/
+/06-archive/*
+!/06-archive/gotcha-gecmisi.md
+
+# Slash komutlari kod sayilir. settings.local.json disarida kalir - makineye
+# ozgu izinler tasir.
+!/.claude/
+/.claude/*
+!/.claude/commands/
+
 # 04-projects icinden yalnizca yatirim-sistemi izlenir
 !/04-projects/
 /04-projects/*
@@ -45,3 +58,6 @@ venv/
 
 # Yerel calisma loglari (Actions'ta uretilmez) - her yerdeki loglar/ dizini
 loglar/
+
+# Wrangler build artifakti - Cloudflare deploy'unda yeniden uretilir
+.wrangler/
