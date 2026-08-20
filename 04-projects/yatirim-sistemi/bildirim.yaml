@@ -66,12 +66,34 @@ takvim:
       bitis: "23:00"
 
   # Gun sonu ozeti bu saatten sonraki ilk kosuda gider (gunde bir kez).
+  #
+  # 23:30 DEGISTIRILEMEZ gibi davran: cron ('30 20' UTC) tam bu esige
+  # ayarli. Saati kaydirip cron'u birakmak gun sonu kosusunu TARAMA'ya
+  # dusurur ve ozet hic gitmez. Ikisi birlikte degisir.
+  #
+  # Gece 00:00 yazilamaz: gorev() "saat >= esik" diye bakar, 00:00 her
+  # saatten kucuk oldugu icin GUNUN HER KOSUSU gun sonu olur - brifing ve
+  # tarama hic calismaz. Ayrica 00:00 zaten ertesi TR gunudur.
   gun_sonu_saati: "23:30"
 
-  # Pazartesi acilis brifingi: hafta sonu kripto hareketleri + BIST/Nasdaq
-  # icin gap riski. BIST 10:00'da aciliyor, brifing bir saat once.
-  brifing_gunu: 0              # 0 = Pazartesi (datetime.weekday)
-  brifing_saati: "09:00"
+  # Gunluk brifing: ogle saatinde "bugune kadar ne oldu" ozeti.
+  # her_gun = brifing haftanin her gunu calisir.
+  #
+  # 13:00 secildi cunku mevcut 2 saatlik tarama gridi ('7 */2' UTC) zaten
+  # TR 13:07'de kosuyor - brifing icin AYRI CRON GEREKMIYOR, ek Actions
+  # dakikasi yakilmiyor. Brifing penceresi 60 dakika oldugu icin cron'un
+  # 5-30 dakikalik gecikmesi brifingi dusurmez.
+  brifing_gunu: her_gun
+  brifing_saati: "13:00"
+
+  # Haftalik ozet gunu (0=Pazartesi ... 4=Cuma). Gun sonu saatinde calisir
+  # ve o gunun gun sonu ozetinin YERINE gecer - haftalik zaten gunun
+  # kapanisini da icerir, ikisini ayri gondermek ayni sayilari iki kez
+  # yollamak olurdu.
+  #
+  # Cuma: BIST ve Nasdaq haftasinin kapandigi gun. Kripto 7/24 acik ama
+  # haftayi kapatan sey diger iki piyasanin kapanisi.
+  haftalik_gunu: 4
 
 # Telegram SORGU botu (scripts/yatirim/bot_sorgu.py) - salt okunur.
 #

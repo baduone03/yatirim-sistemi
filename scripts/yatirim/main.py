@@ -38,7 +38,9 @@ from mesaj import (  # noqa: E402
     uyarilari_topla,
 )
 from notify import (  # noqa: E402
+    GONDERILDI,
     TelegramHatasi,
+    dosya_gonder,
     env_oku,
     gonder_gun_sonu,
     gonder_islem_karari,
@@ -46,7 +48,7 @@ from notify import (  # noqa: E402
     kuyrugu_bosalt,
     mesaj_gonder,
 )
-from piyasa import BRIFING, TARAMA  # noqa: E402
+from piyasa import BRIFING, GUN_SONU, HAFTALIK, TARAMA  # noqa: E402
 from portfolio import (  # noqa: E402
     degisim_24s,
     kur_ayristir,
@@ -220,7 +222,9 @@ def _islem_onerileri(karar, fiyatlar, portfoy, risk, yapilandirma, maliyet,
                   yapilandirma.esikler.risk_katkisi_ust)],
             gidis_donus,
             azalt_try * gidis_donus / 2 if gidis_donus is not None else None,
-            ayarlar=ayarlar, env=ortam, simdi=simdi)
+            ayarlar=ayarlar, env=ortam, simdi=simdi,
+            adlar={v.sembol: v.ad for v in yapilandirma.varliklar},
+            sapma_esigi=yapilandirma.esikler.rebalancing_sapma)
         print(f"  islem karari {sonuc.ad}: {sonuc_gonderim.durum}")
         giden += 1
     return giden
@@ -233,9 +237,35 @@ def _veri_kaynagi(fiyatlar, sembol: str) -> str:
     return "yahoo (gunluk kapanis)"
 
 
+BASLIKLAR = {
+    BRIFING: "🌅 Gunun brifingi",
+    HAFTALIK: "📅 Hafta kapanisi",
+    GUN_SONU: "🌙 Gun sonu",
+}
+
+
+def _ayrintiyi_ekle(sonuc, rapor_dosyasi, baslik: str, ortam) -> None:
+    """Anlati mesajinin yanina tam raporu belge olarak ekler.
+
+    YALNIZCA mesaj gercekten gittiyse gonderilir. Mesaj sessiz saatte
+    biriktirildiyse belgeyi hemen yollamak, ozetinden once ayrintisi gelen
+    bir bildirim uretirdi.
+
+    Belge gonderimi basarisiz olursa AKIS DURMAZ: anlati zaten gitti, asil
+    bilgi okuyanin elinde. Ayrinti eki bir kolaylik, sistemin cikti kanali
+    degil - onun icin ozeti de dusurmek yanlis takas olurdu.
+    """
+    if sonuc.durum != GONDERILDI or rapor_dosyasi is None:
+        return
+    try:
+        dosya_gonder(rapor_dosyasi, f"{baslik} - tum sayilar", ortam)
+    except TelegramHatasi as hata:
+        print(f"UYARI - ayrinti raporu eklenemedi: {hata}")
+
+
 def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
                          maliyet, ayarlar, ortam, simdi, gorev, rapor_adi,
-                         duyarlilik=None) -> None:
+                         duyarlilik=None, rapor_dosyasi=None) -> None:
     """Gorev tipine gore bildirim gonderir.
 
     TARAMA: yalnizca islem kararlari. Her tarama kosusunda tam ozet gondermek
@@ -274,8 +304,7 @@ def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
         ayrimlar=kur_ayristir(fiyatlar, yapilandirma.varliklar,
                               [p.sembol for p in portfoy.pozisyonlar], gun),
         uyarilar=uyarilar,
-        baslik=("🌅 Pazartesi acilis brifingi" if gorev == BRIFING
-                else "🌙 Gun sonu"),
+        baslik=BASLIKLAR.get(gorev, "🌙 Gun sonu"),
         # Anlati girdileri. karar: "islem yapildi mi" bolumu icin; adlar:
         # mesajda 'GC=F' yerine 'Altin (gram)' yazabilmek icin; baslangic_try:
         # getiriyi sermaye tabanina gore ifade edebilmek icin.
@@ -284,6 +313,7 @@ def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
         baslangic_try=taban,
     )
     sonuc = gonder_gun_sonu(ozet, ayarlar, ortam, simdi, gun=rapor_adi)
+    _ayrintiyi_ekle(sonuc, rapor_dosyasi, ozet.baslik, ortam)
     print(f"{ozet.baslik}: {sonuc.durum} ({giden} islem karari da gonderildi)")
 
 
@@ -420,7 +450,8 @@ def main() -> int:
         try:
             _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar,
                                  durum, maliyet, bildirim_ayarlari, ortam,
-                                 simdi, gorev, rapor_adi, duyarlilik)
+                                 simdi, gorev, rapor_adi, duyarlilik,
+                                 rapor_dosyasi)
         except TelegramHatasi as hata:
             # Rapor diske yazildi ve GECERLI - kaybolmadi.
             # Yine de exit 1 doneriyoruz: bu sistemin cikti kanali Telegram,

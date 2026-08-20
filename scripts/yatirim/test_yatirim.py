@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import notify
 
 from config import (
+    TR_OFSET,
     RISK_DISLA,
     RISK_DUZELT,
     Ayarlar,
@@ -139,7 +140,14 @@ from notify import (
     kanaldan_gonder,
     kuyrugu_bosalt,
 )
-from piyasa import BRIFING, GUN_SONU, TARAMA, takvimi_coz  # noqa: F401
+from piyasa import (  # noqa: F401
+    BRIFING,
+    GUN_SONU,
+    HAFTALIK,
+    HER_GUN_KODU,
+    TARAMA,
+    takvimi_coz,
+)
 from portfolio import (
     KurAyristirmasi,
     Portfoy,
@@ -754,6 +762,72 @@ class _SahteAyrim:
     def __init__(self, sembol, yerel, kur, toplam, para="USD"):
         self.sembol, self.para_birimi = sembol, para
         self.yerel_getiri, self.kur_getirisi, self.toplam_tl = yerel, kur, toplam
+
+
+class GunlukBrifingHaftalikTesti(unittest.TestCase):
+    """Yeni takvim: gunluk ogle brifingi + Cuma haftalik ozeti."""
+
+    def _takvim(self, **d):
+        ham = {"gun_sonu_saati": "23:30", "brifing_gunu": "her_gun",
+               "brifing_saati": "13:00", "haftalik_gunu": 4}
+        ham.update(d)
+        return takvimi_coz(ham)
+
+    def _an(self, gun: int, saat: int, dakika: int = 0) -> datetime:
+        """2026-08-17 Pazartesi; gun=0 Pazartesi. UTC dondurur (TR-3)."""
+        yerel = datetime(2026, 8, 17 + gun, saat, dakika, tzinfo=timezone.utc)
+        return yerel - TR_OFSET
+
+    def test_brifing_her_gun_calisir(self):
+        """Eskiden yalnizca Pazartesi idi."""
+        for gun in range(5):
+            self.assertEqual(self._takvim().gorev(self._an(gun, 13, 7)),
+                             BRIFING, f"gun {gun}")
+
+    def test_brifing_penceresi_disinda_tarama(self):
+        self.assertEqual(self._takvim().gorev(self._an(1, 15, 0)), TARAMA)
+
+    def test_mevcut_cron_gridi_brifingi_yakalar(self):
+        """'7 */2' UTC gridi TR 13:07'de kosuyor - ayri cron gerekmiyor."""
+        self.assertEqual(self._takvim().gorev(self._an(1, 13, 7)), BRIFING)
+
+    def test_cuma_gun_sonu_haftaliga_donusur(self):
+        self.assertEqual(self._takvim().gorev(self._an(4, 23, 30)), HAFTALIK)
+
+    def test_diger_gunler_gun_sonu_kalir(self):
+        for gun in (0, 1, 2, 3, 6):
+            self.assertEqual(self._takvim().gorev(self._an(gun, 23, 30)),
+                             GUN_SONU, f"gun {gun}")
+
+    def test_haftalik_gun_sonunu_EZER_ikisi_birden_gitmez(self):
+        """Ayni dakikada iki mesaj = ayni sayilar iki kez."""
+        gorev = self._takvim().gorev(self._an(4, 23, 45))
+        self.assertEqual(gorev, HAFTALIK)
+        self.assertNotEqual(gorev, GUN_SONU)
+
+    def test_gun_sonu_saati_esikte_dahildir(self):
+        """Cron tam 23:30'da tetikleniyor - esik disarida biraksa hic gitmezdi."""
+        self.assertEqual(self._takvim().gorev(self._an(0, 23, 30)), GUN_SONU)
+
+    def test_haftalik_her_gun_olamaz(self):
+        """Yalnizca brifing gunluk olabilir; haftalik 'her_gun' anlamsiz."""
+        with self.assertRaises(ValueError) as tuzak:
+            self._takvim(haftalik_gunu="her_gun")
+        self.assertIn("haftalik_gunu", str(tuzak.exception))
+
+    def test_aralik_disi_gun_reddedilir(self):
+        """7 sessizce kabul edilseydi o gorev HIC calismazdi."""
+        with self.assertRaises(ValueError) as tuzak:
+            self._takvim(haftalik_gunu=7)
+        self.assertIn("0-6", str(tuzak.exception))
+
+    def test_gercek_bildirim_yaml_yeni_takvimi_tasiyor(self):
+        """Sentetik sozluk gercek YAML'daki girinti hatasini yakalamaz."""
+        import bildirim
+        takvim = bildirim.ayarlari_oku().takvim
+        self.assertEqual(takvim.brifing_gunu, HER_GUN_KODU)
+        self.assertEqual(takvim.haftalik_gunu, 4)
+        self.assertEqual(takvim.gun_sonu_saati, time(23, 30))
 
 
 class AnlatiTesti(unittest.TestCase):
@@ -2470,9 +2544,10 @@ class VeriZamaniTesti(unittest.TestCase):
         metin = islem_karari_mesaji(
             self._islem(), [Tetikleyici("Risk katkisi", 0.25, 0.20)],
             [Etki("Agirlik", 0.30, 0.20)], 0.0318, 15.9)
-        self.assertIn("2026-08-14", metin)
+        self.assertIn("14 Agustos", metin)     # okunur bicim, ham ISO degil
         self.assertIn("yahoo", metin)
         self.assertNotIn(date.today().isoformat(), metin)
+        self.assertNotIn(str(date.today().day) + " Agustos", metin)
 
     def test_tetikleyen_ve_etki_yazilir(self):
         metin = islem_karari_mesaji(
@@ -2480,16 +2555,38 @@ class VeriZamaniTesti(unittest.TestCase):
             [Tetikleyici("Risk katkisi", 0.25, 0.20),
              Tetikleyici("Beta", 1.90, 1.50, "sayi")],
             [Etki("Agirlik", 0.30, 0.20)], 0.0318, 15.9)
-        self.assertIn("Risk katkisi 25.00% (esik 20.00%)", metin)
-        self.assertIn("Beta 1.90 (esik 1.50)", metin)
-        self.assertIn("30.00% → 20.00%", metin)
+        # Anlati bicimi: olcut, deger ve esik AYNI CUMLEDE gecmeli -
+        # okuyanin uc madde arasinda baglanti kurmasi beklenmemeli.
+        self.assertIn("Risk katkisi 25.00% oldu ve 20.00% esigini asti", metin)
+        self.assertIn("Beta 1.90", metin)
+        self.assertIn("esik 1.50", metin)
+        self.assertIn("Agirlik 30.00% yerine 20.00% olacak", metin)
         self.assertIn("3.18%", metin)
 
     def test_eksik_maliyet_uyarisi(self):
         """Gidis-donus olculemezse islem KARSIZ olabilir - bu yazilmali."""
         metin = islem_karari_mesaji(self._islem(), [], [], None, None)
         self.assertIn("OLCULEMEDI", metin)
-        self.assertIn("KARSIZ olabilir", metin)
+        self.assertIn("Karsiz cikma ihtimali", metin)
+
+    def test_maliyet_sapmayla_karsilastirilir(self):
+        """Ciplak '%0.31 maliyet' okuyana bir sey soylemez - neye gore?"""
+        ucuz = islem_karari_mesaji(self._islem(), [], [], 0.0031, 15.9,
+                                   sapma_esigi=0.03)
+        self.assertIn("ALTINDA", ucuz)
+        pahali = islem_karari_mesaji(self._islem(), [], [], 0.05, 15.9,
+                                     sapma_esigi=0.03)
+        self.assertIn("USTUNDE", pahali)
+
+    def test_sapma_esigi_yoksa_kiyas_uydurulmaz(self):
+        metin = islem_karari_mesaji(self._islem(), [], [], 0.0031, 15.9)
+        self.assertNotIn("ALTINDA", metin)
+        self.assertNotIn("USTUNDE", metin)
+
+    def test_sembol_yerine_ad_kullanilir(self):
+        metin = islem_karari_mesaji(self._islem(), [], [], 0.0031, 15.9,
+                                    adlar={"QQQ": "Nasdaq 100 ETF"})
+        self.assertIn("Nasdaq 100 ETF", metin)
 
 
 class HaftaSonuEsigiTesti(unittest.TestCase):

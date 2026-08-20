@@ -316,7 +316,9 @@ def gonder_islem_karari(islem: IslemOnerisi, tetikleyen: list[Tetikleyici],
                         uyarilar: list[str] | None = None,
                         ayarlar: BildirimAyarlari | None = None,
                         env: dict | None = None,
-                        simdi: datetime | None = None) -> GonderimSonucu:
+                        simdi: datetime | None = None,
+                        adlar: dict[str, str] | None = None,
+                        sapma_esigi: float | None = None) -> GonderimSonucu:
     """Tek islem karari bildirimi.
 
     Idempotency anahtari SAAT icerir: siklik artinca ayni gun ayni sembolde
@@ -329,7 +331,8 @@ def gonder_islem_karari(islem: IslemOnerisi, tetikleyen: list[Tetikleyici],
             tip="islem",
             anahtar=islem_anahtari(islem.sembol, islem.yon.lower(), simdi),
             metin=islem_karari_mesaji(islem, tetikleyen, etki, gidis_donus,
-                                      komisyon_try, uyarilar),
+                                      komisyon_try, uyarilar,
+                                      adlar=adlar, sapma_esigi=sapma_esigi),
         ),
         ayarlar or BildirimAyarlari(), env, simdi=simdi)
 

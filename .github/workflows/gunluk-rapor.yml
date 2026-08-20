@@ -35,7 +35,13 @@ on:
     # is 10-40 dakika gecikebiliyor; 7. dakika bedava gecikme sigortasi.
     - cron: '7 */2 * * *'     # 2 saatte bir, 7 gun - piyasa taramasi
     - cron: '30 20 * * *'     # 23:30 TR - gun sonu ozeti (esik tam 23:30)
-    - cron: '0 6 * * 1'       # 09:00 TR Pazartesi - acilis brifingi
+    #
+    # Brifing icin AYRI CRON YOK: brifing TR 13:00'de basliyor ve
+    # yukaridaki '7 */2' gridi zaten TR 13:07'de kosuyor. Pazartesi'ye
+    # ozel '0 6' cron'u bu yuzden KALDIRILDI - hem gereksizdi hem de
+    # dakikasi 0 oldugu icin GitHub kuyrugunda en cok geciken slottu.
+    # Haftalik ozet de ayri cron istemez: Cuma gunu gun sonu kosusu
+    # HAFTALIK gorevine donusur.
   workflow_dispatch:          # Actions sekmesinden elle tetiklenebilir
 
 permissions:

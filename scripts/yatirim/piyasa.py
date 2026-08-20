@@ -27,6 +27,12 @@ HAFTA_ICI = "hafta_ici"
 GUN_SONU = "gun_sonu"
 BRIFING = "brifing"
 TARAMA = "tarama"
+HAFTALIK = "haftalik"
+
+# brifing_gunu bu degerdeyse brifing HER GUN calisir. Ayri bir bayrak
+# ("brifing_gunluk_mu: true") eklemek iki alani tutarli tutma yuku getirirdi;
+# tek alan, tek dogruluk kaynagi.
+HER_GUN_KODU = -1
 
 
 @dataclass(frozen=True)
@@ -48,6 +54,10 @@ class Takvim:
     gun_sonu_saati: time = time(23, 30)
     brifing_gunu: int = 0
     brifing_saati: time = time(9, 0)
+    # Haftalik ozet gunu (datetime.weekday; 4 = Cuma). Gun sonu saatinde
+    # calisir ve o gunun GUN_SONU'nun YERINE gecer - ikisini ayri ayri
+    # gondermek ayni sayilari iki kez yollamak olurdu.
+    haftalik_gunu: int = 4
 
     def yerel(self, an: datetime) -> datetime:
         return an + TR_OFSET
@@ -61,10 +71,19 @@ class Takvim:
         farkli saatlerde, ama cakisirlarsa gun sonu daha bilgilendirici."""
         yerel = self.yerel(an)
         if yerel.time() >= self.gun_sonu_saati:
+            # Haftalik, gun sonunu EZER: haftalik ozet gunun kapanisini da
+            # icerir. Ikisi ayri gitseydi Cuma aksami neredeyse ayni iki
+            # mesaj arka arkaya duserdi.
+            if yerel.weekday() == self.haftalik_gunu:
+                return HAFTALIK
             return GUN_SONU
-        if yerel.weekday() == self.brifing_gunu and self._brifing_penceresi(yerel):
+        if self._brifing_gunu_mu(yerel) and self._brifing_penceresi(yerel):
             return BRIFING
         return TARAMA
+
+    def _brifing_gunu_mu(self, yerel: datetime) -> bool:
+        return (self.brifing_gunu == HER_GUN_KODU
+                or yerel.weekday() == self.brifing_gunu)
 
     def _brifing_penceresi(self, yerel: datetime) -> bool:
         """Brifing saatinden sonraki bir saat. Cron gecikirse kacirmasin.
@@ -85,6 +104,32 @@ def _saat(ham, varsayilan: time) -> time:
         return ham
     saat, _, dakika = str(ham).partition(":")
     return time(int(saat), int(dakika or 0))
+
+
+def _gun(ham, alan: str) -> int:
+    """Gun alani: 0-6 arasi sayi veya brifing icin 'her_gun'.
+
+    Aralik disi sayi sessizce kabul edilseydi (ornegin 7) o gorev HIC
+    calismazdi - haftanin hicbir gunu 7 degil. Sessiz devre disi kalma,
+    hata vermekten cok daha pahali.
+    """
+    if str(ham) == HER_GUN:
+        if alan != "brifing_gunu":
+            raise ValueError(
+                f"bildirim.yaml -> takvim.{alan} '{HER_GUN}' olamaz; "
+                "yalnizca brifing her gun calisabilir.")
+        return HER_GUN_KODU
+    try:
+        gun = int(ham)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"bildirim.yaml -> takvim.{alan}: 0-6 arasi sayi bekleniyor, "
+            f"'{ham}' geldi") from None
+    if not 0 <= gun <= 6:
+        raise ValueError(
+            f"bildirim.yaml -> takvim.{alan}: 0-6 arasi olmali (0=Pazartesi), "
+            f"{gun} geldi")
+    return gun
 
 
 def takvimi_coz(ham: dict | None) -> Takvim:
@@ -111,6 +156,7 @@ def takvimi_coz(ham: dict | None) -> Takvim:
     return Takvim(
         seanslar=sorted(seanslar, key=lambda s: s.ad),
         gun_sonu_saati=_saat(ham.get("gun_sonu_saati"), time(23, 30)),
-        brifing_gunu=int(ham.get("brifing_gunu", 0)),
+        brifing_gunu=_gun(ham.get("brifing_gunu", 0), "brifing_gunu"),
         brifing_saati=_saat(ham.get("brifing_saati"), time(9, 0)),
+        haftalik_gunu=_gun(ham.get("haftalik_gunu", 4), "haftalik_gunu"),
     )

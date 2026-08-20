@@ -158,36 +158,63 @@ def _deger(sayi: float, bicim: str) -> str:
 def islem_karari_mesaji(islem: IslemOnerisi, tetikleyen: list[Tetikleyici],
                         etki: list[Etki], gidis_donus: float | None,
                         komisyon_try: float | None,
-                        uyarilar: list[str] | None = None) -> str:
-    """Islem karari bildirimi.
+                        uyarilar: list[str] | None = None,
+                        adlar: dict[str, str] | None = None,
+                        sapma_esigi: float | None = None) -> str:
+    """Islem karari bildirimi - ANLATI bicimi.
 
     VERI ZAMANI yazar, mesaj zamani DEGIL. Ayrim kritik: mesaj 19:04'te gitse
     de fiyat Cuma kapanisina aitse karar Cuma verisiyle verilmistir. Mesaj
     zamanini gostermek bayat veriyi guncel gibi sunar - bu sistemde en pahali
     hata turu.
+
+    Onceki surum tetikleyici/etki/maliyet kalemlerini madde madde diziyordu.
+    Okuyanin "hangi olcut, hangi esik, ne degisti" uclusunu kafasinda
+    birlestirmesi gerekiyordu; simdi cumle bunu zaten kuruyor.
     """
     simge = {"AL": "🟩", "SAT": "🟥"}.get(islem.yon, "🟨")
+    ad = _ad(islem.sembol, adlar)
     satirlar = [
-        f"<b>{simge} {kacis(islem.yon)} {kacis(islem.sembol)}</b>",
-        f"{islem.adet:g} adet x {_tl(islem.fiyat_try)} = {_tl(islem.tutar_try)}",
-        "",
-        f"<b>Veri:</b> {kacis(islem.veri_zamani)} "
-        f"({kacis(islem.veri_kaynagi)})",
+        f"<b>{simge} {kacis(islem.yon)} {ad}</b>",
+        f"{islem.adet:g} adet, {_tl(islem.tutar_try)} "
+        f"(birim {_tl(islem.fiyat_try)})",
     ]
+
     if tetikleyen:
-        satirlar += ["", "<b>Tetikleyen</b>"]
-        satirlar += [f"• {t.satir()}" for t in tetikleyen]
+        ilk = tetikleyen[0]
+        satirlar += ["", "<b>Neden</b>",
+                     f"{kacis(ilk.olcut)} {_deger(ilk.deger, ilk.bicim)} oldu ve "
+                     f"{_deger(ilk.esik, ilk.bicim)} esigini asti."]
+        for baska in tetikleyen[1:]:
+            satirlar.append(
+                f"Ayrica {kacis(baska.olcut)} "
+                f"{_deger(baska.deger, baska.bicim)} "
+                f"(esik {_deger(baska.esik, baska.bicim)}).")
+
     if etki:
-        satirlar += ["", "<b>Etki</b>"]
-        satirlar += [f"• {e.satir()}" for e in etki]
+        satirlar += ["", "<b>Ne degisecek</b>"]
+        satirlar += [f"{kacis(e.olcut)} {_deger(e.once, e.bicim)} yerine "
+                     f"{_deger(e.sonra, e.bicim)} olacak." for e in etki]
 
     satirlar += ["", "<b>Maliyet</b>"]
-    satirlar.append(f"• Bu islemin komisyonu: "
-                    f"{_tl(komisyon_try) if komisyon_try is not None else 'OLCULEMEDI'}")
-    satirlar.append(f"• Gidis-donus maliyeti: "
-                    f"{f'{gidis_donus * 100:.2f}%' if gidis_donus is not None else 'OLCULEMEDI'}")
-    if gidis_donus is None:
-        satirlar.append("  ⚠️ Eksik maliyet kalemi - bu islem KARSIZ olabilir.")
+    if komisyon_try is None or gidis_donus is None:
+        satirlar.append(
+            "Bu islemin maliyeti TAM OLCULEMEDI - eksik maliyet kalemi var. "
+            "Karsiz cikma ihtimali gercek; ekli rapordaki eksik kalemlere bak.")
+    else:
+        satirlar.append(
+            f"Komisyon {_tl(komisyon_try)}; al-sat turu toplam "
+            f"{gidis_donus * 100:.2f}%.")
+        if sapma_esigi is not None:
+            ekonomik = gidis_donus < sapma_esigi
+            satirlar.append(
+                f"Bu, duzeltilen sapmanin ({sapma_esigi * 100:.2f}%) "
+                + ("ALTINDA - islem duzelttigi seyden ucuz."
+                   if ekonomik else
+                   "USTUNDE - islem duzelttigi sapmadan pahali."))
+
+    satirlar += ["", f"<i>Veri: {_gun_adi(islem.veri_zamani)} "
+                 f"({kacis(islem.veri_kaynagi)}). Kagit portfoy.</i>"]
 
     for uyari in uyarilar or []:
         satirlar.append(f"⚠️ {kacis(uyari)}")
