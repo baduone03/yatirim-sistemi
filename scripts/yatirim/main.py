@@ -50,6 +50,7 @@ from notify import (  # noqa: E402
 )
 from piyasa import BRIFING, GUN_SONU, HAFTALIK, TARAMA  # noqa: E402
 from portfolio import (  # noqa: E402
+    NAKIT_SINIFI,
     degisim_24s,
     kur_ayristir,
     kur_maruziyeti,
@@ -67,7 +68,9 @@ from report import (  # noqa: E402
 )
 from risk import riski_hesapla  # noqa: E402
 from sinyal import (  # noqa: E402
+    AZALT,
     SEMBOL,
+    SINIF,
     gecmisi_oku,
     gecmisi_yaz,
     kararlari_uret,
@@ -230,6 +233,90 @@ def _islem_onerileri(karar, fiyatlar, portfoy, risk, yapilandirma, maliyet,
     return giden
 
 
+def _sinif_onerileri(karar, sapmalar, fiyatlar, portfoy, yapilandirma,
+                     maliyet, ayarlar, ortam, simdi) -> int:
+    """Acik SINIF sinyallerini SOMUT islem onerisine cevirir. Doner: giden sayisi.
+
+    Bu fonksiyon olmadan sistem yalnizca SATABILIYORDU: tek islem onerisi
+    uretim yolu risk kismasiydi (`yon="SAT"` sabit). Sonucu yapisal bir
+    circirdi - satis nakdi buyutur, nakdi dagitacak hicbir sinyal yolu yoktu
+    ve portfoy zamanla nakde suruklenirdi. Ustelik rebalancing sistemin ANA
+    isi (README) ama yalnizca uyari uretiyordu, miktar uretmiyordu.
+
+    Sinif ICI dagitim MEVCUT agirliklara orantilidir. Bilincli: sistemde
+    sembol bazinda hedef agirlik YOK (yalnizca sinif hedefi var), dolayisiyla
+    "hangi hisseyi alayim" sorusunun kayitli bir cevabi yok. Orantili dagitim
+    bu soruya cevap vermez, sinif ici oranlari OLDUGU GIBI korur - yani
+    sistemin sahip olmadigi bir gorusu varmis gibi davranmaz.
+    """
+    toplam = portfoy.toplam_deger_try
+    if not toplam:
+        return 0
+    sapma_esigi = yapilandirma.esikler.rebalancing_sapma
+    adlar = {v.sembol: v.ad for v in yapilandirma.varliklar}
+    sapma_haritasi = {s.sinif: s for s in sapmalar}
+    son_fiyatlar = fiyatlar.son_fiyatlar
+    kalan_nakit = portfoy.nakit_try
+    giden = 0
+
+    for sonuc in karar.sinyaller(SINIF):
+        # Nakit ARTIK bir sinif degil, KALINTIDIR: diger siniflara yapilan
+        # her alim/satim nakdi zaten degistirir. "Nakit al" diye bir islem
+        # yok; nakdi hedefe getiren sey oteki siniflarin islemleridir.
+        if sonuc.ad == NAKIT_SINIFI:
+            continue
+        sapma = sapma_haritasi.get(sonuc.ad)
+        if sapma is None:
+            continue
+        sinif_pozisyonlari = [p for p in portfoy.pozisyonlar
+                              if p.sinif == sonuc.ad and p.deger_try > 0]
+        if not sinif_pozisyonlari:
+            # Sinifta pozisyon yoksa orantili dagitim tanimsiz. Rastgele bir
+            # sembol secmek sistemin uretmedigi bir gorus olurdu.
+            print(f"  {sonuc.ad}: sinifta pozisyon yok, hangi sembol "
+                  "alinacagi tanimsiz - oneri uretilmedi")
+            continue
+
+        tutar = abs(sapma.sapma) * toplam
+        yon = "SAT" if sonuc.yon == AZALT else "AL"
+        if yon == "AL":
+            # Nakit kisiti: elde olmayan parayla alim onermek emir degil
+            # temennidir. Kirpilirsa sapma tam kapanmaz, mesaj bunu yazar.
+            tutar = min(tutar, kalan_nakit)
+            if tutar <= 0:
+                print(f"  {sonuc.ad}: alim gerekiyor ama nakit yok")
+                continue
+
+        sinif_degeri = sum(p.deger_try for p in sinif_pozisyonlari)
+        for pozisyon in sinif_pozisyonlari:
+            pay = tutar * pozisyon.deger_try / sinif_degeri
+            fiyat = son_fiyatlar.get(pozisyon.sembol)
+            if fiyat is None or pay <= 0:
+                continue
+            gidis_donus = maliyet.gidis_donus(pozisyon.sembol, pay,
+                                              fiyatlar.usdtry)
+            islem = IslemOnerisi(
+                sembol=pozisyon.sembol, yon=yon, adet=pay / fiyat,
+                fiyat_try=fiyat, veri_zamani=fiyatlar.son_tarih,
+                veri_kaynagi=_veri_kaynagi(fiyatlar, pozisyon.sembol))
+            sonuc_gonderim = gonder_islem_karari(
+                islem,
+                [Tetikleyici(f"{sonuc.ad} sinif sapmasi", sapma.sapma,
+                             sapma_esigi if sapma.sapma > 0 else -sapma_esigi)],
+                [Etki(f"{sonuc.ad} agirligi", sapma.guncel_agirlik,
+                      sapma.hedef_agirlik)],
+                gidis_donus,
+                pay * gidis_donus / 2 if gidis_donus is not None else None,
+                ayarlar=ayarlar, env=ortam, simdi=simdi,
+                adlar=adlar, sapma_esigi=sapma_esigi)
+            print(f"  rebalancing {yon} {pozisyon.sembol}: "
+                  f"{sonuc_gonderim.durum}")
+            giden += 1
+            if yon == "AL":
+                kalan_nakit -= pay
+    return giden
+
+
 def _veri_kaynagi(fiyatlar, sembol: str) -> str:
     """Fiyatin nereden geldigi. Kripto BTCTurk'ten ezilmis olabilir."""
     if sembol in {s.sembol for s in fiyatlar.ucgenleme.sonuclar}:
@@ -265,7 +352,8 @@ def _ayrintiyi_ekle(sonuc, rapor_dosyasi, baslik: str, ortam) -> None:
 
 def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
                          maliyet, ayarlar, ortam, simdi, gorev, rapor_adi,
-                         duyarlilik=None, rapor_dosyasi=None) -> None:
+                         duyarlilik=None, rapor_dosyasi=None,
+                         sapmalar=()) -> None:
     """Gorev tipine gore bildirim gonderir.
 
     TARAMA: yalnizca islem kararlari. Her tarama kosusunda tam ozet gondermek
@@ -276,6 +364,8 @@ def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
                               yapilandirma.bayatlik, risk, duyarlilik)
     giden = _islem_onerileri(karar, fiyatlar, portfoy, risk, yapilandirma,
                              maliyet, ayarlar, ortam, simdi)
+    giden += _sinif_onerileri(karar, sapmalar, fiyatlar, portfoy, yapilandirma,
+                              maliyet, ayarlar, ortam, simdi)
 
     if gorev == TARAMA:
         # Uyarilar gun sonunda toplu gidiyor; tarama kosusunda yalnizca
@@ -451,7 +541,7 @@ def main() -> int:
             _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar,
                                  durum, maliyet, bildirim_ayarlari, ortam,
                                  simdi, gorev, rapor_adi, duyarlilik,
-                                 rapor_dosyasi)
+                                 rapor_dosyasi, sapmalar)
         except TelegramHatasi as hata:
             # Rapor diske yazildi ve GECERLI - kaybolmadi.
             # Yine de exit 1 doneriyoruz: bu sistemin cikti kanali Telegram,

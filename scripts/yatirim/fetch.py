@@ -253,7 +253,8 @@ def _serileri_hazirla(kapanis: pd.DataFrame, yapilandirma: Yapilandirma
 
 
 def _kur_kotasyonu(kaynaklar, env, yahoo_usdtry: float, getir,
-                   bugun=None) -> tuple[KurKotasyonu, list[str]]:
+                   bugun=None, yahoo_tarihi=None
+                   ) -> tuple[KurKotasyonu, list[str]]:
     """USD/TRY: once TCMB, erisilemez veya BAYATSA Yahoo.
 
     TCMB kuru yalnizca is gunu ~15:30'da yayimlanir. Hafta sonu ve tatilde
@@ -263,7 +264,12 @@ def _kur_kotasyonu(kaynaklar, env, yahoo_usdtry: float, getir,
     """
     bugun = bugun or date.today()
     uyarilar: list[str] = []
-    yedek = KurKotasyonu(yahoo_usdtry, bugun, "yahoo")
+    # Yahoo kuru serinin SON GERCEK gozleminden gelir ve o gozlem hafta sonu
+    # veya tatilde gunlerce eski olabilir (`.ffill()` degeri tasiyor).
+    # Kotasyona `bugun` damgasi vurmak bayat bir kuru guncelmis gibi
+    # gostermek olurdu - TCMB tarafinda titizlikle olculen bayatligin
+    # Yahoo tarafinda hic olculmemesi tutarsizdi.
+    yedek = KurKotasyonu(yahoo_usdtry, yahoo_tarihi or bugun, "yahoo")
 
     if not kaynaklar.tcmb_url:
         return yedek, uyarilar
@@ -276,13 +282,15 @@ def _kur_kotasyonu(kaynaklar, env, yahoo_usdtry: float, getir,
         uyarilar.append(
             f"TCMB kuru {kur.tarih} tarihli, bayat - USD/TRY Yahoo'dan alindi. "
             "TCMB yalnizca is gunu kur yayimlar.")
-        return KurKotasyonu(yahoo_usdtry, bugun, "yahoo (tcmb bayat)"), uyarilar
+        return (KurKotasyonu(yahoo_usdtry, yahoo_tarihi or bugun,
+                             "yahoo (tcmb bayat)"), uyarilar)
     return kur, uyarilar
 
 
 def kripto_ucgenlemesi(yapilandirma: Yapilandirma, yahoo_usdtry: float,
                        env: dict | None = None, getir=http_json,
-                       simdi=None, bugun=None) -> UcgenlemeSonucu:
+                       simdi=None, bugun=None,
+                       kur_tarihi=None) -> UcgenlemeSonucu:
     """BTCTurk + CoinGecko + TCMB capraz kontrolu.
 
     Kaynaklardan biri dusse bile HATA FIRLATMAZ: eksik kaynak OLCULEMEDI
@@ -309,7 +317,8 @@ def kripto_ucgenlemesi(yapilandirma: Yapilandirma, yahoo_usdtry: float,
         except KaynakHatasi as hata:
             uyarilar.append(f"CoinGecko okunamadi: {hata}")
 
-    kur, kur_uyarilari = _kur_kotasyonu(kaynaklar, env, yahoo_usdtry, getir, bugun)
+    kur, kur_uyarilari = _kur_kotasyonu(kaynaklar, env, yahoo_usdtry, getir,
+                                        bugun, kur_tarihi)
     uyarilar += kur_uyarilari
 
     ayarlar = UcgenlemeAyarlari(
@@ -404,7 +413,12 @@ def fiyatlari_getir(yapilandirma: Yapilandirma,
         kapanis[varlik_sutunlari], hacim, yapilandirma.kurumsal_olay, bilinen_olaylar
     )
 
-    yahoo_usdtry = float(kapanis[kur_sembolu].ffill().iloc[-1])
+    # ffill son GERCEK gozlemi tasir; o gozlemin tarihi kurun gercek yasidir.
+    # Hafta sonu/tatilde Cuma kuru tasinir ve bunu bugunun kuru saymak tum
+    # TL degerlemesini sessizce bayat bir kura baglar.
+    kur_serisi = kapanis[kur_sembolu].dropna()
+    yahoo_usdtry = float(kur_serisi.iloc[-1])
+    kur_tarihi = kur_serisi.index[-1].date() if len(kur_serisi) else None
     try_gecmis, yerel_gecmis, kur_gecmis = _serileri_hazirla(kapanis, yapilandirma)
     return FiyatVerisi(
         try_gecmis=try_gecmis,
@@ -412,7 +426,8 @@ def fiyatlari_getir(yapilandirma: Yapilandirma,
         eksik_semboller=eksik,
         sinif_haritasi=yapilandirma.sinif_haritasi,
         kurumsal_olay_supheleri=supheliler,
-        ucgenleme=kripto_ucgenlemesi(yapilandirma, yahoo_usdtry, env, getir),
+        ucgenleme=kripto_ucgenlemesi(yapilandirma, yahoo_usdtry, env, getir,
+                                     kur_tarihi=kur_tarihi),
         yerel_gecmis=yerel_gecmis,
         kur_gecmis=kur_gecmis,
     )

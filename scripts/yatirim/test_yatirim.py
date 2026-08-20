@@ -764,6 +764,141 @@ class _SahteAyrim:
         self.yerel_getiri, self.kur_getirisi, self.toplam_tl = yerel, kur, toplam
 
 
+class _SahteSinyal:
+    def __init__(self, ad, yon):
+        self.tur, self.ad, self.yon, self.sebep = "sinif", ad, yon, ""
+
+    @property
+    def acik(self):
+        return True
+
+
+class _SahteSinifKarar:
+    def __init__(self, sinyaller_):
+        self._s = sinyaller_
+
+    def sinyaller(self, tur=""):
+        return [x for x in self._s if not tur or x.tur == tur]
+
+
+class _SahteMaliyet:
+    def gidis_donus(self, sembol, tutar, usdtry):
+        return 0.003
+
+
+class _SahteFiyatlar:
+    son_tarih = "2026-08-19"
+    usdtry = 47.9
+
+    def __init__(self, fiyatlar):
+        self.son_fiyatlar = fiyatlar
+        self.ucgenleme = type("U", (), {"sonuclar": []})()
+
+
+class RebalancingAlimTesti(unittest.TestCase):
+    """SINIF sinyalleri artik SOMUT islem onerisi uretiyor.
+
+    Bu yol acilmadan once sistem YALNIZCA satabiliyordu: tek oneri uretim
+    noktasi risk kismasiydi ve yonu 'SAT' sabitti. Satis nakdi buyutur,
+    nakdi dagitacak sinyal yolu yoktu - yapisal bir circir.
+    """
+
+    def _kur(self, nakit=3000.0, pozisyonlar=None):
+        import main
+        varsayilan = [
+            PozisyonDegeri("QQQ", "Nasdaq ETF", "nasdaq", 1, 4000.0, 4000.0),
+            PozisyonDegeri("AAPL", "Apple", "nasdaq", 1, 2000.0, 2000.0),
+        ]
+        portfoy = Portfoy(pozisyonlar=pozisyonlar if pozisyonlar is not None
+                          else varsayilan, nakit_try=nakit, fiyatlanamayan=[])
+        fiyatlar = _SahteFiyatlar({"QQQ": 100.0, "AAPL": 50.0, "BTC-USD": 10.0})
+        yapilandirma = type("Y", (), {
+            "esikler": Esikler(rebalancing_sapma=0.03, risk_katkisi_ust=0.20,
+                               risk_beta_ust=1.5),
+            "varliklar": [],
+        })()
+        return main, portfoy, fiyatlar, yapilandirma
+
+    def _kos(self, yon, sapma_orani, nakit=3000.0, pozisyonlar=None,
+             sinif="nasdaq"):
+        main, portfoy, fiyatlar, yapilandirma = self._kur(nakit, pozisyonlar)
+        toplam = portfoy.toplam_deger_try
+        guncel = 0.40 + sapma_orani
+        sapmalar = [SinifSapmasi(sinif, guncel, 0.40)]
+        karar = _SahteSinifKarar([_SahteSinyal(sinif, yon)])
+        with unittest.mock.patch("main.gonder_islem_karari") as sahte:
+            sahte.return_value = type("S", (), {"durum": "gonderildi"})()
+            giden = main._sinif_onerileri(
+                karar, sapmalar, fiyatlar, portfoy, yapilandirma,
+                _SahteMaliyet(), None, None, None)
+        return giden, sahte, toplam
+
+    def test_hedefin_ALTINDA_kalan_sinif_ALIM_uretir(self):
+        """Sistemin daha once HIC yapamadigi sey."""
+        giden, sahte, _ = self._kos("artir", -0.05)
+        self.assertEqual(giden, 2)                 # sinifta 2 pozisyon
+        for cagri in sahte.call_args_list:
+            self.assertEqual(cagri.args[0].yon, "AL")
+
+    def test_hedefin_USTUNDE_kalan_sinif_SATIM_uretir(self):
+        giden, sahte, _ = self._kos("azalt", 0.05)
+        self.assertEqual(giden, 2)
+        for cagri in sahte.call_args_list:
+            self.assertEqual(cagri.args[0].yon, "SAT")
+
+    def test_alim_sinif_ici_oranlari_korur(self):
+        """Sembol hedefi YOK - sistem sahip olmadigi gorusu uydurmamali."""
+        _, sahte, _ = self._kos("artir", -0.06)
+        tutarlar = {c.args[0].sembol: c.args[0].tutar_try
+                    for c in sahte.call_args_list}
+        # QQQ 4000, AAPL 2000 -> 2:1 orani korunmali
+        self.assertAlmostEqual(tutarlar["QQQ"] / tutarlar["AAPL"], 2.0, places=6)
+
+    def test_alim_NAKITLE_sinirli(self):
+        """Elde olmayan parayla alim onermek emir degil temennidir."""
+        _, sahte, _ = self._kos("artir", -0.50, nakit=1000.0)
+        toplam_alim = sum(c.args[0].tutar_try for c in sahte.call_args_list)
+        self.assertLessEqual(round(toplam_alim, 6), 1000.0)
+
+    def test_nakit_yoksa_alim_onerilmez(self):
+        giden, sahte, _ = self._kos("artir", -0.05, nakit=0.0)
+        self.assertEqual(giden, 0)
+        sahte.assert_not_called()
+
+    def test_satim_nakit_kisitina_TABI_DEGIL(self):
+        """Satis nakit uretir, tuketmez."""
+        giden, _, _ = self._kos("azalt", 0.05, nakit=0.0)
+        self.assertEqual(giden, 2)
+
+    def test_bos_sinifta_oneri_uretilmez(self):
+        """Hangi sembolun alinacagi tanimsiz - rastgele secmek gorus olurdu."""
+        giden, sahte, _ = self._kos("artir", -0.05, pozisyonlar=[])
+        self.assertEqual(giden, 0)
+        sahte.assert_not_called()
+
+    def test_nakit_sinifi_hic_islem_uretmez(self):
+        """Nakit KALINTIDIR: oteki siniflarin islemleri onu zaten degistirir."""
+        giden, sahte, _ = self._kos("artir", -0.05, sinif="nakit")
+        self.assertEqual(giden, 0)
+        sahte.assert_not_called()
+
+    def test_devre_kesildiginde_oneri_gitmez(self):
+        """Devre kesici tum sinyallere sebep yazar - acik sinyal kalmaz."""
+        main, portfoy, fiyatlar, yapilandirma = self._kur()
+        karar = _SahteSinifKarar([])         # bastirilmis: acik sinyal yok
+        with unittest.mock.patch("main.gonder_islem_karari") as sahte:
+            giden = main._sinif_onerileri(
+                karar, [SinifSapmasi("nasdaq", 0.35, 0.40)], fiyatlar, portfoy,
+                yapilandirma, _SahteMaliyet(), None, None, None)
+        self.assertEqual(giden, 0)
+        sahte.assert_not_called()
+
+    def test_alim_tutari_sapmayi_kapatacak_kadar(self):
+        giden, sahte, toplam = self._kos("artir", -0.05, nakit=99999.0)
+        toplam_alim = sum(c.args[0].tutar_try for c in sahte.call_args_list)
+        self.assertAlmostEqual(toplam_alim, 0.05 * toplam, places=4)
+
+
 class GunlukBrifingHaftalikTesti(unittest.TestCase):
     """Yeni takvim: gunluk ogle brifingi + Cuma haftalik ozeti."""
 
