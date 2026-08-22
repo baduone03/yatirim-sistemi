@@ -188,9 +188,15 @@ veri_kaynaklari:
       - ad: "Yahoo Finance"
         url: "https://finance.yahoo.com/news/rssindex"
         kategori: piyasa
+      # 2026-08-22'de makro olarak etiketlenmisti ama besleme GENEL haber
+      # veriyor (sirket haberleri, siyaset, teknoloji) - makro degil.
+      # "Makro" basligi altinda gostermek okuyanı yaniltiyordu.
+      # TCMB/faiz/enflasyon odakli bir TR beslemesi bulunamadi: TCMB RSS
+      # yayinlamiyor. Makro kategorisi su an BOS ve bu dogru - olmayan
+      # kaynagi varmis gibi gostermektense baslik hic cikmasin.
       - ad: "Investing TR"
         url: "https://tr.investing.com/rss/news.rss"
-        kategori: makro
+        kategori: piyasa
 
 # ==========================================================================
 # UC SINIFLI MALIYET MODELI
