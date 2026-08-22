@@ -40,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from bicim import oran, tl, yuzde  # noqa: E402
 from bildirim import bol  # noqa: E402
+from haber import haberleri_topla  # noqa: E402
 from config import PROJE_DIZINI, TR_OFSET, yapilandirmayi_oku  # noqa: E402
 from duyarlilik import (  # noqa: E402
     GERCEK,
@@ -52,8 +53,8 @@ from fetch import fiyatlari_getir, maliyet_modelini_coz  # noqa: E402
 from kurumsal_olay import bilinen_olay_anahtarlari, olaylari_oku  # noqa: E402
 from ledger import durumu_hesapla, islemleri_oku  # noqa: E402
 from maliyet import TEMEL  # noqa: E402
-from mesaj import kacis  # noqa: E402
-from notify import API_KOKU, ZAMAN_ASIMI, env_oku  # noqa: E402
+from mesaj import haber_dosyasi, haber_mesaji, kacis  # noqa: E402
+from notify import API_KOKU, ZAMAN_ASIMI, dosya_gonder, env_oku  # noqa: E402
 from portfolio import (  # noqa: E402
     degisim_24s,
     kur_maruziyeti,
@@ -527,8 +528,29 @@ def komut_yardim(baglam: Baglam, arguman: str) -> str:
         "/fiyat SEMBOL - fiyat, veri zamani, kaynak, bayatlik",
         "/son - son 5 simule islem",
         "/param - olculmesi gereken parametreler",
+        "/haber - guncel basliklar (makro, piyasa, kripto) + ayrinti dosyasi",
         "/yardim - bu liste",
     ])
+
+
+def komut_haber(baglam: Baglam, arguman: str) -> str:
+    """Guncel basliklar. Fiyat verisi CEKMEZ - haber fiyattan bagimsizdir.
+
+    `baglam.veri` kasitli olarak kullanilmiyor: Yahoo'ya gitmek bu komut icin
+    tamamen gereksiz Actions dakikasi yakardi. Yalnizca yapilandirma okunur.
+    """
+    yapilandirma = yapilandirmayi_oku()
+    ayar = yapilandirma.haber
+    if not ayar.beslemeler:
+        return ("<b>📰 Haberler</b>\n\n"
+                "Hic besleme tanimli degil. <code>varliklar.yaml -> "
+                "veri_kaynaklari.haber.beslemeler</code> altina ekle.")
+
+    bugun = (simdi_utc() + TR_OFSET).date()
+    haberler, uyarilar = haberleri_topla(
+        ayar.beslemeler, bugun=bugun, azami_gun=ayar.azami_gun,
+        besleme_basina=ayar.besleme_basina)
+    return haber_mesaji(haberler, uyarilar, bugun)
 
 
 KOMUTLAR = {
@@ -538,6 +560,7 @@ KOMUTLAR = {
     "/fiyat": komut_fiyat,
     "/son": komut_son,
     "/param": komut_param,
+    "/haber": komut_haber,
     "/yardim": komut_yardim,
 }
 
@@ -683,6 +706,32 @@ def guncellemeleri_isle(guncellemeler: list[dict], izinliler: set[str],
     return son_id, cevaplanan
 
 
+HABER_DIZINI = PROJE_DIZINI / "haberler"
+
+
+def haber_ayrintisi_uret(env: dict[str, str] | None = None,
+                         bugun=None) -> Path | None:
+    """Haber ayrinti dosyasini diske yazar ve yolunu doner.
+
+    KOMUT DEGIL, tasima yardimcisi. Komutlar saf kalmali - `komut_haber`
+    yalnizca metin uretir. Bu ayrim `test_bot_yazma_islemi_yok` tarafindan
+    korunuyor ve sebebi mimari: komut govdesi diske dokunmaya baslarsa
+    "salt okunur bot" garantisi her yeni komutta yeniden tartisilir.
+    """
+    yapilandirma = yapilandirmayi_oku()
+    ayar = yapilandirma.haber
+    if not ayar.beslemeler:
+        return None
+    bugun = bugun or (simdi_utc() + TR_OFSET).date()
+    haberler, uyarilar = haberleri_topla(
+        ayar.beslemeler, bugun=bugun, azami_gun=ayar.azami_gun,
+        besleme_basina=ayar.besleme_basina)
+    HABER_DIZINI.mkdir(parents=True, exist_ok=True)
+    dosya = HABER_DIZINI / f"{bugun}.md"
+    dosya.write_text(haber_dosyasi(haberler, uyarilar, bugun), encoding="utf-8")
+    return dosya
+
+
 def tek_komutu_cevapla(komut: str, chat_id: str,
                        env: dict[str, str] | None = None,
                        gonder=None, yukleyici=None) -> int:
@@ -721,6 +770,18 @@ def tek_komutu_cevapla(komut: str, chat_id: str,
     except Exception as hata:                     # noqa: BLE001
         print(f"HATA - cevap gonderilemedi: {type(hata).__name__}", file=sys.stderr)
         return 1
+
+    if komut.split()[0].split("@")[0] == "/haber":
+        # Ayrinti dosyasi metin cevabindan SONRA gider ve basarisizligi
+        # komutu dusurmez: ozet asil cikti, dosya kolaylik. Ikisini birbirine
+        # baglamak, ek yuzunden haberi tumden kaybettirirdi.
+        try:
+            dosya = haber_ayrintisi_uret(env)
+            if dosya is not None:
+                dosya_gonder(dosya, f"Haber ayrintisi - {dosya.stem}", env)
+        except Exception as hata:                 # noqa: BLE001
+            print(f"UYARI - haber dosyasi eklenemedi: {type(hata).__name__}",
+                  file=sys.stderr)
     print(f"Webhook komutu cevaplandi: {komut[:32]}")
     return 0
 

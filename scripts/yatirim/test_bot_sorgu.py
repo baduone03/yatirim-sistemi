@@ -213,14 +213,17 @@ class KomutTesti(unittest.TestCase):
                       "write_text", "open(", "unlink", "rmtree", "requests."):
             self.assertNotIn(yasak, komut_bolumu, f"komut bolumunde {yasak} var")
 
-        # Modulde yazma yalnizca offset defterinde olmali.
-        self.assertEqual(kaynak.count("write_text"), 1)
+        # Modulde yazma IKI yerde: offset defteri ve haber dokumu. Ikisi de
+        # KOMUT bolumunun disinda, tasima katmaninda. Sayiyi sabit tutmak
+        # bilincli - yeni bir yazma eklenirse bu test kirilir ve "bot salt
+        # okunur mu" sorusu yeniden sorulur.
+        self.assertEqual(kaynak.count("write_text"), 2)
         self.assertIn("dosya.write_text", kaynak)
 
     def test_komut_sozlugu_beklenen_kumeyi_icerir(self):
         self.assertEqual(
             set(KOMUTLAR),
-            {"/portfoy", "/risk", "/durum", "/fiyat", "/son", "/param", "/yardim"})
+            {"/portfoy", "/risk", "/durum", "/fiyat", "/son", "/param", "/haber", "/yardim"})
 
     def test_bot_adi_soneki_temizlenir(self):
         """Grupta /risk@InvestmentTR_bot diye gelir."""
@@ -450,6 +453,7 @@ class KomutGovdesiTesti(unittest.TestCase):
 
     def test_her_komut_calisiyor(self):
         for komut in ("/portfoy", "/risk", "/durum", "/son", "/param",
+            "/haber",
                       "/yardim", "/fiyat THYAO.IS"):
             cevap = self._cevap(komut)
             self.assertTrue(cevap.strip(), komut)

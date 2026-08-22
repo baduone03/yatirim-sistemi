@@ -160,6 +160,38 @@ veri_kaynaklari:
     prim_esigi: 0.03           # ustunde TR primi olarak kaydedilir + uyari
     durdurma_esigi: 0.08       # ustunde rapor URETILMEZ (uc kaynak da tazeyse)
 
+  # HABER BESLEMELERI - /haber komutunun kaynagi.
+  #
+  # Bu blok SAYI URETMEZ, baglam saglar. Hicbir besleme karar uretmez;
+  # sistem hala yalnizca fiyat ve orana bakar. Haber okuyanin yorumu icin.
+  #
+  # Buradaki bes adres 2026-08-22'de TEK TEK denendi ve calisiyor. Denenip
+  # ELENENLER: Kitco (`/rss/KitcoNews.xml` HTTP 404), TCMB duyuru RSS'i
+  # (boyle bir uc nokta yok). Yenisini eklemeden once gercekten cevap
+  # verdigini dogrula - olu bir URL sessizce "kaynak okunamadi" uyarisina
+  # doner ve ozet farkinda olmadan eksik kalir.
+  #
+  # kategori: makro | piyasa | kripto. Ozet bu basliklara gore gruplanir.
+  haber:
+    azami_gun: 2          # bundan eski baslik ozete girmez
+    besleme_basina: 6     # tek yuksek hacimli kaynak ozeti ele gecirmesin
+    beslemeler:
+      - ad: "CoinDesk"
+        url: "https://www.coindesk.com/arc/outboundfeeds/rss/"
+        kategori: kripto
+      - ad: "Cointelegraph"
+        url: "https://cointelegraph.com/rss"
+        kategori: kripto
+      - ad: "CNBC Piyasalar"
+        url: "https://www.cnbc.com/id/100003114/device/rss/rss.html"
+        kategori: piyasa
+      - ad: "Yahoo Finance"
+        url: "https://finance.yahoo.com/news/rssindex"
+        kategori: piyasa
+      - ad: "Investing TR"
+        url: "https://tr.investing.com/rss/news.rss"
+        kategori: makro
+
 # ==========================================================================
 # UC SINIFLI MALIYET MODELI
 # ==========================================================================

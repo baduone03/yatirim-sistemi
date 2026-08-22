@@ -15,6 +15,9 @@ from maliyet import MaliyetModeli, modeli_kur
 # hesaplanirsa Cumartesi TR 02:00 hala Cuma sayilir.
 TR_OFSET = timedelta(hours=3)
 
+# Haber ozeti bu basliklara gore gruplanir; tanimsiz kategori kabul edilmez.
+HABER_KATEGORILERI = frozenset({"makro", "piyasa", "kripto"})
+
 PROJE_DIZINI = Path(__file__).resolve().parents[2] / "04-projects" / "yatirim-sistemi"
 
 
@@ -185,6 +188,20 @@ class VeriKaynaklari:
 
 
 @dataclass(frozen=True)
+class HaberAyarlari:
+    """RSS/Atom haber beslemeleri. Bos birakilirsa /haber komutu devre disi.
+
+    Bu blok SAYI URETMEZ. Hicbir besleme karar yoluna girmez - sistem yalnizca
+    fiyat ve orana bakar. Haber baglam icindir ve o yuzden burada hicbir esik
+    yok: tazelik disinda suzulecek bir sey de yok.
+    """
+
+    beslemeler: list = field(default_factory=list)
+    azami_gun: int = 2
+    besleme_basina: int = 6
+
+
+@dataclass(frozen=True)
 class Yapilandirma:
     ayarlar: Ayarlar
     esikler: Esikler
@@ -196,6 +213,7 @@ class Yapilandirma:
     bayatlik: BayatlikEsikleri = field(default_factory=BayatlikEsikleri)
     kurumsal_olay: KurumsalOlayAyarlari = field(default_factory=KurumsalOlayAyarlari)
     kaynaklar: VeriKaynaklari = field(default_factory=VeriKaynaklari)
+    haber: HaberAyarlari = field(default_factory=HaberAyarlari)
     maliyet: MaliyetModeli = field(default_factory=MaliyetModeli)
     bekleme: Bekleme = field(default_factory=Bekleme)
     devre_kesici: DevreKesici = field(default_factory=DevreKesici)
@@ -396,6 +414,28 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
         prim_esigi=float(ucgen_ham.get("prim_esigi", 0.03)),
         durdurma_esigi=float(ucgen_ham.get("durdurma_esigi", 0.08)),
     )
+
+    haber_ham = kaynak_ham.get("haber") or {}
+    beslemeler = []
+    for kayit in haber_ham.get("beslemeler") or []:
+        url = str((kayit or {}).get("url", "")).strip()
+        if not url:
+            raise ValueError(
+                "varliklar.yaml -> veri_kaynaklari.haber.beslemeler: "
+                "her beslemenin 'url' alani olmali")
+        kategori = str((kayit or {}).get("kategori", "genel"))
+        if kategori not in HABER_KATEGORILERI:
+            raise ValueError(
+                f"veri_kaynaklari.haber: bilinmeyen kategori '{kategori}'. "
+                f"Gecerli: {', '.join(sorted(HABER_KATEGORILERI))}. "
+                "Tanimsiz kategori ozet gruplarinda sessizce kaybolur.")
+        beslemeler.append({"ad": str((kayit or {}).get("ad", url)),
+                           "url": url, "kategori": kategori})
+    haber = HaberAyarlari(
+        beslemeler=beslemeler,
+        azami_gun=int(haber_ham.get("azami_gun", 2)),
+        besleme_basina=int(haber_ham.get("besleme_basina", 6)),
+    )
     if not 0 < kaynaklar.prim_esigi < kaynaklar.durdurma_esigi < 1:
         raise ValueError(
             "ucgenleme esikleri 0 < prim_esigi < durdurma_esigi < 1 olmali; "
@@ -438,6 +478,7 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
         bayatlik=bayatlik,
         kurumsal_olay=kurumsal_olay,
         kaynaklar=kaynaklar,
+        haber=haber,
         maliyet=maliyet,
         bekleme=bekleme,
         devre_kesici=devre_kesici,

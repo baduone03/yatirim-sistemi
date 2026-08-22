@@ -61,3 +61,8 @@ loglar/
 
 # Wrangler build artifakti - Cloudflare deploy'unda yeniden uretilir
 .wrangler/
+
+# Gunluk haber dokumu: turetilmis veri, her /haber komutunda yeniden
+# uretilir ve gunde bir dosya birikir. Rapor gibi degil - rapor portfoy
+# durumunun kaydi, bu yalnizca o anki basliklarin kopyasi.
+/04-projects/yatirim-sistemi/haberler/

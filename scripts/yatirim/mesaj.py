@@ -543,3 +543,110 @@ def uyarilari_topla(fiyatlar, portfoy, karar, maliyet, bayatlik,
         uyarilar.append(f"Bayat fiyat {sembol}: {gecikme} islem gunu "
                         "guncellenmedi.")
     return uyarilar
+
+
+# --------------------------------------------------------------------------
+# Haber ozeti
+# --------------------------------------------------------------------------
+
+KATEGORI_BASLIKLARI = {
+    "makro": "Makro (kur, faiz, enflasyon)",
+    "piyasa": "Piyasa",
+    "kripto": "Kripto",
+}
+
+MESAJDA_AZAMI = 5      # kategori basina; gerisi ekli dosyada
+
+
+def _kategori_sirasi(ikili) -> tuple[int, str]:
+    sira = {"makro": 0, "piyasa": 1, "kripto": 2}
+    return (sira.get(ikili[0], 9), ikili[0])
+
+
+def _haberleri_grupla(haberler: list) -> list[tuple[str, list]]:
+    gruplar: dict[str, list] = {}
+    for h in haberler:
+        gruplar.setdefault(h.kategori, []).append(h)
+    return sorted(gruplar.items(), key=_kategori_sirasi)
+
+
+def haber_mesaji(haberler: list, uyarilar: list[str], bugun) -> str:
+    """Telegram'a giden KISA haber ozeti.
+
+    Sistemin geri kalanindan farkli olarak burasi YORUM URETMEZ - basliklari
+    gruplar ve tazeligini isaretler. Sebep: bu sistemin hicbir yerinde
+    olculmemis bir sey iddia edilmiyor; haber basligindan piyasa yorumu
+    turetmek tam olarak bunu yapmak olurdu. Basliklar okuyana ait.
+    """
+    satirlar = [f"<b>📰 Haberler — {_gun_adi(str(bugun))}</b>", ""]
+
+    if not haberler:
+        satirlar.append("Taze baslik bulunamadi.")
+        if uyarilar:
+            satirlar += ["", "<b>Sebep</b>"]
+            satirlar += [f"• {kacis(u)}" for u in uyarilar]
+        else:
+            satirlar.append("Beslemeler cevap verdi ama esikteki gun "
+                            "araliginda yeni baslik yoktu.")
+        return "\n".join(satirlar)
+
+    kaynaklar = sorted({h.kaynak for h in haberler})
+    satirlar.append(f"{len(kaynaklar)} kaynaktan {len(haberler)} taze baslik.")
+
+    for kategori, grup in _haberleri_grupla(haberler):
+        satirlar += ["", f"<b>{KATEGORI_BASLIKLARI.get(kategori, kategori)}</b>"]
+        for h in grup[:MESAJDA_AZAMI]:
+            damga = " <i>(tarihsiz)</i>" if h.tarihsiz else ""
+            satirlar.append(f"• {kacis(h.baslik)}{damga}")
+        if len(grup) > MESAJDA_AZAMI:
+            kalan = len(grup) - MESAJDA_AZAMI
+            satirlar.append(f"<i>… {kalan} baslik daha, ekli dosyada</i>")
+
+    tarihsiz = sum(1 for h in haberler if h.tarihsiz)
+    if tarihsiz:
+        satirlar += ["", f"<i>{tarihsiz} baslik tarih bildirmedi - guncel "
+                     "olduklari VARSAYILMADI, oldugu gibi listelendi.</i>"]
+    if uyarilar:
+        satirlar += ["", "<b>⚠️ Okunamayan kaynak</b>"]
+        satirlar += [f"• {kacis(u)}" for u in uyarilar]
+
+    satirlar += ["", "<i>Basliklar ham kaynaktan gelir; sistem bunlardan "
+                 "KARAR URETMEZ. Baglantilar ekli dosyada.</i>"]
+    return "\n".join(satirlar)
+
+
+def haber_dosyasi(haberler: list, uyarilar: list[str], bugun) -> str:
+    """Ekte giden AYRINTI dosyasi: tum basliklar, baglantilar, tarihler."""
+    satirlar = [
+        "---",
+        f'title: "Haber Ozeti {bugun}"',
+        f"date_created: {bugun}",
+        "tags: [yatirim, haber]",
+        "status: processed",
+        "---",
+        "",
+        f"# Haber Ozeti - {_gun_adi(str(bugun))}",
+        "",
+        "Ham besleme ciktisi. Sistem bu basliklardan KARAR URETMEZ; fiyat ve",
+        "oran disinda hicbir girdi karar yoluna girmez. Burasi baglam icin.",
+        "",
+    ]
+    if not haberler:
+        satirlar += ["Taze baslik bulunamadi.", ""]
+    for kategori, grup in _haberleri_grupla(haberler):
+        satirlar += [f"## {KATEGORI_BASLIKLARI.get(kategori, kategori)}", ""]
+        for h in grup:
+            tarih = h.tarih.isoformat() if h.tarih else "tarihsiz"
+            if h.baglanti:
+                satirlar.append(f"- [{h.baslik}]({h.baglanti}) - {h.kaynak}, {tarih}")
+            else:
+                satirlar.append(f"- {h.baslik} - {h.kaynak}, {tarih}")
+        satirlar.append("")
+    if uyarilar:
+        satirlar += ["## Okunamayan kaynaklar", ""]
+        satirlar += [f"- {u}" for u in uyarilar]
+        satirlar += ["",
+                     "Bir beslemenin dusmesi ozeti durdurmaz; eksik kaynak",
+                     "burada acikca yazilir - sessizce kisalan bir ozet,",
+                     "kisaldigini bilmeyen okuyucu uretir.", ""]
+    return "\n".join(satirlar)
