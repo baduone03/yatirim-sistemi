@@ -317,6 +317,17 @@ def _yuzde(oran: float) -> str:
     return f"{oran * 100:+.2f}%"
 
 
+def _kisalt(metin: str, azami: int = 70) -> str:
+    """Tablo hucresi icin kisaltir. Tam metin tahminler.yaml'da durur.
+
+    Kisaltmadan dayanak sutunu birkac yuz karakter olup tabloyu okunmaz
+    yapiyordu - karnenin isi ozet vermek, kaynagi tekrar basmak degil.
+    """
+    if not metin:
+        return "-"
+    return metin if len(metin) <= azami else metin[:azami - 1].rstrip() + "…"
+
+
 def _hukum(karne: Karne) -> list[str]:
     """Gozlem sayisi neye yetiyor - ve neye yetmiyor."""
     if karne.n < EGILIM_N:
@@ -421,7 +432,7 @@ def karne_raporu(tahminler: list[Tahmin], sonuclar: list[Sonuc],
                 else f"{tahmin.vade_gunu.isoformat()} (olculmedi)"
             satirlar.append(
                 f"| {vade} | {tahmin.ifade} | {tahmin.ufuk_gun}g "
-                f"| %{tahmin.olasilik * 100:.0f} | {tahmin.dayanak or '-'} |")
+                f"| %{tahmin.olasilik * 100:.0f} | {_kisalt(tahmin.dayanak)} |")
         satirlar.append("")
 
     return "\n".join(satirlar)

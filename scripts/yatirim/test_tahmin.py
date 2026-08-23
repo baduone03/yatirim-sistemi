@@ -212,9 +212,26 @@ class IzolasyonTesti(unittest.TestCase):
 
 
 class DefterDosyasiTesti(unittest.TestCase):
+    """Gercek defter her zaman ayristirilabilir olmali.
+
+    "Defter bos" diye yazilamaz - defter doldukca test kirilir. Sorulan
+    sey sayi degil: her kayit dogrulamadan geciyor mu, ve yorumdaki
+    ornekler gercek kayit sanilmis mi?
+    """
+
+    ORNEK_KIMLIKLER = {"2026-08-24-asels-yukselir", "2026-08-24-tuprs-gecer"}
+
     def test_gercek_defter_ayristirilabilir(self):
-        """Ornekler yorumda; ciplak yazilirsa defter onlari gercek sanar."""
-        self.assertEqual(T.tahminleri_oku(), [])
+        T.tahminleri_oku()      # dogrulamadan gecmeyen kayit varsa patlar
+
+    def test_yorumdaki_ornekler_gercek_kayit_sayilmaz(self):
+        kimlikler = {t.id for t in T.tahminleri_oku()}
+        self.assertEqual(kimlikler & self.ORNEK_KIMLIKLER, set())
+
+    def test_her_kaydin_gerekcesi_var(self):
+        """Gerekcesiz ongoru sonradan okunamaz - defterin amaci tam da o."""
+        for tahmin in T.tahminleri_oku():
+            self.assertTrue(tahmin.gerekce.strip(), f"{tahmin.id}: gerekce bos")
 
 
 if __name__ == "__main__":

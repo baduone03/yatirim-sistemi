@@ -43,4 +43,71 @@
 #     gerekce: "Petrol marji genisliyor, banka net faiz marji daraliyor."
 #     dayanak: ""
 
-tahminler: []
+tahminler:
+  # --- 2026-08-23 turu: haber-arsivi/2026-08-23.yaml basliklarindan ---
+  # Bunlar MODEL URETIMI hipotezlerdir, derin analiz degil. Amac karneyi
+  # gercek veriyle beslemek ve kalibrasyonu olcmeye baslamak.
+
+  - id: 2026-08-23-btc-sikisma-sonrasi
+    tarih: 2026-08-23
+    ufuk_gun: 5
+    olasilik: 0.4
+    tip: esik_asar
+    sembol: BTC-USD
+    esik: 0.0
+    gerekce: >-
+      Bitcoin gunler icinde %25 yukselip ~80.000 dolara dayandi, ama bu hareket
+      spot talepten cok SIKISMADAN geliyor: 1 milyar dolardan fazla short
+      tasfiye oldu. 80.000 test edildi ve reddedildi, fiyat 77.000'e geri
+      dondu; hafta sonu likiditesi ince. Analistler yeni bir boga piyasasi
+      olup olmadiginda BOLUNMUS durumda. Sikismayla gelen hareketler yeni alici
+      girmezse tipik olarak yatay/geri cekilir. Bu yuzden olasilik 0.5'in
+      ALTINDA - yani ongoru "5 gunde yukselmeyecek" yonunde.
+    dayanak: >-
+      CoinDesk 2026-08-23: "How a Treasury buyback tweak helped bitcoin surge
+      25% to nearly $80,000 in days"; "Bitcoin faces $80,000 test as thinner
+      weekend liquidity looms"; "Bitcoin slips back to $77,000 after
+      challenging $80,000 overnight"; "Analysts split on whether Bitcoin's
+      surge past key levels signals a new bull run"
+
+  - id: 2026-08-23-altin-nasdaqi-gecer
+    tarih: 2026-08-23
+    ufuk_gun: 20
+    olasilik: 0.55
+    tip: gecer
+    sembol: GC=F
+    kiyas: QQQ
+    gerekce: >-
+      Uzun vadeli Hazine getirileri yukseliyor ve Bessent'in tahvil geri alim
+      hamlesi piyasayi yatistirmak yerine ENFLASYON endisesi uyandirdi. Ray
+      Dalio bunu yaklasan bir borc krizinin isareti sayip acikca altin
+      oneriyor. Yukselen uzun vadeli getiri, yuksek carpanli Nasdaq icin
+      dogrudan bir ters ruzgar. Ikisi de dolar bazli oldugu icin bu GORELI
+      karsilastirmada kur etkisi sadelesir - olculen sey saf altin/Nasdaq
+      tercihi. Olasilik yalnizca 0.55: NVDA bilancosu QQQ'yu tek basina
+      yukari cekebilir ve bu ongoruyu bozabilir.
+    dayanak: >-
+      CNBC 2026-08-23: "Ray Dalio says Bessent move is sign that a debt crisis
+      is getting closer; recommends gold"; "Longer-dated Treasury yields rise
+      as Bessent's bond buyback rally fizzles out"; "Bessent's bond gambit
+      aimed at calming markets is instead stirring inflation worries".
+      Yahoo Finance: "Gold remains strong amid U.S. debt concerns"
+
+  - id: 2026-08-23-tuprs-endeksi-gecer
+    tarih: 2026-08-23
+    ufuk_gun: 20
+    olasilik: 0.55
+    tip: gecer
+    sembol: TUPRS.IS
+    kiyas: XU100.IS
+    gerekce: >-
+      Iran yaptirim endiseleri petrol fiyatlarini yukseltti ve ABD'nin sert
+      yeni yaptirimlari kapida. Tupras rafineri; ham petrol yukselisi
+      OTOMATIK olarak olumlu degil - belirleyici olan rafineri marji, ve
+      girdi maliyeti artisi marji sikistirabilir. Bu yuzden olasilik dusuk
+      tutuldu. Ayrica karar defterinde TUPRS son 10 gunde zaten guclu getiri
+      uretti; ortalamaya donus riski var.
+    dayanak: >-
+      Investing TR 2026-08-23: "Iran yaptirim endiseleri petrol fiyatlarini
+      yukseltti, Korfez borsalari artti". CNBC: "Ahead of tough new U.S.
+      sanctions, Iran criticizes 'extraterritorial sovereignty'"
