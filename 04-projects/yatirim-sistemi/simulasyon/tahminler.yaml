@@ -1,0 +1,46 @@
+# ONGORU DEFTERI - append-only. Yazilmis ongoru silinmez, duzeltilmez.
+#
+# Sebep: sonradan duzenlenen ongoru karneyi olcum aracindan ovunme aracina
+# cevirir. Yanlis cikan ongoru en degerli kayittir - onu silmek, ogrenmenin
+# kendisini silmektir.
+#
+# ONGORULER ISLEM TETIKLEMEZ. Bu defter sistemin akil yurutmesini
+# yanlislanabilir kilmak icindir. Bir ongoruye dayanarak pozisyon acmak,
+# kalibre oldugu kanitlanmamis bir modele para baglamak olur.
+#
+# ALANLAR
+#   id        : benzersiz, tarih-konu formatinda
+#   tarih     : ongorunun kuruldugu gun (YYYY-AA-GG)
+#   ufuk_gun  : kac gun sonra olculecek (1, 5, 20 gibi)
+#   olasilik  : 0.0-1.0 arasi guven. 0 ve 1 YASAK - kesinlik iddiasi
+#               olculemez ve Brier skorunu bozar.
+#   tip       : esik_asar | gecer
+#   sembol    : varliklar.yaml'da tanimli sembol
+#   esik      : tip esik_asar ise zorunlu. 0.0 = "yukselecek mi"
+#   kiyas     : tip gecer ise zorunlu
+#   gerekce   : NEDEN boyle dusunuldugu. Sonradan okunacak olan bu.
+#   dayanak   : hangi haber/veri tetikledi. Bos birakilabilir.
+#
+# ORNEKLER (yorumda - ciplak yazilirsa defter onlari gercek ongoru sayar)
+#
+#   - id: 2026-08-24-asels-yukselir
+#     tarih: 2026-08-24
+#     ufuk_gun: 5
+#     olasilik: 0.6
+#     tip: esik_asar
+#     sembol: ASELS.IS
+#     esik: 0.0
+#     gerekce: "Savunma sanayi ihracat haberi sonrasi hacim artti."
+#     dayanak: "Investing TR, 2026-08-24 basligi"
+#
+#   - id: 2026-08-24-tuprs-gecer
+#     tarih: 2026-08-24
+#     ufuk_gun: 20
+#     olasilik: 0.55
+#     tip: gecer
+#     sembol: TUPRS.IS
+#     kiyas: GARAN.IS
+#     gerekce: "Petrol marji genisliyor, banka net faiz marji daraliyor."
+#     dayanak: ""
+
+tahminler: []

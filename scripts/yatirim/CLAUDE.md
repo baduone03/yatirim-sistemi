@@ -372,3 +372,12 @@ A maddeleri kok `CLAUDE.md`'dedir ve buraya YAZILMAZ.
   dondugu icin `{v.sembol: ... for v in varliklar}` govdesi hic calismadi ve `AttributeError`
   uc cagri noktasinda birden uretime kadar gitti. Sahte veri uretimin **tipini** tasimali,
   yalnizca sekilini degil - bos liste/dict ile kurulan sahte, o kod yolunu HIC test etmez.
+- **ongoru defteri karar yoluna BAGLANMAZ** (B, 2026-08-23): `tahmin.py` sinyal uretmez;
+  `main.py`/`sinyal.py` onu import etmez ve Actions'ta AYRI adim olarak kosar. Sebep: bir
+  ongoruye dayanarak pozisyon acmak, kalibre oldugu kanitlanmamis bir modele para baglamaktir.
+  Bkz. `IzolasyonTesti`.
+- **karne kosullu yazilir** (B, 2026-08-23): `tahmin.py` tarama gridinde de kosuyor; kosulsuz
+  `write_text` gunde 12 anlamsiz commit uretirdi. Icerik aynysa dosyaya dokunulmaz.
+- **varsayilan arguman `def` aninda baglanir** (B, 2026-08-23): `def oku(dosya=SABIT)` yazip
+  sonra modul sabitini degistirmek fonksiyonu ETKILEMEZ - modul uctan uca test edilemez hale
+  gelir. `main()` icinde sabitleri acikca gecir.

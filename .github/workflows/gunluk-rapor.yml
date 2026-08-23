@@ -90,6 +90,13 @@ jobs:
         # Kacan gunler gecmis fiyat serisinden geriye donuk tamamlanir.
         run: python scripts/yatirim/karar_takip.py
 
+      - name: Ongoruleri olc
+        # Vadesi dolan ongoruleri olcer ve karneyi gunceller.
+        # main.py bu modulu IMPORT ETMEZ ve etmemeli: ongoru islem
+        # tetiklemez, ayri adim olmasi bu siniri fiziksel tutuyor.
+        # Vadesi dolan ongoru yoksa ag'a hic cikmaz ve dosyaya dokunmaz.
+        run: python scripts/yatirim/tahmin.py
+
       # NOT: vault gozden gecirme burada CALISTIRILMAZ.
       # CI checkout'u .gitignore beyaz listesi yuzunden eksik vault icerir:
       # 03-wiki, 02-sources, 05-daily repoda yok. Denetci burada calissaydi
