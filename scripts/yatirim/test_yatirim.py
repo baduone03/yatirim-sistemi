@@ -815,7 +815,15 @@ class RebalancingAlimTesti(unittest.TestCase):
         yapilandirma = type("Y", (), {
             "esikler": Esikler(rebalancing_sapma=0.03, risk_katkisi_ust=0.20,
                                risk_beta_ust=1.5),
-            "varliklar": [],
+            # Uretimdeki tip: dict[str, Varlik]. Burada BOS LISTE duruyordu;
+            # bos koleksiyon sifir kez dondugu icin `for v in ...varliklar`
+            # icindeki `v.sembol` hic calismiyor ve tip uyusmazligi testten
+            # kaciyordu. Sahte veri uretimin TIPINI tasimali, yalnizca
+            # sekilini degil.
+            "varliklar": {
+                "QQQ": Varlik("QQQ", "Nasdaq ETF", "nasdaq", "USD"),
+                "AAPL": Varlik("AAPL", "Apple", "nasdaq", "USD"),
+            },
         })()
         return main, portfoy, fiyatlar, yapilandirma
 

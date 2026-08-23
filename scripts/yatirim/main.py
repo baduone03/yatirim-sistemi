@@ -226,7 +226,7 @@ def _islem_onerileri(karar, fiyatlar, portfoy, risk, yapilandirma, maliyet,
             gidis_donus,
             azalt_try * gidis_donus / 2 if gidis_donus is not None else None,
             ayarlar=ayarlar, env=ortam, simdi=simdi,
-            adlar={v.sembol: v.ad for v in yapilandirma.varliklar},
+            adlar={v.sembol: v.ad for v in yapilandirma.varliklar.values()},
             sapma_esigi=yapilandirma.esikler.rebalancing_sapma)
         print(f"  islem karari {sonuc.ad}: {sonuc_gonderim.durum}")
         giden += 1
@@ -253,7 +253,7 @@ def _sinif_onerileri(karar, sapmalar, fiyatlar, portfoy, yapilandirma,
     if not toplam:
         return 0
     sapma_esigi = yapilandirma.esikler.rebalancing_sapma
-    adlar = {v.sembol: v.ad for v in yapilandirma.varliklar}
+    adlar = {v.sembol: v.ad for v in yapilandirma.varliklar.values()}
     sapma_haritasi = {s.sinif: s for s in sapmalar}
     son_fiyatlar = fiyatlar.son_fiyatlar
     kalan_nakit = portfoy.nakit_try
@@ -399,7 +399,7 @@ def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
         # mesajda 'GC=F' yerine 'Altin (gram)' yazabilmek icin; baslangic_try:
         # getiriyi sermaye tabanina gore ifade edebilmek icin.
         karar=karar,
-        adlar={v.sembol: v.ad for v in yapilandirma.varliklar},
+        adlar={v.sembol: v.ad for v in yapilandirma.varliklar.values()},
         baslangic_try=taban,
     )
     sonuc = gonder_gun_sonu(ozet, ayarlar, ortam, simdi, gun=rapor_adi)
