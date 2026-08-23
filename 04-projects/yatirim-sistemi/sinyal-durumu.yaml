@@ -7,21 +7,13 @@ gunluk_sayi: 0
 siniflar:
   bist:
     acik: true
-    yon: azalt
+    yon: artir
     son_sinyal: ''
   kripto:
     acik: true
     yon: azalt
     son_sinyal: ''
-  maden:
-    acik: true
-    yon: artir
-    son_sinyal: ''
   nakit:
-    acik: true
-    yon: azalt
-    son_sinyal: ''
-  nasdaq:
     acik: true
     yon: azalt
     son_sinyal: ''
