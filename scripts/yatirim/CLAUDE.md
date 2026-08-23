@@ -381,3 +381,10 @@ A maddeleri kok `CLAUDE.md`'dedir ve buraya YAZILMAZ.
 - **varsayilan arguman `def` aninda baglanir** (B, 2026-08-23): `def oku(dosya=SABIT)` yazip
   sonra modul sabitini degistirmek fonksiyonu ETKILEMEZ - modul uctan uca test edilemez hale
   gelir. `main()` icinde sabitleri acikca gecir.
+- **haber arsivi ozetten AYRI tavan kullanir** (B, 2026-08-23): Telegram ozeti besleme basina 6
+  baslikla sinirli cunku okunabilir kalmali; arsiv `ARSIV_BESLEME_BASINA=40` kullanir. Ayni
+  `haberleri_topla` iki farkli tavanla cagrilir - ozetin tavanini arsiv icin yukseltme, ozet
+  okunmaz hale gelir. Bkz. `TavanTesti`.
+- **arsivde anahtar BAGLANTI, baslik degil** (B, 2026-08-23): besleme ayni baglantiyi her kosuda
+  tekrar verir; baslik anahtar olsaydi kucuk bir editoryal duzeltme kaydi coklardi. Gunluk dosya
+  ~46 KB / ~135 baslik.

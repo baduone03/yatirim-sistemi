@@ -90,6 +90,14 @@ jobs:
         # Kacan gunler gecmis fiyat serisinden geriye donuk tamamlanir.
         run: python scripts/yatirim/karar_takip.py
 
+      - name: Haberleri arsivle
+        # RSS basliklarini gunluk dosyaya yazar. Ongoru defterinin `dayanak`
+        # alani buna atif yapar - uc ay sonra "bunu neden dusunmustum"
+        # sorusunun cevabi burada durur.
+        # Yeni baslik yoksa dosyaya dokunmaz. Dusen besleme kosuyu KIRMAZ:
+        # haber baglamdir, karar girdisi degil.
+        run: python scripts/yatirim/haber_arsivi.py
+
       - name: Ongoruleri olc
         # Vadesi dolan ongoruleri olcer ve karneyi gunceller.
         # main.py bu modulu IMPORT ETMEZ ve etmemeli: ongoru islem
