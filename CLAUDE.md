@@ -247,6 +247,15 @@ ilgili alt klasorun `CLAUDE.md`'sindedir:
 
 ### Butce ve zaman
 
+- **Actions kotasi HESAP duzeyinde, repo duzeyinde DEGIL** (A, 2026-08-23): baska bir private
+  repo kotayi bitirirse bu repo da durur ve kosu 3-5 saniyede "job was not started" ile olur.
+  2026-08-20'de kpss-bot (372 kosu x 4 dk = ~1488 dk) havuzu bitirdi, yatirim-sistemi 3 gun sustu.
+  Tani: `gh run view <id>` -> ANNOTATIONS satiri; log YOK cunku is hic baslamadi. Kalici cozum
+  **repoyu public yapmak** - public repolarda Actions dakikasi sinirsiz.
+- **repoyu public yapmadan once commit YAZAR e-postasini kontrol et** (A, 2026-08-23): token/`.env`
+  taramasi yetmez. `git log --format='%ae' | sort -u` gercek adresi gosteriyorsa public'te herkese
+  acilir. GitHub push'u `GH007` ile reddederek uyarir ama gorunurluk degisimini engellemez -
+  yani sira: once e-postayi temizle, sonra public yap.
 - **Actions dakika butcesi**: private repo, GitHub Free = 2000 dk/ay, her kosu yukari
   yuvarlanir. 2 saatlik grid ~800 dk (%40), 1 saatlik ~1530 dk (%77), 30 dakikalik ~2980 dk
   (MUMKUN DEGIL). Sikligi artirmanin tek faydasi ilk hareketi ne kadar gec duydugundur - bekleme

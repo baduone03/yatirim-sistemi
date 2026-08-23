@@ -366,3 +366,9 @@ A maddeleri kok `CLAUDE.md`'dedir ve buraya YAZILMAZ.
   altinda `sk-seriler` DISINDAKI tum yollar 403. `sk-seriler`teki 10 serinin icindeki tek faiz
   serisi `TP.TRY.MT02`. Bu yuzden politika faizi elle giriliyor; PPK takvimi yilda ~8 satir
   bakim.
+
+- **bos sahte koleksiyon tip uyusmazligini GIZLER** (B, 2026-08-23): `RebalancingAlimTesti`
+  sahtesi `"varliklar": []` tutuyordu; uretimde tip `dict[str, Varlik]`. Bos koleksiyon sifir kez
+  dondugu icin `{v.sembol: ... for v in varliklar}` govdesi hic calismadi ve `AttributeError`
+  uc cagri noktasinda birden uretime kadar gitti. Sahte veri uretimin **tipini** tasimali,
+  yalnizca sekilini degil - bos liste/dict ile kurulan sahte, o kod yolunu HIC test etmez.
