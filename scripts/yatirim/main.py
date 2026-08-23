@@ -512,6 +512,9 @@ def main() -> int:
     # kez calisiyor ve rapor dosyasi tarihe gore adlandirildigi icin her kosu
     # aynı dosyayi yeniden yazardi: 12 anlamsiz commit, hepsi bir sonrakinin
     # ustune. Taramanin isi sinyal tespiti, rapor uretimi degil.
+    # Tarama kosusunda rapor yazilmaz; Telegram eki de yoktur.
+    # _ayrintiyi_ekle None'i zaten 'ek gonderme' diye okuyor.
+    rapor_dosyasi = None
     if gorev != TARAMA:
         rapor_dizini = SIM_RAPOR_DIZINI if durum else RAPOR_DIZINI
         rapor_dizini.mkdir(parents=True, exist_ok=True)
