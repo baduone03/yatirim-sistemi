@@ -4,11 +4,7 @@
 # yeniden asmak zorunda kalir (tek seferlik gurultu, veri kaybi degil).
 gun: '2026-08-24'
 gunluk_sayi: 0
-siniflar:
-  kripto:
-    acik: true
-    yon: azalt
-    son_sinyal: ''
+siniflar: {}
 semboller:
   ASELS.IS:
     acik: true

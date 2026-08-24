@@ -1,6 +1,6 @@
 ---
 title: Tahmin Karnesi
-date_created: 2026-08-23
+date_created: 2026-08-24
 tags: [yatirim, tahmin, olcum, kalibrasyon]
 status: active
 related: ["[[00-simulasyon]]", "[[00-karar-sonuclari]]"]
@@ -16,6 +16,6 @@ Henuz vadesi dolmus ongoru yok.
 
 | Vade | Ongoru | Ufuk | Iddia | Dayanak |
 |---|---|---|---|---|
-| 2026-08-28 (5g) | BTC-USD yukselir | 5g | %40 | CoinDesk 2026-08-23: "How a Treasury buyback tweak helped bitcoin sur… |
-| 2026-09-12 (20g) | GC=F, QQQ kiyasini gecer | 20g | %55 | CNBC 2026-08-23: "Ray Dalio says Bessent move is sign that a debt cri… |
-| 2026-09-12 (20g) | TUPRS.IS, XU100.IS kiyasini gecer | 20g | %55 | Investing TR 2026-08-23: "Iran yaptirim endiseleri petrol fiyatlarini… |
+| 2026-08-28 (4g) | BTC-USD yukselir | 5g | %40 | CoinDesk 2026-08-23: "How a Treasury buyback tweak helped bitcoin sur… |
+| 2026-09-12 (19g) | GC=F, QQQ kiyasini gecer | 20g | %55 | CNBC 2026-08-23: "Ray Dalio says Bessent move is sign that a debt cri… |
+| 2026-09-12 (19g) | TUPRS.IS, XU100.IS kiyasini gecer | 20g | %55 | Investing TR 2026-08-23: "Iran yaptirim endiseleri petrol fiyatlarini… |
