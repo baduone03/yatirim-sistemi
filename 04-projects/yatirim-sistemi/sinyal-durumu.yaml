@@ -4,12 +4,16 @@
 # yeniden asmak zorunda kalir (tek seferlik gurultu, veri kaybi degil).
 gun: '2026-08-24'
 gunluk_sayi: 0
-siniflar: {}
-semboller:
-  ASELS.IS:
+siniflar:
+  bist:
     acik: true
-    yon: kis
+    yon: artir
     son_sinyal: ''
+  kripto:
+    acik: true
+    yon: azalt
+    son_sinyal: ''
+semboller:
   BTC-USD:
     acik: true
     yon: kis
