@@ -5,10 +5,6 @@
 gun: '2026-08-25'
 gunluk_sayi: 0
 siniflar:
-  bist:
-    acik: true
-    yon: artir
-    son_sinyal: ''
   kripto:
     acik: true
     yon: azalt
