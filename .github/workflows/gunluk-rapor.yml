@@ -80,17 +80,20 @@ jobs:
         run: node --test altyapi/telegram-webhook/worker.test.js
 
       - name: Rapor uret ve Telegram'a gonder
+        id: rapor
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python scripts/yatirim/main.py --sim --telegram
 
       - name: Karar sonuclarini olc
+        id: karar
         # Vadesi gelen 5/10/15/20/25/30. gun kontrollerini doldurur.
         # Kacan gunler gecmis fiyat serisinden geriye donuk tamamlanir.
         run: python scripts/yatirim/karar_takip.py
 
       - name: Haberleri arsivle
+        id: haber
         # RSS basliklarini gunluk dosyaya yazar. Ongoru defterinin `dayanak`
         # alani buna atif yapar - uc ay sonra "bunu neden dusunmustum"
         # sorusunun cevabi burada durur.
@@ -99,6 +102,7 @@ jobs:
         run: python scripts/yatirim/haber_arsivi.py
 
       - name: Ongoruleri olc
+        id: ongoru
         # Vadesi dolan ongoruleri olcer ve karneyi gunceller.
         # main.py bu modulu IMPORT ETMEZ ve etmemeli: ongoru islem
         # tetiklemez, ayri adim olmasi bu siniri fiziksel tutuyor.
@@ -113,6 +117,12 @@ jobs:
       # (IkinciBeyin-VaultDenetim). Bkz. scripts/vault/gozden_gecir.py
 
       - name: Durumu ve raporu repoya commit et
+        # HER ZAMAN calisir. Rapordan SONRAKI bir adim kirildiginda bu adim
+        # atlansaydi main.py'nin cok once yazdigi latch ve gonderilen.log
+        # kaybolurdu: Actions temiz checkout aldigi icin bir sonraki kosu
+        # ayni bildirimi tekrar gonderir, histerezis hicbir sey hatirlamazdi.
+        # Gonderilmis bir mesaji unutmak, yarim durumu saklamaktan kotudur.
+        if: always()
         # Yalnizca rapor degil: sinyal-durumu.yaml (histerezis latch'i, bekleme
         # saati, gunluk sayac), gonderilen.log (idempotency) ve
         # bildirim-kuyrugu.yaml (sessiz saatte biriken bildirimler) da commit
@@ -161,7 +171,8 @@ jobs:
         # paradoksaldi - bildirim ne kadar cok gelirse o kadar az okunuyor
         # ve gercekten yeni bir ariza gurultunun icinde kayboluyordu.
         #
-        # Kod SABIT bir etiket ("rapor-basarisiz"), mesaj metni degil: metinde
+        # Kod SABIT bir etiket ("rapor-basarisiz" / "yan-adim-basarisiz"),
+        # mesaj metni degil: metinde
         # kosu URL'i var ve o her kosuda degisir - metne bakan bir
         # karsilastirma her seferinde "yeni hata" gorurdu.
         #
@@ -174,16 +185,42 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           CALISMA: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RAPOR: ${{ steps.rapor.outcome }}
+          KARAR: ${{ steps.karar.outcome }}
+          HABER: ${{ steps.haber.outcome }}
+          ONGORU: ${{ steps.ongoru.outcome }}
         run: |
           if [ -s hata-kodu.txt ]; then
             echo "main.py zaten bildirdi ($(cat hata-kodu.txt)), atlaniyor."
             exit 0
           fi
-          python scripts/yatirim/hata_takip.py \
-            --kod "rapor-basarisiz" \
-            --mesaj "<b>Yatirim raporu BASARISIZ</b>
-          Gunluk calisma hata verdi, rapor uretilmedi.
-          Detay: $CALISMA"
+          # Rapor adimi gectiyse ozet Telegram'a ZATEN gitmistir; o durumda
+          # "rapor uretilmedi" demek yanlis. 2026-08-26'da brifing sorunsuz
+          # dustu, ardindan olcum adimi kirildi ve mesaj raporu yok saydi -
+          # yanlis hata metni dogru mesajlara duyulan guveni de goturur.
+          if [ "$RAPOR" = "success" ]; then
+            KIRILAN="rapor sonrasi adim"
+            for adim in "karar olcumu:$KARAR" "haber arsivi:$HABER" \
+                        "ongoru olcumu:$ONGORU"; do
+              if [ "${adim#*:}" = "failure" ]; then
+                KIRILAN="${adim%%:*}"
+                break
+              fi
+            done
+            KOD="yan-adim-basarisiz"
+            MESAJ=$(printf '%s\n%s\n%s\n%s' \
+              "<b>Yatirim: $KIRILAN basarisiz</b>" \
+              "Gunluk ozet URETILDI ve gonderildi - onceki mesaj gecerli." \
+              "Kirilan sey rapordan SONRAKI adim ($KIRILAN); portfoy sayilari etkilenmedi." \
+              "Detay: $CALISMA")
+          else
+            KOD="rapor-basarisiz"
+            MESAJ=$(printf '%s\n%s\n%s' \
+              "<b>Yatirim raporu BASARISIZ</b>" \
+              "Rapor uretilemedi - bugunku ozet Telegram'a GITMEDI." \
+              "Detay: $CALISMA")
+          fi
+          python scripts/yatirim/hata_takip.py --kod "$KOD" --mesaj "$MESAJ"
 
       - name: Hata durumunu commit et
         # HER ZAMAN calisir (basarili da basarisiz da). Commit edilmezse

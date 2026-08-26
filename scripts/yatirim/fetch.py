@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -32,6 +33,12 @@ from maliyet import MaliyetModeli
 
 
 BAYAT_ESIGI_GUN = 7
+
+# Gecici indirme hatasi tum kosuyu dusurmesin. Iki ek deneme ~6 saniye
+# tutuyor ve YALNIZCA hata halinde harcaniyor - basarili kosunun suresi
+# (35-50 sn, fatura esigi 60 sn) degismez.
+INDIRME_DENEMESI = 3
+INDIRME_BEKLEMESI_SN = 3
 
 
 @dataclass(frozen=True)
@@ -146,14 +153,27 @@ def kapanislari_indir(semboller: list[str], gun: int) -> tuple[pd.DataFrame, pd.
     ama hacimde karsilik gelen patlama olmaz; gercek cokus hacimle gelir.
     Ikisini ayirt eden tek gozlenebilir sinyal budur.
     """
-    ham = yf.download(
-        semboller,
-        period=f"{gun}d",
-        interval="1d",
-        auto_adjust=True,
-        progress=False,
-        group_by="column",
-    )
+    ham = None
+    for deneme in range(INDIRME_DENEMESI):
+        # Ilk deneme paralel (hizli), sonrakiler TEK IS PARCACIGI. Sebep:
+        # yfinance sembol basina zaman dilimi/cerez bilgisini ortak bir SQLite
+        # dosyasinda tutar ve paralel indirmede is parcaciklari o dosyada
+        # kilitlenip "database is locked" ile TUM sembolleri dusurebiliyor
+        # (2026-08-26 kosusu boyle kirildi). Sirali indirme kendisiyle
+        # yarisamaz, yani ikinci deneme bu hataya yapisal olarak kapalidir.
+        ham = yf.download(
+            semboller,
+            period=f"{gun}d",
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+            group_by="column",
+            threads=(deneme == 0),
+        )
+        if ham is not None and not ham.empty:
+            break
+        if deneme < INDIRME_DENEMESI - 1:
+            time.sleep(INDIRME_BEKLEMESI_SN)
     if ham is None or ham.empty:
         raise RuntimeError("Yahoo Finance bos veri dondurdu - ag baglantisini kontrol et")
 

@@ -231,6 +231,12 @@ ilgili alt klasorun `CLAUDE.md`'sindedir:
   commit edilmezse her kosu latch'i kapali baslatir ve histerezis hicbir sey hatirlamaz. Yerel
   kosuyla Actions ayni dosyayi yazarsa catisma cikar - rapordan farkli olarak burada dogru surum
   **Actions'inki**.
+- **rapor SONRASI adim kirilsa da durum commit edilir** (A, 2026-08-26): `Durumu ve raporu
+  repoya commit et` adimi `if: always()`. Yoksa main.py'nin coktan gonderdigi mesajin latch'i ve
+  `gonderilen.log` satiri kaybolur, bir sonraki kosu ayni bildirimi tekrar gonderir.
+- **hata mesaji HANGI adimin kirildigini soyler** (A, 2026-08-26): rapor adimi `success` ise kod
+  `yan-adim-basarisiz` ve metin "ozet gonderildi, sonraki adim kirildi" der. Sabit "rapor
+  uretilmedi" metni yanlisti - 2026-08-26'da brifing dustugu halde o mesaj gitti.
 - **`main.py` bilinen engelde `hata-kodu.txt` birakir**, workflow'un genel `failure()` adimi onu
   gorunce SUSAR. Yoksa ayni ariza icin iki mesaj gider ve - daha kotusu - iki farkli kod
   ("hurdle-bayat" / "rapor-basarisiz") her kosuda birbirini "yeni hata" yapip bastirmayi tumden

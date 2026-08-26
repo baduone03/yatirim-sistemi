@@ -391,6 +391,61 @@ def _kazanc_anlatisi(ozet: GunSonuOzeti) -> list[str]:
     ]
 
 
+def _durum_satiri(ozet: GunSonuOzeti) -> str:
+    """Portfoy satiri: guncel deger + baslangica gore fark."""
+    toplam = ozet.portfoy.toplam_deger_try
+    if not ozet.baslangic_try:
+        return f"💰 <b>{_tl(toplam)}</b>"
+    fark = toplam - ozet.baslangic_try
+    oran = fark / ozet.baslangic_try
+    return (f"💰 <b>{_tl(toplam)}</b> — baslangica gore "
+            f"{'+' if fark >= 0 else '-'}{_tl(abs(fark))} ({oran * 100:+.1f}%)")
+
+
+def _gun_satiri(ozet: GunSonuOzeti) -> str:
+    if ozet.degisim_24s is None:
+        return "📊 Son 24 saat: olculemedi (fiyat verisi eksik)"
+    return f"📊 Son 24 saat: {ozet.degisim_24s * 100:+.1f}%"
+
+
+def _kazanc_satiri(ozet: GunSonuOzeti) -> str:
+    """Tek satirlik cevap: mevduatta beklemekten iyi mi, kotu mu?"""
+    if ozet.asiri_getiri is None:
+        return "❔ Mevduat karsilastirmasi yapilamadi"
+    puan = ozet.asiri_getiri * 100
+    if puan >= 0:
+        return f"✅ Mevduatta beklemekten {puan:.2f} puan IYI"
+    return f"🔻 Mevduatta beklemekten {abs(puan):.2f} puan KOTU"
+
+
+def _islem_satiri(ozet: GunSonuOzeti) -> str:
+    karar = ozet.karar
+    if karar is None:
+        return "⏸️ Islem yok"
+    if karar.devre_kesildi:
+        return f"🛑 Gunluk islem siniri doldu ({karar.gunluk_maks}) - fren devrede"
+    acik = karar.sinyaller()
+    if not acik:
+        return "⏸️ Islem yok - hicbir varlik esigi asacak kadar sapmadi"
+    return f"🔔 {len(acik)} sinyal acik: " + ", ".join(
+        _ad(s.ad, ozet.adlar) for s in acik)
+
+
+def _ozet_bloku(ozet: GunSonuOzeti) -> list[str]:
+    """Mesajin ilk ekrani: dort satirda deger, gun, getiri, islem.
+
+    Anlati bolumleri dogru ama uzun; telefonda ilk bakista okunan sey ilk uc
+    satirdir ve orada "iyi mi kotu mu" cevabi yoktu - okuyan uc paragraf
+    sonra ogreniyordu. Blok hicbir bilgiyi silmez, SIRAYI degistirir: cevap
+    ustte, gerekcesi altindaki bolumlerde.
+    """
+    satirlar = [_durum_satiri(ozet), _gun_satiri(ozet),
+                _kazanc_satiri(ozet), _islem_satiri(ozet)]
+    if ozet.uyarilar:
+        satirlar.append(f"⚠️ {len(ozet.uyarilar)} uyari - en altta")
+    return satirlar
+
+
 def gun_sonu_mesaji(ozet: GunSonuOzeti) -> str:
     """Gun sonu / brifing ozeti - ANLATI bicimi.
 
@@ -399,19 +454,8 @@ def gun_sonu_mesaji(ozet: GunSonuOzeti) -> str:
     bilgi (hareketin kurdan gelmesi gibi) hicbir yerde yazmiyordu - okuyanin
     cikarmasi bekleniyordu. Sayi listesi okunmaz, cumle okunur.
     """
-    portfoy = ozet.portfoy
     baslik = f"<b>{ozet.baslik} — {_gun_adi(ozet.veri_zamani)}</b>"
-
-    fark = portfoy.toplam_deger_try - ozet.baslangic_try
-    yon = "uzerinde" if fark >= 0 else "altinda"
-    oran = fark / ozet.baslangic_try if ozet.baslangic_try else 0.0
-    satirlar = [
-        baslik,
-        "",
-        f"{_tl(portfoy.toplam_deger_try)}. Basladigimiz "
-        f"{_tl(ozet.baslangic_try)}'nin {_tl(abs(fark))} {yon} "
-        f"({oran * 100:+.1f}%).",
-    ]
+    satirlar = [baslik, ""] + _ozet_bloku(ozet)
 
     for baslik_metni, govde in (
         ("Bugun ne oldu", _hareket_anlatisi(ozet)),
@@ -483,10 +527,10 @@ def uyarilari_topla(fiyatlar, portfoy, karar, maliyet, bayatlik,
             sonrasi = ("bir sonraki kaynaga dusulur"
                        if len(maliyet.risksiz_zincir) > 1 else "rapor uretilmez")
             uyarilar.append(
-                f"Hurdle rate {yas} GUNLUK ({maliyet.risksiz_serisi}, "
-                f"{maliyet.risksiz_tarih}) - taze esigi "
-                f"{maliyet.risksiz_bayatlik_gun} gun. Gereken getiri, asiri "
-                f"getiri ve nakit getirisi bu orandan turuyor; "
+                f"Mevduat faizi verisi {yas} GUNLUK - {maliyet.risksiz_bayatlik_gun} "
+                f"gunden eskisi bayat sayilir (kaynak {maliyet.risksiz_serisi}, "
+                f"{maliyet.risksiz_tarih}). 'Mevduatta beklemek daha mi iyiydi' "
+                f"karsilastirmasi bu eski orana dayaniyor; "
                 f"{maliyet.risksiz_durdurma_gun} gunu asarsa {sonrasi}.")
 
     engellenenler = maliyet.engellenenler if maliyet is not None else {}

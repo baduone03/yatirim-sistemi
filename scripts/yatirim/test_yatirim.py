@@ -3936,13 +3936,14 @@ class HurdleTazeligiTesti(unittest.TestCase):
         gecikmis = self._model(tarih=date.today().replace(day=1).isoformat(),
                                esik=0, durdurma=3650)
         uyarilar = uyarilari_topla(None, None, None, gecikmis, None)
-        self.assertTrue(any("Hurdle rate" in u and "GUNLUK" in u for u in uyarilar),
+        self.assertTrue(any("Mevduat faizi verisi" in u and "GUNLUK" in u
+                            for u in uyarilar),
                         f"bayatlik uyarisi yok: {uyarilar}")
 
     def test_taze_hurdle_uyari_uretmez(self):
         taze = self._model(tarih=date.today().isoformat())
         uyarilar = uyarilari_topla(None, None, None, taze, None)
-        self.assertFalse([u for u in uyarilar if "Hurdle rate" in u])
+        self.assertFalse([u for u in uyarilar if "Mevduat faizi verisi" in u])
 
     def test_tarihsiz_yedek_taze_sayilmaz(self):
         """Elle yazilmis bir sayinin ne zamandan kaldigi bilinmiyorsa guvenilmez."""
@@ -4146,3 +4147,119 @@ class HurdleZinciriTesti(unittest.TestCase):
                          "birincil kaynak mevduat serisi olmali - politika "
                          "faizi one alinirsa cita ~11 puan duser")
         self.assertEqual(maliyet.risksiz_zincir[-1].tur, "ilan_edilmis")
+
+
+class IndirmeYenidenDenemeTesti(unittest.TestCase):
+    """Gecici bir Yahoo hatasi tum kosuyu dusurmemeli.
+
+    2026-08-26 kosusu boyle kirildi: paralel indirmede yfinance'in SQLite
+    onbellegi kilitlendi, 7 sembolun 7'si de dustu ve rapor uretilmis olmasina
+    ragmen adim hata verdi.
+    """
+
+    def _sahte_veri(self):
+        indeks = pd.to_datetime(["2026-08-25", "2026-08-26"])
+        return pd.DataFrame({("Close", "AAPL"): [1.0, 2.0],
+                             ("Volume", "AAPL"): [10.0, 20.0]}, index=indeks)
+
+    def test_bos_donus_yeniden_denenir(self):
+        cagrilar = []
+
+        def sahte_download(*args, **kwargs):
+            cagrilar.append(kwargs)
+            return pd.DataFrame() if len(cagrilar) == 1 else self._sahte_veri()
+
+        with mock.patch.object(fetch.yf, "download", sahte_download), \
+                mock.patch.object(fetch.time, "sleep", lambda _: None):
+            kapanis, _ = fetch.kapanislari_indir(["AAPL"], 5)
+
+        self.assertEqual(len(cagrilar), 2, "ikinci deneme yapilmadi")
+        self.assertFalse(kapanis.empty)
+
+    def test_ikinci_deneme_tek_is_parcaciginda(self):
+        """Kilit paralel indirmenin kendi is parcaciklari arasinda cikiyor -
+        sirali deneme bu hataya yapisal olarak kapali."""
+        cagrilar = []
+
+        def sahte_download(*args, **kwargs):
+            cagrilar.append(kwargs)
+            return pd.DataFrame() if len(cagrilar) == 1 else self._sahte_veri()
+
+        with mock.patch.object(fetch.yf, "download", sahte_download), \
+                mock.patch.object(fetch.time, "sleep", lambda _: None):
+            fetch.kapanislari_indir(["AAPL"], 5)
+
+        self.assertTrue(cagrilar[0]["threads"])
+        self.assertFalse(cagrilar[1]["threads"])
+
+    def test_kalici_hata_yine_de_yukari_cikar(self):
+        """Sonsuza kadar deneme YOK - kalici ariza gorunur kalmali."""
+        cagrilar = []
+
+        def sahte_download(*args, **kwargs):
+            cagrilar.append(kwargs)
+            return pd.DataFrame()
+
+        with mock.patch.object(fetch.yf, "download", sahte_download), \
+                mock.patch.object(fetch.time, "sleep", lambda _: None):
+            with self.assertRaises(RuntimeError):
+                fetch.kapanislari_indir(["AAPL"], 5)
+
+        self.assertEqual(len(cagrilar), fetch.INDIRME_DENEMESI)
+
+
+class OzetBlokuTesti(unittest.TestCase):
+    """Mesajin ilk ekrani cevabi VERMELI, okuyanı paragraf okumaya birakmamali.
+
+    Anlati bolumleri yerinde duruyor; test edilen sey sira: 'iyi mi kotu mu'
+    ve 'islem oldu mu' sorularinin cevabi ustte mi.
+    """
+
+    def _mesaj(self, **degisiklik):
+        portfoy = Portfoy(pozisyonlar=[], nakit_try=21259.0, fiyatlanamayan=[])
+        varsayilan = dict(
+            portfoy=portfoy, risk=None, veri_zamani="2026-08-26",
+            degisim_24s=0.006, asiri_getiri=0.049, risksiz=0.0139,
+            donem_gun=13, karar=_SahteKarar(), baslangic_try=20000.0)
+        varsayilan.update(degisiklik)
+        return gun_sonu_mesaji(GunSonuOzeti(**varsayilan))
+
+    def _ilk_ekran(self, mesaj: str) -> str:
+        """Ilk anlati basligina kadar olan kisim."""
+        return mesaj.split("<b>Bugun ne oldu</b>")[0]
+
+    def test_deger_ve_fark_ilk_ekranda(self):
+        ilk = self._ilk_ekran(self._mesaj())
+        self.assertIn("21.259", ilk)
+        self.assertIn("+6.3%", ilk)
+
+    def test_gunluk_degisim_ilk_ekranda(self):
+        self.assertIn("Son 24 saat", self._ilk_ekran(self._mesaj()))
+
+    def test_mevduat_karsilastirmasi_ilk_ekranda(self):
+        """Asil soru bu: riski almaya deger miydi."""
+        self.assertIn("IYI", self._ilk_ekran(self._mesaj()))
+        self.assertIn("KOTU", self._ilk_ekran(self._mesaj(asiri_getiri=-0.012)))
+
+    def test_olculemeyen_karsilastirma_uydurulmaz(self):
+        ilk = self._ilk_ekran(self._mesaj(asiri_getiri=None, risksiz=None))
+        self.assertIn("yapilamadi", ilk)
+        self.assertNotIn("IYI", ilk)
+
+    def test_islem_durumu_ilk_ekranda(self):
+        self.assertIn("Islem yok", self._ilk_ekran(self._mesaj()))
+        frenli = self._ilk_ekran(self._mesaj(karar=_SahteKarar(devre=True)))
+        self.assertIn("fren devrede", frenli)
+
+    def test_uyari_sayisi_ilk_ekranda(self):
+        """Uyarilar en altta duruyor - ustte olduklarini haber vermek gerek."""
+        ilk = self._ilk_ekran(self._mesaj(uyarilar=["bir", "iki"]))
+        self.assertIn("2 uyari", ilk)
+        self.assertNotIn("uyari", self._ilk_ekran(self._mesaj()))
+
+    def test_gerekce_bolumleri_KORUNUR(self):
+        """Ozet, anlatinin yerine gecmez - ustune biner."""
+        mesaj = self._mesaj()
+        for bolum in ("Bugun ne oldu", "Islem yapildi mi", "Kazanc gercek mi"):
+            self.assertIn(bolum, mesaj)
+        self.assertIn("mevduatta tutsaydin", mesaj)

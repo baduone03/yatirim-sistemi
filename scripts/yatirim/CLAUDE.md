@@ -193,6 +193,11 @@ A maddeleri kok `CLAUDE.md`'dedir ve buraya YAZILMAZ.
   raporlamaktir.
 - **`kapanislari_indir` artik `(kapanis, hacim)` tuple doner**: hacim kurumsal olay tespiti icin
   sart. Tek deger bekleyen cagri sessizce DataFrame yerine tuple alir.
+- **yfinance paralel indirmede "database is locked"** (B, 2026-08-26): 7 sembolun HEPSI birden
+  `OperationalError('database is locked')` ile duserse sebep Yahoo degil, yfinance'in kendi
+  SQLite onbelleginde is parcaciklarinin kilitlenmesi. `kapanislari_indir` bu yuzden 3 kez
+  dener ve ILK denemeden sonrasini `threads=False` ile yapar - sirali indirme kendisiyle
+  yarisamaz. Bkz. IndirmeYenidenDenemeTesti.
 - **yfinance toplu indirmede gecici rate limit**: 13 sembolun HEPSI birden "possibly delisted"
   derse bu delist degil, rate limit. Kod "ag baglantisini kontrol et" der ama tek sembol ayri
   denendiginde calisiyorsa sebep budur; birkac dakika bekle. `period='365d'` gecerlidir, sorun o
