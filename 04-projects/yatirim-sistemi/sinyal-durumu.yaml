@@ -2,8 +2,8 @@
 # Histerezis latch'i, bekleme suresi saati ve gunluk sinyal sayaci.
 # Silinirse latch kapali baslar: acik bir sinyal tetik esigini
 # yeniden asmak zorunda kalir (tek seferlik gurultu, veri kaybi degil).
-gun: '2026-08-26'
-gunluk_sayi: 1
+gun: '2026-08-27'
+gunluk_sayi: 0
 siniflar:
   kripto:
     acik: true
