@@ -1,0 +1,11 @@
+# MAKINE URETIR - elle duzenleme.
+# tahmin.py yazar. Ongoruler icin tahminler.yaml'a bak.
+# Bir sonuc yazildiktan sonra DEGISTIRILMEZ: sonradan duzeltilen
+# sonuc, karneyi olcum aracindan ovunme aracina cevirir.
+
+sonuclar:
+- tahmin_id: 2026-08-23-btc-sikisma-sonrasi
+  olcum_tarihi: '2026-08-28'
+  tuttu: true
+  getiri: 0.031058
+  kiyas_getirisi: null
