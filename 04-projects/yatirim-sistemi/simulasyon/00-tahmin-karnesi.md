@@ -1,6 +1,6 @@
 ---
 title: Tahmin Karnesi
-date_created: 2026-08-31
+date_created: 2026-09-02
 tags: [yatirim, tahmin, olcum, kalibrasyon]
 status: active
 related: ["[[00-simulasyon]]", "[[00-karar-sonuclari]]"]
@@ -37,5 +37,5 @@ Ongoruler **islem tetiklemez**. Bu defterin isi, sistemin akil yurutmesini yanli
 
 | Vade | Ongoru | Ufuk | Iddia | Dayanak |
 |---|---|---|---|---|
-| 2026-09-12 (12g) | GC=F, QQQ kiyasini gecer | 20g | %55 | CNBC 2026-08-23: "Ray Dalio says Bessent move is sign that a debt cri… |
-| 2026-09-12 (12g) | TUPRS.IS, XU100.IS kiyasini gecer | 20g | %55 | Investing TR 2026-08-23: "Iran yaptirim endiseleri petrol fiyatlarini… |
+| 2026-09-12 (10g) | GC=F, QQQ kiyasini gecer | 20g | %55 | CNBC 2026-08-23: "Ray Dalio says Bessent move is sign that a debt cri… |
+| 2026-09-12 (10g) | TUPRS.IS, XU100.IS kiyasini gecer | 20g | %55 | Investing TR 2026-08-23: "Iran yaptirim endiseleri petrol fiyatlarini… |

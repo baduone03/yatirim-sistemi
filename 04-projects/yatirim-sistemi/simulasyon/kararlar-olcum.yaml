@@ -23,6 +23,13 @@ olcumler:
   portfoy_getirisi: 0.049701
   fiyatlar: {}
   getiriler: {}
+- karar_id: 2026-08-13-acilis
+  gun: 20
+  olcum_tarihi: '2026-09-02'
+  portfoy_degeri: 20903.78
+  portfoy_getirisi: 0.03158
+  fiyatlar: {}
+  getiriler: {}
 - karar_id: 2026-08-13-asels-kisma
   gun: 5
   olcum_tarihi: '2026-08-18'
@@ -56,6 +63,17 @@ olcumler:
   getiriler:
     ASELS.IS: 0.006317
     TUPRS.IS: 0.098266
+- karar_id: 2026-08-13-asels-kisma
+  gun: 20
+  olcum_tarihi: '2026-09-02'
+  portfoy_degeri: 20903.78
+  portfoy_getirisi: 0.03158
+  fiyatlar:
+    ASELS.IS: 386.25
+    TUPRS.IS: 400.25
+  getiriler:
+    ASELS.IS: -0.024005
+    TUPRS.IS: 0.156792
 - karar_id: 2026-08-13-garan-tuprs
   gun: 5
   olcum_tarihi: '2026-08-18'
@@ -89,3 +107,14 @@ olcumler:
   getiriler:
     GARAN.IS: 0.028549
     TUPRS.IS: 0.098266
+- karar_id: 2026-08-13-garan-tuprs
+  gun: 20
+  olcum_tarihi: '2026-09-02'
+  portfoy_degeri: 20903.78
+  portfoy_getirisi: 0.03158
+  fiyatlar:
+    GARAN.IS: 130.9
+    TUPRS.IS: 400.25
+  getiriler:
+    GARAN.IS: 0.010031
+    TUPRS.IS: 0.156792
