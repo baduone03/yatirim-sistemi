@@ -1,0 +1,747 @@
+# MAKINE URETIR - elle duzenleme.
+# haber_arsivi.py yazar. Ayni baglanti iki kez yazilmaz.
+# Bu dosya KAYITTIR, kaynak degil: buradaki bir baslik tek basina
+# bir iddiayi desteklemez, yalnizca o gun ne okundugunu gosterir.
+
+basliklar:
+- baslik: BTC will hit $1M by 2030... but Arthur Hayes is buying ETH instead
+  baglanti: https://cointelegraph.com/magazine/btc-will-hit-1m-by-2030-but-arthur-hayes-is-buying-eth-instead?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Does the Bitcoin rally mean we haven’t wasted our lives in crypto?
+  baglanti: https://cointelegraph.com/magazine/does-bitcoins-rally-mean-we-havent-wasted-our-lives-in-crypto?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Bitcoin ETFs notch best month of 2026 as BTC gains 25% in August
+  baglanti: https://cointelegraph.com/markets/bitcoin-etf-best-month-2026-btc-up-25-august?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Bitcoin stays flat as global bond bear market rages on, pushing JGB to high
+  baglanti: https://cointelegraph.com/markets/bitcoin-remains-flat-as-global-bond-bear-market-rages-on?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Bitcoin’s apparent demand turns negative as price struggles with $77K
+  baglanti: https://cointelegraph.com/markets/bitcoins-apparent-demand-turns-negative-price-struggles-with-77k?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: BofA, Citi, Goldman Sachs among 21 institutions planning stablecoin launch
+  baglanti: https://cointelegraph.com/news/21-financial-institutions-g7-stablecoin-venture?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Asia sees digital asset custody infrastructure deals from Ripple, Coincheck
+  baglanti: https://cointelegraph.com/news/asia-digital-asset-custody-deals-ripple-coincheck?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Binance expands TradFi push with options on 1,000 US stocks, ETFs
+  baglanti: https://cointelegraph.com/news/binance-adds-options-on-1000-us-stocks-and-etfs-in-tradfi-expansion?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Coinbase launches regulated crypto derivatives in Canada
+  baglanti: https://cointelegraph.com/news/coinbase-launches-regulated-crypto-derivatives-in-canada?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Core DAO plans emergency hard fork after validators drew excess rewards
+  baglanti: https://cointelegraph.com/news/core-dao-emergency-hard-fork-excess-validator-rewards?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Crypto industry urges SEC to avoid blanket novel ETF restrictions
+  baglanti: https://cointelegraph.com/news/crypto-industry-sec-novel-etf-restrictions?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Crypto-backed PAC scales back ad spending in Massachusetts primary
+  baglanti: https://cointelegraph.com/news/crypto-pac-protect-progress-spending-massachusetts-primary?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Ethena launches USDe payments app, offers 6% rewards
+  baglanti: https://cointelegraph.com/news/ethena-launches-usde-powered-money-app-across-48-countries?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Fake Claude desktop app spreads crypto-stealing malware
+  baglanti: https://cointelegraph.com/news/fake-claude-desktop-app-spreads-crypto-stealing-malware?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Sui DeFi protocol Full Sail to wind down after Switchboard incident
+  baglanti: https://cointelegraph.com/news/full-sail-sui-wind-down-switchboard-incident?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: G20 members tout ‘clear pathways’ for digital asset innovation
+  baglanti: https://cointelegraph.com/news/g20-members-clear-pathways-digital-asset-innovation?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Hashkey joins DTCC working group as first Asian crypto service provider
+  baglanti: https://cointelegraph.com/news/hashkey-dtcc-first-asian-crypto-service-provider?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: HYPE treasury firm Hyperliquid Strategies boosts equity facility to $2.5B
+  baglanti: https://cointelegraph.com/news/hyperliquid-strategies-equity-facility-2-5-billion?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Kalshi issues first lifetime ban for Republican politician over insider
+    bets
+  baglanti: https://cointelegraph.com/news/kalshi-bans-politicians-insider-trading-bets-manipulation?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Kast launches stablecoin-powered business platform after $80M raise
+  baglanti: https://cointelegraph.com/news/kast-launches-stablecoin-business-platform-80m-raise?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: New Jersey officials petition US Supreme Court over prediction markets
+  baglanti: https://cointelegraph.com/news/new-jersey-supreme-court-kalshi-prediction-markets-cftc?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Ondo urges SEC, CFTC to bring US stock perpetuals onshore
+  baglanti: https://cointelegraph.com/news/ondo-urges-sec-cftc-bring-us-stock-perpetuals-onshore?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Japan’s Remixpoint dumps altcoins, leaves 1,506 BTC as sole crypto bet
+  baglanti: https://cointelegraph.com/news/remixpoint-dumps-altcoins-1506-btc-sole-crypto-bet?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: SEC proposes broad update to decades-old transfer agent rules with blockchain
+    nod
+  baglanti: https://cointelegraph.com/news/sec-proposes-transfer-agent-overhaul-as-securities-move-onchain?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Thai businessmen sue Tether for freezing $42M in $61M pig butchering case
+  baglanti: https://cointelegraph.com/news/thai-sue-tether-freezing-61m-pig-butchering-case?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Thailand adopts crypto Travel Rule with self-custodial wallet checks
+  baglanti: https://cointelegraph.com/news/thailand-crypto-travel-rule-self-custodial-wallet-checks?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: UK crime agency froze $13.5M amid probe into Premier League crypto sponsor
+  baglanti: https://cointelegraph.com/news/uk-crime-agency-froze-premier-league-crypto-partner-sorare?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: US officials work with CrowdStrike to fight malware behind crypto theft
+  baglanti: https://cointelegraph.com/news/us-officials-crowdstrike-malware-stealing-crypto?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Here’s what happened in crypto today
+  baglanti: https://cointelegraph.com/news/what-happened-in-crypto-today?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Wyoming adds Chainlink reserve verification to state-issued stable token
+  baglanti: https://cointelegraph.com/news/wyoming-chainlink-onchain-reserves-of-state-issued-stable-token?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: The Labor Market Is Getting Harder for Americans Who Want to Leave Their
+    Job
+  baglanti: https://finance.yahoo.com/economy/articles/labor-market-getting-harder-americans-160524492.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Predatory Online Lenders Hide Behind ‘Tribal Sovereignty’ to Evade State
+    Laws and Ensnare Borrowers in 400% Interest Rates
+  baglanti: https://finance.yahoo.com/economy/policy/articles/predatory-online-lenders-hide-behind-160310779.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: 1 Magnificent Artificial Intelligence (AI) Stock to Buy With $25 Before
+    2026 Is Over
+  baglanti: https://finance.yahoo.com/markets/stocks/articles/1-magnificent-artificial-intelligence-ai-160700723.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: An $89 Billion Reason to Buy Nvidia Stock Here
+  baglanti: https://finance.yahoo.com/markets/stocks/articles/89-billion-reason-buy-nvidia-161638805.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Baird Just Upgraded Deere Stock. Here's Why.
+  baglanti: https://finance.yahoo.com/markets/stocks/articles/baird-just-upgraded-deere-stock-160823928.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Citi says investors should consider buying tumbling tech stock
+  baglanti: https://finance.yahoo.com/markets/stocks/articles/citi-says-investors-consider-buying-165315833.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Costco shuts down key service without notice
+  baglanti: https://finance.yahoo.com/markets/stocks/articles/costco-shuts-down-key-no-011218190.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Dell Falls 4% Ahead of Earnings as Its 266% Rally Raises the Bar, Super
+    Micro and Hewlett Packard Enterprise Slip
+  baglanti: https://finance.yahoo.com/markets/stocks/articles/dell-falls-4-ahead-earnings-160837873.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Dell and HPE Stocks Soared After Last Earnings. Forget the Guidance Raise.
+    This Is What Matters Most This Time.
+  baglanti: https://finance.yahoo.com/markets/stocks/articles/dell-hpe-stocks-soared-last-152826535.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: This High-Yield Dividend Stock Is up 60% From Its 2026 Lows. Why You Should
+    Think About Selling Now.
+  baglanti: https://finance.yahoo.com/markets/stocks/articles/high-yield-dividend-stock-60-160021999.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: How Is Intuitive Surgical's Stock Performance Compared to Other Health Care
+    Equipment Stocks?
+  baglanti: https://finance.yahoo.com/markets/stocks/articles/intuitive-surgicals-stock-performance-compared-153212563.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Major Bank CEO Liquidates Over $1.7 Million Worth of Stock
+  baglanti: https://finance.yahoo.com/markets/stocks/articles/major-bank-ceo-liquidates-over-160501090.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: 'RTX Corporation Stock: Is RTX Outperforming the Industrial Sector?'
+  baglanti: https://finance.yahoo.com/markets/stocks/articles/rtx-corporation-stock-rtx-outperforming-152720890.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: 'Uber Technologies Stock: Is UBER Underperforming the Technology Sector?'
+  baglanti: https://finance.yahoo.com/markets/stocks/articles/uber-technologies-stock-uber-underperforming-155244261.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Is Union Pacific Stock Outperforming the S&P 500?
+  baglanti: https://finance.yahoo.com/markets/stocks/articles/union-pacific-stock-outperforming-p-153756706.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: What's Going On With Salesforce Stock?
+  baglanti: https://finance.yahoo.com/markets/stocks/articles/whats-going-salesforce-stock-160621569.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Denny’s rival dining chain files for Chapter 11 bankruptcy
+  baglanti: https://finance.yahoo.com/small-business/articles/denny-rival-dining-chain-files-153300154.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Private equity group rolls up 3 small firms for courier network
+  baglanti: https://finance.yahoo.com/small-business/articles/private-equity-group-rolls-3-155325320.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: AI Is Coming for One of Legacy Software’s Most Defensible Businesses as
+    a New Challenger Takes on Oracle, SAP and Workday
+  baglanti: https://finance.yahoo.com/technology/ai/articles/ai-coming-one-legacy-software-160807338.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Apple's accusations are making things uncomfortable for OpenAI
+  baglanti: https://finance.yahoo.com/technology/ai/articles/apples-accusations-making-things-uncomfortable-160300847.html
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Diversified Energy, Birch’i 1,8 milyar dolara satın alıyor
+  baglanti: https://tr.investing.com/news/company-news/diversified-energy-birchi-18-milyar-dolara-satn-alyor-93CH-4053160
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: EagleOne Metals özel yerleştirmeyi 225.200 dolara çıkardı
+  baglanti: https://tr.investing.com/news/company-news/eagleone-metals-ozel-yerlestirmeyi-225200-dolara-ckard-93CH-4053163
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: AN2 Therapeutics yöneticisi 11.601 dolar değerinde hisse aldı
+  baglanti: https://tr.investing.com/news/insider-trading-news/an2-therapeutics-yoneticisi-11601-dolar-degerinde-hisse-ald-93CH-4053153
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Avalo Therapeutics CFO’su Sullivan 1,4 milyon dolarlık hisse sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/avalo-therapeutics-cfosu-sullivan-14-milyon-dolarlk-hisse-satt-93CH-4053159
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Basswood Capital, Dime Commercial hisselerinden 3,46 milyon dolar sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/basswood-capital-dime-commercial-hisselerinden-346-milyon-dolar-satt-93CH-4053154
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Biomerica yöneticisi Gary M. Huff, 50.000 dolar değerinde hisse aldı
+  baglanti: https://tr.investing.com/news/insider-trading-news/biomerica-yoneticisi-gary-m-huff-50000-dolar-degerinde-hisse-ald-93CH-4053161
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Grindr CLO Zachary Katz, 161.022 dolarlık GRND hissesi sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/grindr-clo-zachary-katz-161022-dolarlk-grnd-hissesi-satt-93CH-4053157
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: ThredUp COO’su Christopher Homer 155.465 dolar değerinde hisse sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/thredup-coosu-christopher-homer-155465-dolar-degerinde-hisse-satt-93CH-4053158
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Samsung Fire, Canopius’ta yüzde 90’a varan hisse almak istiyor
+  baglanti: https://tr.investing.com/news/stock-market-news/samsung-fire-canopiusta-yuzde-90a-varan-hisse-almak-istiyor-93CH-4053162
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Uber Londra’da Wayve AI ile otonom sürüş hizmetine başladı
+  baglanti: https://tr.investing.com/news/stock-market-news/uber-londrada-wayve-ai-ile-otonom-surus-hizmetine-baslad-93CH-4053155
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: AI trade faces test with next week's Oracle earnings
+  baglanti: https://www.cnbc.com/2026/09/02/ai-trade-faces-test-with-next-weeks-oracle-earnings.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: American Airlines continues premium push with redesigned Boeing planes
+  baglanti: https://www.cnbc.com/2026/09/02/american-airlines-flagship-suite.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Apple shares are doing something they haven't done in 20 years. Here’s what’s
+    happening
+  baglanti: https://www.cnbc.com/2026/09/02/apple-shares-are-doing-something-they-havent-done-in-20-years-heres-whats-happening.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Bank of Canada mulls Trump tariff shock as it holds interest rates
+  baglanti: https://www.cnbc.com/2026/09/02/bank-canada-rate-decision-trump-tariffs.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Berkshire CEO Abel says Alphabet a 'significant player' in AI after growing
+    stake in Q2
+  baglanti: https://www.cnbc.com/2026/09/02/berkshire-ceo-abel-says-alphabet-a-significant-player-in-ai-after-growing-stake-in-q2.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: 10-year U.S. Treasury yield hits highest level since November 2023
+  baglanti: https://www.cnbc.com/2026/09/02/bond-yields-treasurys-inflation.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Broadcom delivers strong earnings view as CEO touts growth with AI labs
+  baglanti: https://www.cnbc.com/2026/09/02/broadcom-avgo-q3-earnings-report-2026.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Chevron to expand in Venezuela operations, doubling production through $7
+    billion investment
+  baglanti: https://www.cnbc.com/2026/09/02/chevron-venezuela-operations.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Jim Cramer says investors aren't ditching tech — they just want cheaper
+    stocks
+  baglanti: https://www.cnbc.com/2026/09/02/cramer-says-investors-arent-ditching-tech-they-want-cheaper-stocks.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: States now must report undocumented immigrants to DHS or risk federal funding,
+    DOJ says
+  baglanti: https://www.cnbc.com/2026/09/02/doj-states-undocumented-immigrants-dhs-funds.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Energy Secretary Chris Wright tells CNBC more than 17 million barrels of
+    oil transited Hormuz on Monday
+  baglanti: https://www.cnbc.com/2026/09/02/energy-secretary-chris-wright-tells-cnbc-that-more-than-17-million-barrels-of-oil-transited-hormuz-on-monday.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: How Equinix has found a niche in the multitrillion-dollar AI data center
+    boom
+  baglanti: https://www.cnbc.com/2026/09/02/equinix-partners-with-nvidia-carves-niche-in-ai-data-center-boom.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Ford's production of highly profitable Super Duty trucks hits 20-year high
+    as it recovers from supplier fires
+  baglanti: https://www.cnbc.com/2026/09/02/ford-sales-f-150-production.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: These women were laid off while on maternity leave. Yes, it's legal, and
+    probably more common than you thought
+  baglanti: https://www.cnbc.com/2026/09/02/getting-laid-off-on-maternity-leave.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: USTR's Greer huddles with House Republicans amid Trump trade spats
+  baglanti: https://www.cnbc.com/2026/09/02/greer-trade-house-republicans-trump.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: J&J's run to record highs hasn't reached the finish line yet. Here are the
+    key drivers
+  baglanti: https://www.cnbc.com/2026/09/02/jjs-run-to-record-highs-hasnt-reached-the-finish-line-yet-here-are-the-key-drivers.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-03'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Does Medicare pay for long-term care? Many people get it wrong — and it
+    may cost them later
+  baglanti: https://www.cnbc.com/2026/09/02/long-term-care-medicare-medicaid-insurance.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Microsoft to start disclosing Azure quarterly revenue as company consolidates
+    business units
+  baglanti: https://www.cnbc.com/2026/09/02/microsoft-to-disclose-azure-revenue-as-part-of-segment-changes.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: NBA suspends Clippers owner Ballmer for one year in Kawhi Leonard salary
+    cap probe
+  baglanti: https://www.cnbc.com/2026/09/02/nba-suspends-clippers-ballmer-kawhi-leonard-salary-cap.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: New Jersey asks the Supreme Court to take on prediction markets
+  baglanti: https://www.cnbc.com/2026/09/02/new-jersey-asks-the-supreme-court-to-take-on-prediction-markets-.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: New York Fed's Williams says yield surge due to strong economic prospects
+  baglanti: https://www.cnbc.com/2026/09/02/new-york-feds-williams-says-yield-surge-due-to-strong-economic-prospects.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Private payrolls rose by 38,000 in August, less than expected, ADP reports
+  baglanti: https://www.cnbc.com/2026/09/02/private-payrolls-rose-by-38000-in-august-fewer-than-expected-adp-reports.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Southwest to debut airport lounges in four cities, with more to come
+  baglanti: https://www.cnbc.com/2026/09/02/southwest-airport-lounges.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: The Los Angeles Angels are being sold for a record $4 billion. Here's what
+    every MLB team is now worth
+  baglanti: https://www.cnbc.com/2026/09/02/the-los-angeles-angels-are-being-sold-for-a-record-4-billion-heres-what-every-mlb-team-is-now-worth.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Thyme Care raises $125 million, pushing cancer care startup's valuation
+    above $2 billion
+  baglanti: https://www.cnbc.com/2026/09/02/thyme-care-raises-125-million-cancer-startups-value-over-2-billion.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Traders are piling into this international stock market that just pulled
+    ahead of the Nasdaq
+  baglanti: https://www.cnbc.com/2026/09/02/traders-pile-into-this-international-stock-market-thats-beating-the-nasdaq.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Trump floats renaming Strait of Hormuz the 'Trump Strait'
+  baglanti: https://www.cnbc.com/2026/09/02/trump-hormuz-strait-ontario-iran.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Travel industry presses Trump to target 100 million international visitors
+    in Oval Office meeting
+  baglanti: https://www.cnbc.com/2026/09/02/trump-travel-industry-world-cup-tourism-airlines-hotels.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Uber to cut 10% of workforce in bid to move 'simpler and faster'
+  baglanti: https://www.cnbc.com/2026/09/02/uber-to-cut-10percent-of-workforce-in-bid-to-move-simpler-and-faster.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Iran says two tankers have hit Hormuz naval mines. U.S. disputes claim
+  baglanti: https://www.cnbc.com/2026/09/02/us-iran-war-trump-hormuz-irgc-jordan-bahrain.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Capital B aims to add 376 BTC to bitcoin treasury following $8.8 million
+    Adam Back investment
+  baglanti: https://www.coindesk.com/business/2026/08/29/capital-b-aims-to-add-376-btc-to-bitcoin-treasury-following-usd8-8-million-adam-back-investment
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Firelight raises $8 million, expands beyond XRP as it aims to make DeFi
+    less scary for fintechs
+  baglanti: https://www.coindesk.com/business/2026/08/31/firelight-raises-usd8-million-expands-beyond-xrp-as-it-aims-to-make-defi-less-scary-for-fintechs
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Citi, Goldman, other global banks and asset managers team up on stablecoin
+    venture
+  baglanti: https://www.coindesk.com/business/2026/09/01/citi-goldman-other-global-banks-and-asset-managers-team-up-on-stablecoin-venture
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: DOJ says Hamas crypto seizures reached $560,000 as FBI took over fundraising
+    sites
+  baglanti: https://www.coindesk.com/business/2026/09/02/doj-says-hamas-crypto-seizures-reached-usd560-000-as-fbi-took-over-fundraising-sites
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Kraken parent Payward delays IPO to second quarter of 2027 at earliest
+  baglanti: https://www.coindesk.com/business/2026/09/02/kraken-parent-payward-pushes-ipo-back-to-mid-2027-at-earliest
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: 'Live updates: Bitcoin trades near $77,000, with central bank policy rate
+    decisions taking center stage'
+  baglanti: https://www.coindesk.com/business/2026/09/02/live-updates-blackrock-s-ibit-drives-usd236-million-bitcoin-etf-outflow
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Lawsuit challenges Tether for allegedly freezing $42.4 million USDT before
+    U.S. warrant
+  baglanti: https://www.coindesk.com/business/2026/09/02/tether-sued-over-usd42-4-million-usdt-freeze-allegedly-made-months-before-u-s-warrant
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: 'Crypto Long & Short: Crypto VCs are mistaking consensus for discipline'
+  baglanti: https://www.coindesk.com/coindesk-indices/2026/09/02/crypto-long-and-short-crypto-vcs-are-mistaking-consensus-for-discipline
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: A Fed rate increase would be a mistake, some observers say as bitcoin, gold,
+    stocks fall
+  baglanti: https://www.coindesk.com/daybook-us/2026/09/02/a-fed-rate-increase-would-be-a-mistake-some-observers-say-as-bitcoin-gold-stocks-fall
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Bitcoin enters ‘Rektember’ as rate-hike risk combines with seasonality to
+    threaten rally
+  baglanti: https://www.coindesk.com/markets/2026/09/01/bitcoin-enters-rektember-as-rate-hike-risks-threaten-its-august-rally
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Robinhood's new crypto network is printing cash, and it's sending Arbitrum's
+    token soaring
+  baglanti: https://www.coindesk.com/markets/2026/09/01/robinhood-s-new-crypto-network-is-printing-cash-and-it-s-sending-arbitrum-s-token-soaring
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: A China indicator that supports risk-taking in stocks and bitcoin is flashing
+    red
+  baglanti: https://www.coindesk.com/markets/2026/09/02/a-china-indicator-that-greases-risk-taking-in-stocks-and-bitcoin-is-flashing-red
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: The bearish 'Bart Simpson' pattern is back as bitcoin and XRP prices pull
+    back
+  baglanti: https://www.coindesk.com/markets/2026/09/02/bitcoin-flashes-the-bart-simpsom-pattern-analyst-debate-whether-it-will-actually-form
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Bitcoin slips below $76,500 as U.S. strikes on Iran send oil above $93
+  baglanti: https://www.coindesk.com/markets/2026/09/02/bitcoin-slips-below-usd77-000-as-u-s-strikes-on-iran-send-oil-above-usd93
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Bitcoin withstands $90 oil and rising yields while gold slides. A firm dollar
+    is the catch
+  baglanti: https://www.coindesk.com/markets/2026/09/02/bitcoin-withstands-usd90-oil-and-rising-yields-as-gold-slides-a-firm-dollar-is-the-catch
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Former UK Prime Minister Liz Truss says bond rout could force emergency
+    spending cuts
+  baglanti: https://www.coindesk.com/markets/2026/09/02/former-uk-prime-minister-liz-truss-says-bond-rout-could-force-emergency-spending-cuts
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Solana, ether, xrp lead majors slide as Iran strikes drive a broad risk
+    selloff
+  baglanti: https://www.coindesk.com/markets/2026/09/02/solana-ether-xrp-lead-majors-slide-as-iran-strikes-drive-a-broad-risk-selloff
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: XRP ETFs pull in $170 million over 11 days. Goldman tops institutional holders
+  baglanti: https://www.coindesk.com/markets/2026/09/02/xrp-etfs-pull-in-usd160-million-over-nine-days-as-goldman-tops-institutional-holders
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Crypto made new friends in U.S. primaries, but focus now shifts to general
+    election
+  baglanti: https://www.coindesk.com/news-analysis/2026/09/02/crypto-made-new-friends-in-u-s-primaries-but-focus-now-shifts-to-general-election
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: 'The token supercycle: everything of value is becoming programmable'
+  baglanti: https://www.coindesk.com/opinion/2026/09/02/the-token-supercycle-everything-of-value-is-becoming-programmable
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: SEC proposes transfer agent rule, sets event to figure out round-the-clock
+    U.S. trading
+  baglanti: https://www.coindesk.com/policy/2026/09/01/sec-proposes-transfer-agent-rule-sets-event-to-figure-out-round-the-clock-u-s-trading
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: New Jersey becomes first state to ask Supreme Court to weigh in on prediction
+    markets
+  baglanti: https://www.coindesk.com/policy/2026/09/02/new-jersey-becomes-first-state-to-ask-supreme-court-to-weigh-in-on-prediction-markets
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Musk’s X hit by wave of unsolicited password reset emails
+  baglanti: https://www.coindesk.com/tech/2026/09/01/musk-s-x-hit-by-wave-of-unsolicited-password-reset-emails
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: CrowdStrike and federal authorities dismantle Russian malware that secretly
+    stole crypto for 8 years
+  baglanti: https://www.coindesk.com/tech/2026/09/02/crowdstrike-and-federal-authorities-dismantle-russian-malware-that-secretly-stole-crypto-for-8-years
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: OpenAI says its new 'Astra' AI can build attacks without human help
+  baglanti: https://www.coindesk.com/tech/2026/09/02/openai-says-its-new-astra-ai-can-build-attacks-without-human-help
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-09-02'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
+- baslik: Amazon Stock Extends Losses After FTC Lawsuit Over Ad Practices
+  baglanti: https://www.investors.com/news/technology/amazon-stock-ftc-lawsuit-advertising-auctions-amzn/?src=A00220&yptr=yahoo
+  kaynak: Yahoo Finance
+  kategori: piyasa
+  tarih: '2026-09-01'
+  ilk_gorulme: '2026-09-03T00:10:11+00:00'
