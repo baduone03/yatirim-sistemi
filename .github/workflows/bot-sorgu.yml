@@ -91,6 +91,9 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_IZINLI_CHAT_ID: ${{ secrets.TELEGRAM_IZINLI_CHAT_ID }}
+          # /haber basliklarini portfoye gore siralamak icin. Yoksa basliklar
+          # besleme sirasinda gosterilir ve sebebi mesaja yazilir.
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           KOMUT: ${{ github.event.client_payload.komut }}
           CHAT_ID: ${{ github.event.client_payload.chat_id }}
         run: |

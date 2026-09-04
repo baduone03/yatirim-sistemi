@@ -60,7 +60,7 @@ class TelegramHatasi(RuntimeError):
 # Actions'ta .env dosyasi YOK - bu anahtarlar repository secrets'tan ortama
 # enjekte edilir. Listeye eklenmeyen bir anahtar orada sessizce bos kalir.
 ORTAM_ANAHTARLARI = ("TELEGRAM_BOT_TOKEN", "TELEGRAM_TOKEN", "TELEGRAM_CHAT_ID",
-                     "TELEGRAM_IZINLI_CHAT_ID")
+                     "TELEGRAM_IZINLI_CHAT_ID", "NVIDIA_API_KEY")
 
 
 def env_oku(dosya: Path = ENV_DOSYASI) -> dict[str, str]:

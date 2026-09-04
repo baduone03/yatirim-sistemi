@@ -41,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from bicim import oran, tl, yuzde  # noqa: E402
 from bildirim import bol  # noqa: E402
 from haber import haberleri_topla  # noqa: E402
+from haber_analiz import haberleri_degerlendir  # noqa: E402
 from config import PROJE_DIZINI, TR_OFSET, yapilandirmayi_oku  # noqa: E402
 from duyarlilik import (  # noqa: E402
     GERCEK,
@@ -533,6 +534,19 @@ def komut_yardim(baglam: Baglam, arguman: str) -> str:
     ])
 
 
+def _haberleri_sirala(haberler: list, yapilandirma, env: dict[str, str]):
+    """Basliklari portfoye gore siralar. Doner: (haberler, degerlendirmeler, uyari).
+
+    Model kapali veya cagri dusukse haberler DEGISMEDEN doner - besleme
+    sirasi eskiden beri kullanilan sira, yani duserken kaybedilen sey
+    siralamanin iyilesmesi, haberin kendisi degil.
+    """
+    if not yapilandirma.llm.kullanilabilir:
+        return haberler, {}, ""
+    adlar = {s: v.ad for s, v in yapilandirma.varliklar.items()}
+    return haberleri_degerlendir(haberler, adlar, yapilandirma.llm, env)
+
+
 def komut_haber(baglam: Baglam, arguman: str) -> str:
     """Guncel basliklar. Fiyat verisi CEKMEZ - haber fiyattan bagimsizdir.
 
@@ -550,7 +564,10 @@ def komut_haber(baglam: Baglam, arguman: str) -> str:
     haberler, uyarilar = haberleri_topla(
         ayar.beslemeler, bugun=bugun, azami_gun=ayar.azami_gun,
         besleme_basina=ayar.besleme_basina)
-    return haber_mesaji(haberler, uyarilar, bugun)
+    haberler, degerlendirmeler, uyari = _haberleri_sirala(
+        haberler, yapilandirma, baglam.env)
+    return haber_mesaji(haberler, uyarilar + ([uyari] if uyari else []),
+                        bugun, degerlendirmeler)
 
 
 KOMUTLAR = {
@@ -726,9 +743,13 @@ def haber_ayrintisi_uret(env: dict[str, str] | None = None,
     haberler, uyarilar = haberleri_topla(
         ayar.beslemeler, bugun=bugun, azami_gun=ayar.azami_gun,
         besleme_basina=ayar.besleme_basina)
+    haberler, degerlendirmeler, uyari = _haberleri_sirala(
+        haberler, yapilandirma, env if env is not None else env_oku())
     HABER_DIZINI.mkdir(parents=True, exist_ok=True)
     dosya = HABER_DIZINI / f"{bugun}.md"
-    dosya.write_text(haber_dosyasi(haberler, uyarilar, bugun), encoding="utf-8")
+    dosya.write_text(
+        haber_dosyasi(haberler, uyarilar + ([uyari] if uyari else []),
+                      bugun, degerlendirmeler), encoding="utf-8")
     return dosya
 
 

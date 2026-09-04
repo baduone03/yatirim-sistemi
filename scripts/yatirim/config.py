@@ -8,6 +8,7 @@ from pathlib import Path
 
 import yaml
 
+from llm import LLMAyarlari
 from maliyet import MaliyetModeli, modeli_kur
 
 # Turkiye kalici UTC+3, yaz saati uygulamasi yok. Zaman damgalari UTC tutulur
@@ -214,6 +215,7 @@ class Yapilandirma:
     kurumsal_olay: KurumsalOlayAyarlari = field(default_factory=KurumsalOlayAyarlari)
     kaynaklar: VeriKaynaklari = field(default_factory=VeriKaynaklari)
     haber: HaberAyarlari = field(default_factory=HaberAyarlari)
+    llm: LLMAyarlari = field(default_factory=LLMAyarlari)
     maliyet: MaliyetModeli = field(default_factory=MaliyetModeli)
     bekleme: Bekleme = field(default_factory=Bekleme)
     devre_kesici: DevreKesici = field(default_factory=DevreKesici)
@@ -436,6 +438,19 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
         azami_gun=int(haber_ham.get("azami_gun", 2)),
         besleme_basina=int(haber_ham.get("besleme_basina", 6)),
     )
+    llm_ham = kaynak_ham.get("llm") or {}
+    llm = LLMAyarlari(
+        model=str(llm_ham.get("model", LLMAyarlari.model)).strip(),
+        zaman_asimi=float(llm_ham.get("zaman_asimi", LLMAyarlari.zaman_asimi)),
+        azami_jeton=int(llm_ham.get("azami_jeton", LLMAyarlari.azami_jeton)),
+        acik=bool(llm_ham.get("acik", False)),
+    )
+    if llm.acik and not llm.model:
+        raise ValueError(
+            "veri_kaynaklari.llm: acik: true ama model bos. Model adi KODDA "
+            "SABIT DEGIL - NIM katalogu degisiyor ve bir modelin hesaba "
+            "kapanmasi yalnizca bu satirla cozulebilmeli.")
+
     if not 0 < kaynaklar.prim_esigi < kaynaklar.durdurma_esigi < 1:
         raise ValueError(
             "ucgenleme esikleri 0 < prim_esigi < durdurma_esigi < 1 olmali; "
@@ -479,6 +494,7 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
         kurumsal_olay=kurumsal_olay,
         kaynaklar=kaynaklar,
         haber=haber,
+        llm=llm,
         maliyet=maliyet,
         bekleme=bekleme,
         devre_kesici=devre_kesici,

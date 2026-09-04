@@ -160,6 +160,26 @@ veri_kaynaklari:
     prim_esigi: 0.03           # ustunde TR primi olarak kaydedilir + uyari
     durdurma_esigi: 0.08       # ustunde rapor URETILMEZ (uc kaynak da tazeyse)
 
+  # NVIDIA NIM - YALNIZCA METIN. Karar yoluna GIRMEZ: hicbir cikti sinyale,
+  # agirliga veya esige donusmez. Iki is yapar: haber basliklarini portfoye
+  # gore siralar (/haber) ve gun sonu mesajinin basina uc cumle koyar.
+  #
+  # Anahtar: .env -> NVIDIA_API_KEY (Actions'ta repository secret).
+  # Anahtar yoksa veya cagri duserse sistem HAM ciktiya duser ve sebebi yazar.
+  #
+  # model KODDA SABIT DEGIL: NIM katalogu degisiyor. Bir model hesaba
+  # kapanirsa (HTTP 404) cozum bu satiri degistirmek. Olculen alternatifler:
+  #   mistralai/mistral-nemotron          ~10 sn, gecerli JSON, dogru Turkce
+  #   nvidia/nemotron-3-super-120b-a12b   ~51 sn, bozuk JSON - KOSU BUTCESINI ASAR
+  #   nvidia/nemotron-3.5-lightning-30b-a3b  hizli ama dusunme metnini sizdiriyor
+  llm:
+    acik: true
+    model: "mistralai/mistral-nemotron"
+    # Kosu suresi 60 saniyeyi asarsa Actions faturasi IKIYE katlanir. Cagri
+    # gorev basina EN FAZLA BIR kez yapiliyor; zaman asimi o butcenin payi.
+    zaman_asimi: 25
+    azami_jeton: 900
+
   # HABER BESLEMELERI - /haber komutunun kaynagi.
   #
   # Bu blok SAYI URETMEZ, baglam saglar. Hicbir besleme karar uretmez;

@@ -84,6 +84,9 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # Gun sonu/brifing mesajinin basindaki uc cumlelik model ozeti icin.
+          # Yoksa mesaj onsozsuz gider, kosu BASARILI sayilir.
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
         run: python scripts/yatirim/main.py --sim --telegram
 
       - name: Karar sonuclarini olc

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from haber_analiz import YUKSEK
 from portfolio import Portfoy
 
 
@@ -248,6 +249,9 @@ class GunSonuOzeti:
     karar: object | None = None          # sinyal.Karar - islem bolumu icin
     adlar: dict = field(default_factory=dict)   # sembol -> okunur ad
     baslangic_try: float = 0.0           # sermaye tabani; 0 ise oran yazilmaz
+    # Model uretimi uc cumlelik giris. Bos ise mesaj eskisi gibi baslar -
+    # ozet bir kolayliktir, mesajin gecerliligi ona bagli DEGIL.
+    onsoz: str = ""
 
 
 AYLAR = ("Ocak", "Subat", "Mart", "Nisan", "Mayis", "Haziran", "Temmuz",
@@ -455,7 +459,14 @@ def gun_sonu_mesaji(ozet: GunSonuOzeti) -> str:
     cikarmasi bekleniyordu. Sayi listesi okunmaz, cumle okunur.
     """
     baslik = f"<b>{ozet.baslik} — {_gun_adi(ozet.veri_zamani)}</b>"
-    satirlar = [baslik, ""] + _ozet_bloku(ozet)
+    satirlar = [baslik, ""]
+    if ozet.onsoz:
+        # Kaynagi acikca isaretlenir: asagidaki her sayi olculmustur, bu
+        # paragraf ise bir modelin AYNI MESAJI okuyup yazdigi ozettir. Isaret
+        # olmasa iki farkli guvenilirlik duzeyi ayni yuzle gorunurdu.
+        satirlar += [f"<i>{kacis(ozet.onsoz)}</i>",
+                     "<i>↑ model ozeti — sayilar asagida.</i>", ""]
+    satirlar += _ozet_bloku(ozet)
 
     for baslik_metni, govde in (
         ("Bugun ne oldu", _hareket_anlatisi(ozet)),
@@ -614,7 +625,23 @@ def _haberleri_grupla(haberler: list) -> list[tuple[str, list]]:
     return sorted(gruplar.items(), key=_kategori_sirasi)
 
 
-def haber_mesaji(haberler: list, uyarilar: list[str], bugun) -> str:
+def _degerlendirme_satirlari(degerlendirme) -> list[str]:
+    """Bir basligin altina gelen model ozeti. Degerlendirme yoksa hicbir sey.
+
+    Yalnizca YUKSEK ilgi ozet yazdirir: her basliga bir cumle eklemek mesaji
+    ikiye katlar ve secici olmayan bir vurgu hicbir seyi vurgulamaz.
+    """
+    if degerlendirme is None or degerlendirme.ilgi != YUKSEK:
+        return []
+    etkilenen = (f" [{', '.join(degerlendirme.etkilenen)}]"
+                 if degerlendirme.etkilenen else "")
+    if not degerlendirme.ozet:
+        return [f"  <i>{kacis(etkilenen.strip())}</i>"] if etkilenen else []
+    return [f"  <i>{kacis(degerlendirme.ozet + etkilenen)}</i>"]
+
+
+def haber_mesaji(haberler: list, uyarilar: list[str], bugun,
+                 degerlendirmeler: dict | None = None) -> str:
     """Telegram'a giden KISA haber ozeti.
 
     Sistemin geri kalanindan farkli olarak burasi YORUM URETMEZ - basliklari
@@ -642,6 +669,8 @@ def haber_mesaji(haberler: list, uyarilar: list[str], bugun) -> str:
         for h in grup[:MESAJDA_AZAMI]:
             damga = " <i>(tarihsiz)</i>" if h.tarihsiz else ""
             satirlar.append(f"• {kacis(h.baslik)}{damga}")
+            satirlar += _degerlendirme_satirlari(
+                (degerlendirmeler or {}).get(h.baslik))
         if len(grup) > MESAJDA_AZAMI:
             kalan = len(grup) - MESAJDA_AZAMI
             satirlar.append(f"<i>… {kalan} baslik daha, ekli dosyada</i>")
@@ -656,10 +685,14 @@ def haber_mesaji(haberler: list, uyarilar: list[str], bugun) -> str:
 
     satirlar += ["", "<i>Basliklar ham kaynaktan gelir; sistem bunlardan "
                  "KARAR URETMEZ. Baglantilar ekli dosyada.</i>"]
+    if degerlendirmeler:
+        satirlar.append("<i>Sira ve ozetler model uretimi; ilgi etiketi bir "
+                        "fiyat tahmini DEGIL, okuma sirasi onerisidir.</i>")
     return "\n".join(satirlar)
 
 
-def haber_dosyasi(haberler: list, uyarilar: list[str], bugun) -> str:
+def haber_dosyasi(haberler: list, uyarilar: list[str], bugun,
+                  degerlendirmeler: dict | None = None) -> str:
     """Ekte giden AYRINTI dosyasi: tum basliklar, baglantilar, tarihler."""
     satirlar = [
         "---",
@@ -685,6 +718,12 @@ def haber_dosyasi(haberler: list, uyarilar: list[str], bugun) -> str:
                 satirlar.append(f"- [{h.baslik}]({h.baglanti}) - {h.kaynak}, {tarih}")
             else:
                 satirlar.append(f"- {h.baslik} - {h.kaynak}, {tarih}")
+            degerlendirme = (degerlendirmeler or {}).get(h.baslik)
+            if degerlendirme is not None and degerlendirme.ozet:
+                etkilenen = (" - " + ", ".join(degerlendirme.etkilenen)
+                             if degerlendirme.etkilenen else "")
+                satirlar.append(f"  - ilgi: {degerlendirme.ilgi}{etkilenen}. "
+                                f"{degerlendirme.ozet}")
         satirlar.append("")
     if uyarilar:
         satirlar += ["## Okunamayan kaynaklar", ""]

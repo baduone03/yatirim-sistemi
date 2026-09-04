@@ -393,3 +393,25 @@ A maddeleri kok `CLAUDE.md`'dedir ve buraya YAZILMAZ.
 - **arsivde anahtar BAGLANTI, baslik degil** (B, 2026-08-23): besleme ayni baglantiyi her kosuda
   tekrar verir; baslik anahtar olsaydi kucuk bir editoryal duzeltme kaydi coklardi. Gunluk dosya
   ~46 KB / ~135 baslik.
+- **model listesi ERISIM BELGESI DEGIL** (B, 2026-09-05): `GET /v1/models` tum katalogu doner,
+  hesabin cagirabildiklerini degil. `writer/palmyra-fin-70b-32k` ve
+  `nvidia/nemotron-nano-3-30b-a3b` listede GORUNDUGU halde HTTP 404 veriyor
+  ("Function ... not found for account"). Ne build.nvidia.com sayfasi ne de `/v1/models`
+  kaynaktir - tek dogrulama gercek bir `chat/completions` cagrisi.
+- **jeton tavani JSON'u ORTASINDAN keser** (B, 2026-09-05): `finish_reason=length` gelen cevap
+  yarim kalir ve ayristirici "JSON degil" der - tani istem bicimine gider, oysa sorun tavanda.
+  `llm.http_llm` bu durumu artik ayri hata olarak raporluyor. Bkz. `JetonTavaniTesti`.
+- **kotasiz "ilgili" etiketi hicbir seyi siralamaz** (B, 2026-09-05): tavan konmadiginda model
+  30 basligin 24'unu YUKSEK isaretledi; hem etiket bilgi tasimayi birakti hem cikti 900 jetonu
+  asip cevabi yarida kesti. `AZAMI_YUKSEK=8` istemde SORULUR, `cevabi_coz` icinde UYGULANIR -
+  istem bir rica, kirpma bir garantidir. Kotayla sure 26 sn'den 13.7 sn'ye dustu.
+- **model secimi OLCULUR, okunmaz** (B, 2026-09-05): ayni haber gorevinde
+  `mistralai/mistral-nemotron` 10 sn + gecerli JSON, `nvidia/nemotron-3-super-120b-a12b` 51 sn +
+  tirnaksiz (bozuk) JSON, `nvidia/nemotron-3.5-lightning-30b-a3b` `chat_template_kwargs:
+  {"thinking": false}` verilmesine ragmen dusunme metnini `content` icine sizdirdi. Parametre
+  sayisi ve "reasoning" etiketi bu isin kalitesini soylemiyor.
+- **NIM ucu KESINTIYE GIRIYOR** (B, 2026-09-05): ayni istem ayni gun once 10 sn'de dondu, sonra
+  HTTP 500 ("Inference connection error") ve 25 sn zaman asimi verdi. Bu yuzden cagri
+  BASARISIZLIGI normal yol sayilir: `haberleri_degerlendir` ve `ozet_uret` haberi/mesaji
+  dusurmez, sebebi ciktiya yazip ham surume doner. Zaman asimini uzatarak "cozme" - kosu
+  butcesi 60 saniye.

@@ -10,13 +10,14 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from bildirim import ayarlari_oku  # noqa: E402
+from durum_ozeti import ozet_uret  # noqa: E402
 from config import (  # noqa: E402
     PROJE_DIZINI,
     RAPOR_DIZINI,
@@ -33,6 +34,7 @@ from mesaj import (  # noqa: E402
     GunSonuOzeti,
     IslemOnerisi,
     Tetikleyici,
+    gun_sonu_mesaji,
     hurdle_eksik_mesaji,
     ucgenleme_durdurma_mesaji,
     uyarilari_topla,
@@ -350,6 +352,28 @@ def _ayrintiyi_ekle(sonuc, rapor_dosyasi, baslik: str, ortam) -> None:
         print(f"UYARI - ayrinti raporu eklenemedi: {hata}")
 
 
+def _onsozu_ekle(ozet, llm_ayarlari, ortam):
+    """Mesajin basina uc cumlelik model ozeti koyar. Basarisizsa mesaj aynen kalir.
+
+    YALNIZCA gun sonu/brifing kosusunda cagrilir, TARAMA'da degil: tarama
+    gunde 12 kez kosuyor ve her kosuya ~10 saniyelik bir ag cagrisi eklemek
+    kosu suresini 60 saniye esigine dogru iter - o esigin ustunde Actions
+    faturasi kosu basina IKIYE katlanir.
+
+    Girdi, mesajin KENDISI. Ayri bir olgu listesi hazirlanmiyor; boylece ozet
+    mesajda yazmayan bir sey soyleyemez.
+    """
+    if not llm_ayarlari.kullanilabilir:
+        return ozet
+    onsoz, uyari = ozet_uret(gun_sonu_mesaji(ozet), llm_ayarlari, ortam)
+    if uyari:
+        # Mesaj yine de gidiyor. Ozetin dusmesi bir eksiklik, ariza degil -
+        # `hata-kodu.txt` birakilmaz, kosu basarili sayilir.
+        print(f"UYARI - {uyari}")
+        return ozet
+    return replace(ozet, onsoz=onsoz)
+
+
 def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
                          maliyet, ayarlar, ortam, simdi, gorev, rapor_adi,
                          duyarlilik=None, rapor_dosyasi=None,
@@ -402,6 +426,7 @@ def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
         adlar={v.sembol: v.ad for v in yapilandirma.varliklar.values()},
         baslangic_try=taban,
     )
+    ozet = _onsozu_ekle(ozet, yapilandirma.llm, ortam)
     sonuc = gonder_gun_sonu(ozet, ayarlar, ortam, simdi, gun=rapor_adi)
     _ayrintiyi_ekle(sonuc, rapor_dosyasi, ozet.baslik, ortam)
     print(f"{ozet.baslik}: {sonuc.durum} ({giden} islem karari da gonderildi)")

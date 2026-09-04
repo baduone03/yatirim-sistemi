@@ -184,6 +184,16 @@ ilgili alt klasorun `CLAUDE.md`'sindedir:
 - **EVDS anahtari yoksa sistem CALISIR**: Yahoo'ya duser ve raporda bunu yazar. Anahtar `.env`
   -> `EVDS_API_ANAHTARI`, header ile gonderilir (URL'ye KOYMA - loglara ve hata mesajlarina
   sizar).
+- **LLM cikti katmanidir, karar yolu DEGIL** (A, 2026-09-05): `llm.py` / `haber_analiz.py` /
+  `durum_ozeti.py` yalnizca metin uretir - hicbir cikti sinyale, agirliga veya esige donusmez ve
+  rapor `.md` dosyasina YAZILMAZ (model ciktisi kosudan kosuya degisir, commit edilseydi her gun
+  anlamsiz diff uretirdi). Model adi `varliklar.yaml -> veri_kaynaklari.llm.model` icinde,
+  KODDA DEGIL: NIM katalogu degisiyor ve bir modelin hesaba kapanmasi (HTTP 404) tek satirla
+  cozulebilmeli. Anahtar `NVIDIA_API_KEY`, `notify.ORTAM_ANAHTARLARI` icinde olmak ZORUNDA.
+- **LLM cagrisi GOREV BASINA BIR, TARAMA'da HIC** (A, 2026-09-05): cagri ~10-25 sn suruyor,
+  kosu ~35 sn ve 60 saniyeyi asan kosunun faturasi IKIYE katlaniyor. Onsoz yalnizca
+  brifing/gun sonunda, haber siralamasi yalnizca `/haber` (ayri workflow) yolunda calisir.
+  Tarama gridine cagri eklenirse gunde 12 kosunun her biri esige dogru iter.
 - **`TELEGRAM_IZINLI_CHAT_ID` bos = bot SUSAR**: "ayar yoksa herkese acik" degil. Ayrica
   anahtarin `notify.ORTAM_ANAHTARLARI` icinde olmasi SART - Actions'ta .env yok, secret ortamdan
   okunur; listede olmayan anahtar orada sessizce bos kalir ve bot hicbir mesaja cevap vermez.
