@@ -1,4 +1,8 @@
 # MAKINE URETIR - elle duzenleme.
 # Aktif hata ve son bildirim zamani. Silinirse bir sonraki hata
 # 'yeni' sayilir ve tekrar bildirilir; sistem durmaz.
-aktif: null
+aktif:
+  kod: rapor-basarisiz
+  ilk_gorulme: '2026-09-04T00:01:45.310838+00:00'
+  son_bildirim: '2026-09-04T00:01:45.310838+00:00'
+  bildirim_sayisi: 1
