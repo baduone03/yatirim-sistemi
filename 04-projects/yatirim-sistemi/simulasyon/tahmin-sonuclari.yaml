@@ -4,8 +4,18 @@
 # sonuc, karneyi olcum aracindan ovunme aracina cevirir.
 
 sonuclar:
+- tahmin_id: 2026-08-23-altin-nasdaqi-gecer
+  olcum_tarihi: '2026-09-12'
+  tuttu: false
+  getiri: -0.040508
+  kiyas_getirisi: 0.002537
 - tahmin_id: 2026-08-23-btc-sikisma-sonrasi
   olcum_tarihi: '2026-08-28'
   tuttu: true
   getiri: 0.031058
   kiyas_getirisi: null
+- tahmin_id: 2026-08-23-tuprs-endeksi-gecer
+  olcum_tarihi: '2026-09-12'
+  tuttu: true
+  getiri: 0.024585
+  kiyas_getirisi: -0.008329

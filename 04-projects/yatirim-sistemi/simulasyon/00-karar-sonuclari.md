@@ -1,6 +1,6 @@
 ---
 title: Karar Sonuclari
-date_created: 2026-09-11
+date_created: 2026-09-12
 tags: [yatirim, karar, olcum, geribildirim]
 status: active
 related: ["[[00-simulasyon]]", "[[00-sistem]]"]
@@ -18,7 +18,7 @@ Her karar **5/10/15/20/25/30.** gunlerde olculur. Esik tetiklensin veya tetiklen
 
 *Beklenti:* Portfoy volatilitesi (%15,6) en dusuk volatiliteli tekil varligin (QQQ) altinda kalacak - cesitlendirme calisiyorsa boyle olmali.
 
-Karar tarihi 2026-08-13 (29 gun once).
+Karar tarihi 2026-08-13 (30 gun once).
 
 | Gun | Tarih | Portfoy | Portfoy getirisi |
 |---|---|---|---|
@@ -27,8 +27,9 @@ Karar tarihi 2026-08-13 (29 gun once).
 | 15 | 2026-08-28 | 21.271 TL | +4.97% |
 | 20 | 2026-09-02 | 20.904 TL | +3.16% |
 | 25 | 2026-09-07 | 21.022 TL | +3.74% |
+| 30 | 2026-09-12 | 21.121 TL | +4.23% |
 
-Kalan kontrol gunleri: 30.
+**Takip tamamlandi** (30 gun doldu).
 
 ## 2026-08-13-garan-tuprs
 
@@ -36,7 +37,7 @@ Kalan kontrol gunleri: 30.
 
 *Beklenti:* TUPRS'un BIST bacagina ortalama korelasyonu 0,17 (GARAN 0,61 idi). Amac getiri degil risk: BIST bacak volatilitesi %29,2'den %26,9'a inmeli ve orada kalmali. TUPRS'un GARAN'i getiri olarak GECMESI beklenmiyor - geride kalirsa bile karar dogru olabilir, olcut volatilite.
 
-Karar tarihi 2026-08-13 (29 gun once).
+Karar tarihi 2026-08-13 (30 gun once).
 
 | Gun | Tarih | Portfoy | Portfoy getirisi | Satilan | Alinan | Takas farki |
 |---|---|---|---|---|---|---|
@@ -45,10 +46,11 @@ Karar tarihi 2026-08-13 (29 gun once).
 | 15 | 2026-08-28 | 21.271 TL | +4.97% | +2.85% | +9.83% | **+6.97%** |
 | 20 | 2026-09-02 | 20.904 TL | +3.16% | +1.00% | +15.68% | **+14.68%** |
 | 25 | 2026-09-07 | 21.022 TL | +3.74% | +1.39% | +12.28% | **+10.89%** |
+| 30 | 2026-09-12 | 21.121 TL | +4.23% | +2.93% | +20.45% | **+17.52%** |
 
 *Takas farki* = alinanin getirisi − satilanin getirisi. Pozitif ise takas getiri olarak kazandirdi. Karar risk icin verildiyse bu satir tek basina yeterli degil.
 
-Kalan kontrol gunleri: 30.
+**Takip tamamlandi** (30 gun doldu).
 
 ## 2026-08-13-asels-kisma
 
@@ -56,7 +58,7 @@ Kalan kontrol gunleri: 30.
 
 *Beklenti:* ASELS'in risk katkisi %20 tavaninin altina inip orada kalacak. ASELS +%10,2 yaptigi gun satildi; kazanandan satmak his olarak yanlis gelir. Eger ASELS bundan sonra da yukselirse bu karar GETIRI olarak kaybettirir ama RISK olarak dogru kalir. Ikisini ayri olc.
 
-Karar tarihi 2026-08-13 (29 gun once).
+Karar tarihi 2026-08-13 (30 gun once).
 
 | Gun | Tarih | Portfoy | Portfoy getirisi | Satilan | Alinan | Takas farki |
 |---|---|---|---|---|---|---|
@@ -65,7 +67,8 @@ Karar tarihi 2026-08-13 (29 gun once).
 | 15 | 2026-08-28 | 21.271 TL | +4.97% | +0.63% | +9.83% | **+9.19%** |
 | 20 | 2026-09-02 | 20.904 TL | +3.16% | -2.40% | +15.68% | **+18.08%** |
 | 25 | 2026-09-07 | 21.022 TL | +3.74% | -1.90% | +12.28% | **+14.18%** |
+| 30 | 2026-09-12 | 21.121 TL | +4.23% | +0.69% | +20.45% | **+19.75%** |
 
 *Takas farki* = alinanin getirisi − satilanin getirisi. Pozitif ise takas getiri olarak kazandirdi. Karar risk icin verildiyse bu satir tek basina yeterli degil.
 
-Kalan kontrol gunleri: 30.
+**Takip tamamlandi** (30 gun doldu).
