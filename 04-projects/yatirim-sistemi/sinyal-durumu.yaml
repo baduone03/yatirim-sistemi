@@ -5,31 +5,15 @@
 gun: '2026-09-16'
 gunluk_sayi: 1
 siniflar:
-  bist:
-    acik: true
-    yon: azalt
-    son_sinyal: ''
   kripto:
     acik: true
     yon: azalt
     son_sinyal: ''
-  maden:
-    acik: true
-    yon: azalt
-    son_sinyal: ''
   nakit:
-    acik: true
-    yon: azalt
+    acik: false
+    yon: ''
     son_sinyal: '2026-09-15T23:04:53+00:00'
-  nasdaq:
-    acik: true
-    yon: artir
-    son_sinyal: ''
 semboller:
-  ASELS.IS:
-    acik: true
-    yon: kis
-    son_sinyal: ''
   BTC-USD:
     acik: true
     yon: kis
