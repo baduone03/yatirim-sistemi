@@ -17,7 +17,8 @@ elle guncellenmezse sessizce yanlislasir, bayatlik olcumu ise kendini duzeltir.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, time
+from datetime import date, datetime, time, timedelta
+from typing import NamedTuple
 
 from config import TR_OFSET
 
@@ -33,6 +34,26 @@ HAFTALIK = "haftalik"
 # ("brifing_gunluk_mu: true") eklemek iki alani tutarli tutma yuku getirirdi;
 # tek alan, tek dogruluk kaynagi.
 HER_GUN_KODU = -1
+
+
+class Plan(NamedTuple):
+    """Kosunun isi ve ozetin ait oldugu TR gunu.
+
+    `gun` telafide DUNDUR: gece 02:00'de giden gun sonu ozeti dunun
+    kapanisidir, anahtari ve rapor dosyasi da dunun adini tasir.
+    """
+    gorev: str
+    gun: date
+
+
+def gorev_anahtari(gorev: str, gun: date) -> str:
+    """gonderilen.log anahtari. notify.gonder_gun_sonu ile AYNI bicim.
+
+    Haftalik ozet gun sonunun YERINE gectigi icin onunla ayni anahtari
+    paylasir - ikisi ayni gun ayri ayri gitmesin.
+    """
+    tur = "brifing" if gorev == BRIFING else "gunsonu"
+    return f"{tur}:{gun.isoformat()}"
 
 
 @dataclass(frozen=True)
@@ -59,6 +80,15 @@ class Takvim:
     # gondermek ayni sayilari iki kez yollamak olurdu.
     haftalik_gunu: int = 4
 
+    # Brifing saatinden sonra kac saat boyunca "bugunun brifingi gitmedi mi"
+    # diye bakilir. 1 saat, cron birkac saat gecikince brifingi dusuruyordu
+    # (2026-09-06 -> 09-26 arasi hic gitmedi); gonderilen.log kontrolu
+    # tekrari engelledigi icin pencereyi genisletmek bedava.
+    brifing_penceresi_saat: int = 1
+    # Kacan gun sonu ozeti ertesi gun bu saate kadar TELAFI edilir. None =
+    # brifing saati: dunun ozeti bugunun brifingiyle cakismasin.
+    gun_sonu_telafi_bitis: time | None = None
+
     def yerel(self, an: datetime) -> datetime:
         return an + TR_OFSET
 
@@ -66,35 +96,60 @@ class Takvim:
         yerel = self.yerel(an)
         return [s.ad for s in self.seanslar if s.acik_mi(yerel)]
 
-    def gorev(self, an: datetime) -> str:
-        """Bu kosunun isi. Sira onemli: gun sonu brifingi ezmez cunku ikisi
-        farkli saatlerde, ama cakisirlarsa gun sonu daha bilgilendirici."""
+    def gorev(self, an: datetime,
+              yapilan: frozenset[str] | set[str] = frozenset()) -> str:
+        return self.planla(an, yapilan).gorev
+
+    def planla(self, an: datetime,
+               yapilan: frozenset[str] | set[str] = frozenset()) -> Plan:
+        """Bu kosunun isi. `yapilan`: gonderilmis VEYA kuyrukta bekleyen
+        ozet anahtarlari (`gorev_anahtari`).
+
+        GitHub zamanlanmis kosulari SAATLERCE geciktirebiliyor (2026-09'da
+        `7 */2` gunde 12 yerine 5-6 kosu verdi). Sabit pencereye bagli ozet
+        o pencereye kosu dusmezse sessizce kaybolur; bu yuzden pencere
+        "gitmediyse ilk firsatta" mantigiyla calisir:
+          - gun sonu esiginden sonra: bugunun gun sonu (gitmediyse)
+          - ertesi gun telafi bitisine kadar: dunun gun sonu (gitmediyse)
+          - brifing penceresinde: bugunun brifingi (gitmediyse)
+        Ozet zaten gittiyse kosu TARAMA'dir - LLM onsozu ve rapor yeniden
+        uretilmez (kosu 60 sn esigini asmasin).
+        """
         yerel = self.yerel(an)
+        bugun = yerel.date()
         if yerel.time() >= self.gun_sonu_saati:
-            # Haftalik, gun sonunu EZER: haftalik ozet gunun kapanisini da
-            # icerir. Ikisi ayri gitseydi Cuma aksami neredeyse ayni iki
-            # mesaj arka arkaya duserdi.
-            if yerel.weekday() == self.haftalik_gunu:
-                return HAFTALIK
-            return GUN_SONU
-        if self._brifing_gunu_mu(yerel) and self._brifing_penceresi(yerel):
-            return BRIFING
-        return TARAMA
+            if gorev_anahtari(GUN_SONU, bugun) not in yapilan:
+                return Plan(self._kapanis(bugun), bugun)
+            return Plan(TARAMA, bugun)
+        dun = bugun - timedelta(days=1)
+        telafi_bitis = self.gun_sonu_telafi_bitis or self.brifing_saati
+        if (yerel.time() < telafi_bitis
+                and gorev_anahtari(GUN_SONU, dun) not in yapilan):
+            return Plan(self._kapanis(dun), dun)
+        if (self._brifing_gunu_mu(yerel) and self._brifing_penceresi(yerel)
+                and gorev_anahtari(BRIFING, bugun) not in yapilan):
+            return Plan(BRIFING, bugun)
+        return Plan(TARAMA, bugun)
+
+    def _kapanis(self, gun: date) -> str:
+        # Haftalik, gun sonunu EZER: haftalik ozet gunun kapanisini da
+        # icerir. Ikisi ayri gitseydi Cuma aksami neredeyse ayni iki
+        # mesaj arka arkaya duserdi. Telafide de ozetin GUNUNE bakilir:
+        # Cuma'nin kacan kapanisi Cumartesi sabahi yine haftaliktir.
+        return HAFTALIK if gun.weekday() == self.haftalik_gunu else GUN_SONU
 
     def _brifing_gunu_mu(self, yerel: datetime) -> bool:
         return (self.brifing_gunu == HER_GUN_KODU
                 or yerel.weekday() == self.brifing_gunu)
 
     def _brifing_penceresi(self, yerel: datetime) -> bool:
-        """Brifing saatinden sonraki bir saat. Cron gecikirse kacirmasin.
-
-        Tam saat esitligi arasaydik Actions cron'unun 5-30 dakikalik gecikmesi
-        brifingi her hafta dusururdu.
-        """
+        """Brifing saatinden sonraki `brifing_penceresi_saat` saat, gun sonu
+        esigine kadar. Cron gecikirse kacirmasin."""
         baslangic = self.brifing_saati
         gecen = ((yerel.hour - baslangic.hour) * 60
                  + (yerel.minute - baslangic.minute))
-        return 0 <= gecen < 60
+        return (0 <= gecen < self.brifing_penceresi_saat * 60
+                and yerel.time() < self.gun_sonu_saati)
 
 
 def _saat(ham, varsayilan: time) -> time:
@@ -132,6 +187,21 @@ def _gun(ham, alan: str) -> int:
     return gun
 
 
+def _pencere(ham) -> int:
+    """Brifing penceresi, saat. 0 brifingi sessizce kapatirdi - hata ver."""
+    try:
+        saat = int(ham)
+    except (TypeError, ValueError):
+        raise ValueError(
+            "bildirim.yaml -> takvim.brifing_penceresi_saat: tam sayi "
+            f"bekleniyor, '{ham}' geldi") from None
+    if not 1 <= saat <= 23:
+        raise ValueError(
+            "bildirim.yaml -> takvim.brifing_penceresi_saat: 1-23 arasi "
+            f"olmali, {saat} geldi")
+    return saat
+
+
 def takvimi_coz(ham: dict | None) -> Takvim:
     """`bildirim.yaml -> takvim` blogunu cozer. Blok yoksa varsayilanlar."""
     ham = ham or {}
@@ -159,4 +229,7 @@ def takvimi_coz(ham: dict | None) -> Takvim:
         brifing_gunu=_gun(ham.get("brifing_gunu", 0), "brifing_gunu"),
         brifing_saati=_saat(ham.get("brifing_saati"), time(9, 0)),
         haftalik_gunu=_gun(ham.get("haftalik_gunu", 4), "haftalik_gunu"),
+        brifing_penceresi_saat=_pencere(ham.get("brifing_penceresi_saat", 1)),
+        gun_sonu_telafi_bitis=(_saat(ham["gun_sonu_telafi_bitis"], time(0, 0))
+                               if ham.get("gun_sonu_telafi_bitis") else None),
     )
