@@ -334,7 +334,7 @@ def _durum_satiri(ozet: GunSonuOzeti) -> str:
         return f"💰 <b>{_tl(toplam)}</b>"
     fark = toplam - ozet.baslangic_try
     oran = fark / ozet.baslangic_try
-    return (f"💰 <b>{_tl(toplam)}</b> ({oran * 100:+.1f}%, "
+    return (f"💰 <b>{_tl(toplam)}</b> (baslangictan {oran * 100:+.1f}%, "
             f"{'+' if fark >= 0 else '-'}{_tl(abs(fark))})")
 
 
@@ -478,10 +478,11 @@ def uyarilari_topla(fiyatlar, portfoy, karar, maliyet, bayatlik,
     # hicbir isaret tasimayan bir citadir.
     if maliyet is not None and maliyet.risksiz_yedege_dusuldu:
         uyarilar.append(
-            f"Hurdle YEDEK kaynaktan: {maliyet.risksiz_kaynagi} "
-            f"(%{(maliyet.tl_risksiz_yillik or 0) * 100:.2f}). Birincil kaynak "
+            f"Mevduat kiyasi iyimser olabilir: faiz YEDEK kaynaktan "
+            f"({maliyet.risksiz_kaynagi}, "
+            f"%{(maliyet.tl_risksiz_yillik or 0) * 100:.2f}) - birincil kaynak "
             f"kullanilamadi. Gercek mevduat alternatifin bundan YUKSEK "
-            f"olabilir - o durumda cita oldugundan dusuk, varliklar "
+            f"olabilir; o durumda cita oldugundan dusuk, varliklar "
             f"oldugundan iyi gorunur.")
 
     # Hurdle rate durdurmayacak kadar ama guvenilecek kadar da taze degil.
@@ -494,10 +495,10 @@ def uyarilari_topla(fiyatlar, portfoy, karar, maliyet, bayatlik,
             sonrasi = ("bir sonraki kaynaga dusulur"
                        if len(maliyet.risksiz_zincir) > 1 else "rapor uretilmez")
             uyarilar.append(
-                f"Mevduat faizi verisi {yas} GUNLUK - {maliyet.risksiz_bayatlik_gun} "
+                f"Mevduat faizi verisi {yas} GUNLUK, kiyas eski orana dayaniyor"
+                f" - {maliyet.risksiz_bayatlik_gun} "
                 f"gunden eskisi bayat sayilir (kaynak {maliyet.risksiz_serisi}, "
-                f"{maliyet.risksiz_tarih}). 'Mevduatta beklemek daha mi iyiydi' "
-                f"karsilastirmasi bu eski orana dayaniyor; "
+                f"{maliyet.risksiz_tarih}); "
                 f"{maliyet.risksiz_durdurma_gun} gunu asarsa {sonrasi}.")
 
     engellenenler = maliyet.engellenenler if maliyet is not None else {}

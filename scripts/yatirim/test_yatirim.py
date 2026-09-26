@@ -127,6 +127,7 @@ from mesaj import (
     IslemOnerisi,
     Tetikleyici,
     _islem_satirlari,
+    _uyari_kisalt,
     gun_sonu_mesaji,
     islem_karari_mesaji,
     kacis,
@@ -4027,6 +4028,14 @@ class HurdleTazeligiTesti(unittest.TestCase):
                             for u in uyarilar),
                         f"bayatlik uyarisi yok: {uyarilar}")
 
+    def test_bayat_hurdle_kisaltilinca_sonucu_soyler(self):
+        gecikmis = self._model(tarih=date.today().replace(day=1).isoformat(),
+                               esik=0, durdurma=3650)
+        uyarilar = uyarilari_topla(None, None, None, gecikmis, None)
+        kisa = [_uyari_kisalt(u) for u in uyarilar
+                if "Mevduat faizi verisi" in u]
+        self.assertTrue(kisa and "kiyas eski orana dayaniyor" in kisa[0], kisa)
+
     def test_taze_hurdle_uyari_uretmez(self):
         taze = self._model(tarih=date.today().isoformat())
         uyarilar = uyarilari_topla(None, None, None, taze, None)
@@ -4204,6 +4213,16 @@ class HurdleZinciriTesti(unittest.TestCase):
         uyarilar = uyarilari_topla(None, None, None, m, None)
         self.assertTrue([u for u in uyarilar if "YEDEK kaynaktan" in u],
                         f"yedek uyarisi yok: {uyarilar}")
+
+    def test_yedek_uyarisi_kisaltilinca_sonucu_soyler(self):
+        """Telegram ilk ' - ' sonrasini keser; kalan kisim 'hurdle yedekte'
+        gibi jargon degil, okuyana ne demek oldugunu soylemeli."""
+        m = self._model(mevduat_tarih="2026-06-01")
+        kisa = [_uyari_kisalt(u) for u in
+                uyarilari_topla(None, None, None, m, None)
+                if "YEDEK kaynaktan" in u]
+        self.assertTrue(kisa and "Mevduat kiyasi iyimser olabilir" in kisa[0],
+                        kisa)
 
     def test_birincil_seri_kazanan_degil_ILK_seridir(self):
         """Kazanana bakilsaydi yedege dusuldugunde canli seri hic yenilenmez
