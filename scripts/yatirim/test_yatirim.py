@@ -127,6 +127,7 @@ from mesaj import (
     IslemOnerisi,
     Tetikleyici,
     _islem_satirlari,
+    _uyari_kisalt,
     gun_sonu_mesaji,
     islem_karari_mesaji,
     kacis,
@@ -1015,64 +1016,59 @@ class AnlatiTesti(unittest.TestCase):
         """Kur kucukken 'sebep kur' demek yanlis atif olurdu."""
         mesaj = gun_sonu_mesaji(self._ozet(
             ayrimlar=[_SahteAyrim("QQQ", 0.045, 0.001, 0.046)]))
-        self.assertNotIn("kaynagi varliklar degil KUR", mesaj)
-        self.assertIn("varliklarin kendisinden", mesaj)
+        self.assertNotIn("KUR", mesaj)
 
-    def test_ikisi_birlikteyse_tek_sebebe_baglanmaz(self):
-        """Kur payi %40-60 arasindayken tek sebep secmek uydurma olurdu."""
+    def test_ikisi_birlikteyse_kur_suclanmaz(self):
+        """Kur payi %40-60 arasindayken kuru sebep gostermek uydurma olurdu."""
         mesaj = gun_sonu_mesaji(self._ozet(
             ayrimlar=[_SahteAyrim("QQQ", -0.030, 0.029, -0.002)]))
-        self.assertIn("tek bir sebebe baglamak dogru olmaz", mesaj)
-        self.assertNotIn("kaynagi varliklar degil KUR", mesaj)
+        self.assertNotIn("KUR", mesaj)
 
     def test_olcek_alti_hareket_oranlanmaz(self):
         """Iki taraf da ~0 iken pay hesabi anlamsiz buyur - cumle dusmeli."""
         mesaj = gun_sonu_mesaji(self._ozet(
             ayrimlar=[_SahteAyrim("QQQ", 0.0001, 0.0001, 0.0002)]))
-        for yasak in ("kaynagi varliklar degil KUR", "varliklarin kendisinden",
-                      "tek bir sebebe"):
-            self.assertNotIn(yasak, mesaj)
+        self.assertNotIn("KUR", mesaj)
 
     def test_olculemeyen_degisim_uydurulmaz(self):
         mesaj = gun_sonu_mesaji(self._ozet(degisim_24s=None))
         self.assertIn("olculemedi", mesaj)
-        self.assertNotIn("yatay kaldi", mesaj)
+        self.assertNotIn("(yatay)", mesaj)
 
     def test_islem_yoksa_SEBEBI_yazilir(self):
         """'Islem yok' tek basina bilgi degil - neden yok?"""
         mesaj = gun_sonu_mesaji(self._ozet())
-        self.assertIn("Islem yapilmadi", mesaj)
-        self.assertIn("sapmadi", mesaj)
+        self.assertIn("Islem yok: portfoy hedef dagilima yakin", mesaj)
 
     def test_devre_kesici_islem_yoklugundan_ayrilir(self):
         """Sessiz sistem ile frenlenmis sistem ayni mesaji vermemeli."""
         mesaj = gun_sonu_mesaji(self._ozet(karar=_SahteKarar(devre=True)))
         self.assertIn("devre kesici", mesaj)
-        self.assertNotIn("Islem yapilmadi:", mesaj)
+        self.assertNotIn("Islem yok", mesaj)
 
     def test_karar_yoksa_bolum_tumuyle_duser(self):
         mesaj = gun_sonu_mesaji(self._ozet(karar=None))
-        self.assertNotIn("Islem yapildi mi", mesaj)
+        self.assertNotIn("Islem", mesaj)
 
     def test_getiri_risksize_gore_konumlanir(self):
         """Ciplak '+4.2% kazandin' eksik: mevduat da kazandiriyordu."""
         mesaj = gun_sonu_mesaji(self._ozet())
-        self.assertIn("mevduatta tutsaydin", mesaj)
-        self.assertIn("USTUNDE", mesaj)
+        # getiri = asiri + risksiz: iki sayi YAN YANA, fark puani degil.
+        self.assertIn("Mevduattan IYI: portfoy +4.2%, mevduat +0.7% (6 gunde)",
+                      mesaj)
 
     def test_risksizin_altinda_kalmak_gizlenmez(self):
         mesaj = gun_sonu_mesaji(self._ozet(asiri_getiri=-0.012))
-        self.assertIn("ALTINDA", mesaj)
-        self.assertIn("daha iyi sonuc vermedi", mesaj)
+        self.assertIn("Mevduattan KOTU", mesaj)
 
     def test_risksiz_yoksa_yorum_uydurulmaz(self):
         mesaj = gun_sonu_mesaji(self._ozet(asiri_getiri=None, risksiz=None))
-        self.assertIn("olculemedi", mesaj)
-        self.assertNotIn("USTUNDE", mesaj)
+        self.assertIn("yapilamadi", mesaj)
+        self.assertNotIn("Mevduattan", mesaj)
 
     def test_simulasyon_ibaresi_her_mesajda(self):
         """Kagit portfoy gercek gibi sunulmamali."""
-        self.assertIn("kagit para", gun_sonu_mesaji(self._ozet()))
+        self.assertIn("Kagit para", gun_sonu_mesaji(self._ozet()))
 
     def test_adi_bilinmeyen_sembol_uydurulmaz(self):
         mesaj = gun_sonu_mesaji(self._ozet(
@@ -4032,6 +4028,14 @@ class HurdleTazeligiTesti(unittest.TestCase):
                             for u in uyarilar),
                         f"bayatlik uyarisi yok: {uyarilar}")
 
+    def test_bayat_hurdle_kisaltilinca_sonucu_soyler(self):
+        gecikmis = self._model(tarih=date.today().replace(day=1).isoformat(),
+                               esik=0, durdurma=3650)
+        uyarilar = uyarilari_topla(None, None, None, gecikmis, None)
+        kisa = [_uyari_kisalt(u) for u in uyarilar
+                if "Mevduat faizi verisi" in u]
+        self.assertTrue(kisa and "kiyas eski orana dayaniyor" in kisa[0], kisa)
+
     def test_taze_hurdle_uyari_uretmez(self):
         taze = self._model(tarih=date.today().isoformat())
         uyarilar = uyarilari_topla(None, None, None, taze, None)
@@ -4210,6 +4214,16 @@ class HurdleZinciriTesti(unittest.TestCase):
         self.assertTrue([u for u in uyarilar if "YEDEK kaynaktan" in u],
                         f"yedek uyarisi yok: {uyarilar}")
 
+    def test_yedek_uyarisi_kisaltilinca_sonucu_soyler(self):
+        """Telegram ilk ' - ' sonrasini keser; kalan kisim 'hurdle yedekte'
+        gibi jargon degil, okuyana ne demek oldugunu soylemeli."""
+        m = self._model(mevduat_tarih="2026-06-01")
+        kisa = [_uyari_kisalt(u) for u in
+                uyarilari_topla(None, None, None, m, None)
+                if "YEDEK kaynaktan" in u]
+        self.assertTrue(kisa and "Mevduat kiyasi iyimser olabilir" in kisa[0],
+                        kisa)
+
     def test_birincil_seri_kazanan_degil_ILK_seridir(self):
         """Kazanana bakilsaydi yedege dusuldugunde canli seri hic yenilenmez
         ve zincir bir daha asla birinciye donemezdi."""
@@ -4317,8 +4331,8 @@ class OzetBlokuTesti(unittest.TestCase):
         return gun_sonu_mesaji(GunSonuOzeti(**varsayilan))
 
     def _ilk_ekran(self, mesaj: str) -> str:
-        """Ilk anlati basligina kadar olan kisim."""
-        return mesaj.split("<b>Bugun ne oldu</b>")[0]
+        """Uyari bolumune kadar olan kisim."""
+        return mesaj.split("<b>⚠️ Dikkat")[0]
 
     def test_deger_ve_fark_ilk_ekranda(self):
         ilk = self._ilk_ekran(self._mesaj())
@@ -4341,17 +4355,51 @@ class OzetBlokuTesti(unittest.TestCase):
     def test_islem_durumu_ilk_ekranda(self):
         self.assertIn("Islem yok", self._ilk_ekran(self._mesaj()))
         frenli = self._ilk_ekran(self._mesaj(karar=_SahteKarar(devre=True)))
-        self.assertIn("fren devrede", frenli)
+        self.assertIn("Fren devrede", frenli)
 
-    def test_uyari_sayisi_ilk_ekranda(self):
-        """Uyarilar en altta duruyor - ustte olduklarini haber vermek gerek."""
-        ilk = self._ilk_ekran(self._mesaj(uyarilar=["bir", "iki"]))
-        self.assertIn("2 uyari", ilk)
-        self.assertNotIn("uyari", self._ilk_ekran(self._mesaj()))
+    def test_mesaj_tek_ekran(self):
+        """Regresyon (2026-09-26): ayni bilgi uc kez soyleniyordu, brifing
+        30 satiri buluyordu. Uyarisiz mesaj telefonda tek ekran olmali."""
+        mesaj = self._mesaj(onsoz="Portfoy yatay.")
+        self.assertLessEqual(len(mesaj.splitlines()), 12)
+        for eski in ("Bugun ne oldu", "Islem yapildi mi", "Kazanc gercek mi"):
+            self.assertNotIn(eski, mesaj)
 
-    def test_gerekce_bolumleri_KORUNUR(self):
-        """Ozet, anlatinin yerine gecmez - ustune biner."""
-        mesaj = self._mesaj()
-        for bolum in ("Bugun ne oldu", "Islem yapildi mi", "Kazanc gercek mi"):
-            self.assertIn(bolum, mesaj)
-        self.assertIn("mevduatta tutsaydin", mesaj)
+    def test_onsoz_model_yorumu_diye_isaretlenir(self):
+        """Olculmus sayi ile model metni ayni yuzle gorunmemeli."""
+        self.assertIn("(model yorumu)", self._mesaj(onsoz="Portfoy yatay."))
+        self.assertNotIn("model yorumu", self._mesaj())
+
+
+class UyariSadelestirmeTesti(unittest.TestCase):
+    """Telegram uyarilari kisa, tekrarsiz ve sayili olmali."""
+
+    def _mesaj(self, uyarilar):
+        portfoy = Portfoy(pozisyonlar=[], nakit_try=20000.0, fiyatlanamayan=[])
+        return gun_sonu_mesaji(GunSonuOzeti(
+            portfoy=portfoy, risk=None, veri_zamani="2026-09-26",
+            uyarilar=uyarilar))
+
+    def test_gerekce_kesilir_sorun_kalir(self):
+        mesaj = self._mesaj(["Bayat fiyat X: 9 islem gunu guncellenmedi - "
+                             "uzun teknik gerekce"])
+        self.assertIn("Bayat fiyat X: 9 islem gunu guncellenmedi", mesaj)
+        self.assertNotIn("uzun teknik gerekce", mesaj)
+
+    def test_ayni_sorun_tek_satirda_birlesir(self):
+        mesaj = self._mesaj([
+            "Dogrulanmamis kripto fiyati BTC-USD: kur kapali - ayrinti",
+            "Dogrulanmamis kripto fiyati ETH-USD: kur kapali - ayrinti"])
+        self.assertIn("Dogrulanmamis kripto fiyati BTC-USD, ETH-USD: kur kapali",
+                      mesaj)
+        self.assertIn("Dikkat (1)", mesaj)
+
+    def test_fazlasi_rapora_yonlendirilir(self):
+        mesaj = self._mesaj([f"Sorun {i}: aciklama {i}" for i in range(5)])
+        self.assertIn("Dikkat (5)", mesaj)
+        self.assertIn("aciklama 2", mesaj)
+        self.assertNotIn("aciklama 3", mesaj)
+        self.assertIn("+2 not daha ekli raporda", mesaj)
+
+    def test_uyari_yoksa_bolum_yok(self):
+        self.assertNotIn("Dikkat", self._mesaj([]))
