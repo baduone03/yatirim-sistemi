@@ -256,8 +256,8 @@ ilgili alt klasorun `CLAUDE.md`'sindedir:
   ikiye katlanirdi. Seans saatleri `bildirim.yaml -> takvim` icinde, kodda DEGIL - BIST seans
   saatleri gecmiste degisti.
 - **webhook aktifken `getUpdates` HTTP 409 doner**: Telegram ikisini ayni anda kullandirmaz. Bu
-  yuzden webhook'a gecerken yoklama yolu fiilen kapandi ve `bot-sorgu.yml`den cron KALDIRILDI -
-  zamanlanmis kosu bekleyen mesaji okuyamaz, sadece hata verip 1 dakika yakardi. Emniyet agi
+  yuzden `bot-sorgu.yml` cron'u gunde 2 kosuya (`7 6,18`) indi: webhook aktifken script
+  "yoklamaya gerek yok" deyip cikar, webhook dusmusse bekleyen mesajlari cevaplar. Emniyet agi
   Telegram'in kendisinde: webhook 200 donmezse guncelleme kuyrukta kalir ve yeniden denenir.
   Geri donus tek satir: `deleteWebhook`.
 
@@ -286,7 +286,12 @@ ilgili alt klasorun `CLAUDE.md`'sindedir:
   saniye.
 - **cron dakikasi 0 DEGIL**: GitHub zamanlanmis kosulari best-effort calistirir ve saat basi
   kuyrugun en kalabalik ani. `0 */2` 10-40 dakika gecikebilir, `7 */2` gecikmez. Gun sonu croni
-  (`30 20`) istisna: `gorev()` esigi tam 23:30 TR, kaydirilirsa gun sonu ozeti taramaya duser.
+  (`30 20`) istisna: `gorev()` esigi tam 23:30 TR.
+- **ozet sabit pencereye BAGLANMAZ, `gonderilen.log`'a bakar** (A, 2026-09-26): GitHub cron'u
+  saatlerce geciktirebiliyor (2026-09: gunde 12 yerine 5-6 kosu, gun sonu 09-21'den, brifing
+  09-06'dan beri gitmedi). `Takvim.planla()` gitmemis ozeti ilk firsatta gonderir (dunun gun
+  sonu ertesi gun `gun_sonu_telafi_bitis`'e kadar), gitmis olani TARAMA'ya cevirir - LLM onsozu
+  tekrar uretilmez. Bkz. OzetTelafiTesti.
 - **UTC zorunlu**: `sinyal.simdi_utc()` disinda `datetime.now()` kullanma. Actions UTC'de, yerel
   kosu TR saatinde calisir; naive damgalarla gecen sure NEGATIF cikar ve bekleme suresi anlamini
   yitirir. Tarih (`gun`, `ozet:{tarih}`) ise rapor adiyla AYNI olmali - o yerel `date.today()`.

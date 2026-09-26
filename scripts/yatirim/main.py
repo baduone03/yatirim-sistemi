@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from bildirim import ayarlari_oku  # noqa: E402
+from bildirim import ayarlari_oku, kuyrugu_oku  # noqa: E402
 from durum_ozeti import ozet_uret  # noqa: E402
 from config import (  # noqa: E402
     PROJE_DIZINI,
@@ -75,6 +75,7 @@ from sinyal import (  # noqa: E402
     SINIF,
     gecmisi_oku,
     gecmisi_yaz,
+    gonderilen_anahtarlar,
     kararlari_uret,
     simdi_utc,
 )
@@ -459,9 +460,6 @@ def main() -> int:
     rapor_adi = (simdi + TR_OFSET).date().isoformat()
     baslik = f"{'Simulasyon' if argumanlar.sim else 'Portfoy'} {rapor_adi}"
     bildirim_ayarlari = ayarlari_oku()
-    gorev = bildirim_ayarlari.takvim.gorev(simdi)
-    acik = bildirim_ayarlari.takvim.acik_seanslar(simdi)
-    print(f"Gorev: {gorev} | acik seans: {', '.join(acik) or 'yok'}")
 
     # Sessiz saatte biriken bildirimler her kosunun BASINDA bosaltilir.
     # Bosaltilmazsa gece biriken uyarilar diskte kalir ve hic gonderilmez.
@@ -472,6 +470,20 @@ def main() -> int:
                 print(f"Biriken {bosaltma.gonderilen} bildirim gonderildi.")
         except TelegramHatasi as hata:
             print(f"UYARI - biriken bildirimler gonderilemedi: {hata}")
+
+    # Gorev, kuyruk bosaltildiktan SONRA secilir: gonderilen ve kuyrukta
+    # bekleyen ozetler "yapildi" sayilir. Kacan ozet bir sonraki kosuda
+    # telafi edilir, giden ozet ikinci kez uretilmez (LLM cagrisi yok).
+    yapilan = gonderilen_anahtarlar() | {b.anahtar for b in kuyrugu_oku()}
+    plan = bildirim_ayarlari.takvim.planla(simdi, yapilan)
+    gorev = plan.gorev
+    # Ozetin ait oldugu gun: telafide DUN. Rapor dosyasi ve gonderim
+    # anahtari bunu kullanir; latch/sayac ise bugunun (rapor_adi) gunudur.
+    ozet_gunu = plan.gun.isoformat()
+    acik = bildirim_ayarlari.takvim.acik_seanslar(simdi)
+    telafi = " (telafi)" if ozet_gunu != rapor_adi and gorev != TARAMA else ""
+    print(f"Gorev: {gorev}{telafi} {ozet_gunu} | acik seans: "
+          f"{', '.join(acik) or 'yok'}")
 
     # Hurdle rate ZORUNLU: yoksa getiri sifira gore olculur ve her pozitif
     # sonuc "basari" gorunur. Once canli TCMB, olmazsa varliklar.yaml yedegi.
@@ -543,7 +555,7 @@ def main() -> int:
     if gorev != TARAMA:
         rapor_dizini = SIM_RAPOR_DIZINI if durum else RAPOR_DIZINI
         rapor_dizini.mkdir(parents=True, exist_ok=True)
-        rapor_dosyasi = rapor_dizini / f"{rapor_adi}.md"
+        rapor_dosyasi = rapor_dizini / f"{ozet_gunu}.md"
         rapor_dosyasi.write_text(
             rapor_olustur(yapilandirma, fiyatlar, portfoy, sapmalar, risk, karar,
                           durum, maliyet, duyarlilik),
@@ -568,7 +580,7 @@ def main() -> int:
         try:
             _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar,
                                  durum, maliyet, bildirim_ayarlari, ortam,
-                                 simdi, gorev, rapor_adi, duyarlilik,
+                                 simdi, gorev, ozet_gunu, duyarlilik,
                                  rapor_dosyasi, sapmalar)
         except TelegramHatasi as hata:
             # Rapor diske yazildi ve GECERLI - kaybolmadi.

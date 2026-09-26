@@ -69,22 +69,38 @@ takvim:
   #
   # 23:30 DEGISTIRILEMEZ gibi davran: cron ('30 20' UTC) tam bu esige
   # ayarli. Saati kaydirip cron'u birakmak gun sonu kosusunu TARAMA'ya
-  # dusurur ve ozet hic gitmez. Ikisi birlikte degisir.
+  # dusurur ve ozet ancak ertesi gun telafiyle gider. Ikisi birlikte degisir.
   #
   # Gece 00:00 yazilamaz: gorev() "saat >= esik" diye bakar, 00:00 her
   # saatten kucuk oldugu icin GUNUN HER KOSUSU gun sonu olur - brifing ve
   # tarama hic calismaz. Ayrica 00:00 zaten ertesi TR gunudur.
   gun_sonu_saati: "23:30"
 
+  # TELAFI: GitHub zamanlanmis kosulari saatlerce geciktirebiliyor (2026-09:
+  # '7 */2' gunde 12 yerine 5-6 kosu, '30 20' cogu gun hic 23:30-00:00
+  # araligina dusmedi -> 09-21'den itibaren gun sonu ozeti gitmedi). Bu
+  # yuzden dunun gun sonu ozeti gonderilen.log'da yoksa ertesi gun bu saate
+  # kadarki ilk kosuda gider (haftalik gunuyse haftalik olarak). Gece 01-08
+  # arasi giderse sessiz saat kuyruguna girer, 08:00 sonrasi ilk kosuda cikar.
+  # Bos birakilirsa brifing_saati kullanilir - dunun ozeti bugunun
+  # brifingiyle cakismasin.
+  gun_sonu_telafi_bitis: "13:00"
+
   # Gunluk brifing: ogle saatinde "bugune kadar ne oldu" ozeti.
   # her_gun = brifing haftanin her gunu calisir.
   #
   # 13:00 secildi cunku mevcut 2 saatlik tarama gridi ('7 */2' UTC) zaten
   # TR 13:07'de kosuyor - brifing icin AYRI CRON GEREKMIYOR, ek Actions
-  # dakikasi yakilmiyor. Brifing penceresi 60 dakika oldugu icin cron'un
-  # 5-30 dakikalik gecikmesi brifingi dusurmez.
+  # dakikasi yakilmiyor.
   brifing_gunu: her_gun
   brifing_saati: "13:00"
+
+  # Brifing, brifing_saati'nden itibaren bu kadar saat boyunca "bugunun
+  # brifingi gitmediyse" ilk kosuda gider (gun sonu esigini asmaz). 1 saatlik
+  # pencere cron gecikmesinde brifingi dusuruyordu (2026-09-06'dan beri hic
+  # gitmedi). Tekrar riski yok: gonderilen.log'daki anahtar ikinci kosuyu
+  # TARAMA'ya cevirir.
+  brifing_penceresi_saat: 10
 
   # Haftalik ozet gunu (0=Pazartesi ... 4=Cuma). Gun sonu saatinde calisir
   # ve o gunun gun sonu ozetinin YERINE gecer - haftalik zaten gunun

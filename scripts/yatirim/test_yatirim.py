@@ -146,6 +146,7 @@ from piyasa import (  # noqa: F401
     HAFTALIK,
     HER_GUN_KODU,
     TARAMA,
+    gorev_anahtari,
     takvimi_coz,
 )
 from portfolio import (
@@ -2845,6 +2846,97 @@ class HaftaSonuUcgenlemeTesti(unittest.TestCase):
         # Pazartesi TR 01:00 = Pazar UTC 22:00 -> hafta ici
         self.assertFalse(hafta_sonu_mu(
             datetime(2026, 8, 16, 22, 0, tzinfo=timezone.utc)))
+
+
+class OzetTelafiTesti(unittest.TestCase):
+    """Regresyon (2026-09-26): cron saatlerce gecikti, gun sonu 09-21'den,
+    brifing 09-06'dan beri hic gitmedi. Ozet sabit pencereye degil
+    gonderilen.log'a bakar: gitmediyse ilk firsatta gider, gittiyse tekrar
+    uretilmez."""
+
+    def _takvim(self, **d):
+        ham = {"gun_sonu_saati": "23:30", "brifing_gunu": "her_gun",
+               "brifing_saati": "13:00", "haftalik_gunu": 4,
+               "brifing_penceresi_saat": 10}
+        ham.update(d)
+        return takvimi_coz(ham)
+
+    def _an(self, gun: int, saat: int, dakika: int = 0) -> datetime:
+        """2026-08-17 Pazartesi; gun=0 Pazartesi. TR saatini UTC'ye cevirir."""
+        return datetime(2026, 8, 17 + gun, saat, dakika,
+                        tzinfo=timezone.utc) - TR_OFSET
+
+    def _gun(self, gun: int) -> date:
+        return date(2026, 8, 17 + gun)
+
+    def test_kacan_gun_sonu_ertesi_gece_telafi_edilir(self):
+        plan = self._takvim().planla(self._an(2, 2, 16))  # Car 02:16 TR
+        self.assertEqual(plan, (GUN_SONU, self._gun(1)))  # Sali'nin ozeti
+
+    def test_giden_gun_sonu_telafi_edilmez(self):
+        yapilan = {gorev_anahtari(GUN_SONU, self._gun(1))}
+        self.assertEqual(self._takvim().gorev(self._an(2, 2, 16), yapilan),
+                         TARAMA)
+
+    def test_cuma_telafisi_haftalik_olur(self):
+        """Cuma'nin kacan kapanisi Cumartesi sabahi gun sonu DEGIL haftalik."""
+        plan = self._takvim().planla(self._an(5, 7, 50))
+        self.assertEqual(plan, (HAFTALIK, self._gun(4)))
+
+    def test_telafi_bitisinden_sonra_dun_unutulur(self):
+        """Telafi brifinge devreder; dunun ozeti aksama kadar surunmez."""
+        self.assertEqual(self._takvim().planla(self._an(2, 13, 40)),
+                         (BRIFING, self._gun(2)))
+
+    def test_telafi_bitisi_yamldan(self):
+        takvim = self._takvim(gun_sonu_telafi_bitis="06:00")
+        self.assertEqual(takvim.gorev(self._an(2, 7, 0)), TARAMA)
+        self.assertEqual(takvim.gorev(self._an(2, 5, 59)), GUN_SONU)
+
+    def test_gec_kalan_brifing_gider(self):
+        """Eskiden 14:00'ten sonra TARAMA'ya dusuyordu."""
+        yapilan = {gorev_anahtari(GUN_SONU, self._gun(1))}
+        self.assertEqual(self._takvim().gorev(self._an(2, 18, 31), yapilan),
+                         BRIFING)
+
+    def test_giden_brifing_tekrar_uretilmez(self):
+        """LLM onsozu her kosuda uretilseydi kosu 60 sn esigini asardi."""
+        yapilan = {gorev_anahtari(GUN_SONU, self._gun(1)),
+                   gorev_anahtari(BRIFING, self._gun(2))}
+        self.assertEqual(self._takvim().gorev(self._an(2, 18, 31), yapilan),
+                         TARAMA)
+
+    def test_brifing_gun_sonu_esigini_asmaz(self):
+        self.assertEqual(self._takvim(brifing_penceresi_saat=23)
+                         .gorev(self._an(2, 23, 40)), GUN_SONU)
+
+    def test_gun_sonu_gittiyse_ayni_aksam_tekrar_gitmez(self):
+        yapilan = {gorev_anahtari(GUN_SONU, self._gun(2))}
+        self.assertEqual(self._takvim().gorev(self._an(2, 23, 50), yapilan),
+                         TARAMA)
+
+    def test_haftalik_ve_gun_sonu_ayni_anahtari_paylasir(self):
+        self.assertEqual(gorev_anahtari(HAFTALIK, self._gun(4)),
+                         gorev_anahtari(GUN_SONU, self._gun(4)))
+
+    def test_anahtar_gonderimle_ayni_bicimde(self):
+        """Planlayicinin baktigi anahtar notify'in yazdigi anahtar olmali;
+        ayrisirsa ozet her kosuda yeniden gider."""
+        for gorev, baslik in ((BRIFING, "🌅 Gunun brifingi"),
+                              (GUN_SONU, "🌙 Gun sonu"),
+                              (HAFTALIK, "📅 Hafta kapanisi")):
+            ozet = unittest.mock.Mock(baslik=baslik)
+            with unittest.mock.patch.object(notify, "gun_sonu_mesaji",
+                                            return_value="metin"), \
+                    unittest.mock.patch.object(notify, "kanaldan_gonder") as sahte:
+                notify.gonder_gun_sonu(ozet, None, None, self._an(2, 14),
+                                       gun=self._gun(2).isoformat())
+            self.assertEqual(sahte.call_args.args[0].anahtar,
+                             gorev_anahtari(gorev, self._gun(2)), baslik)
+
+    def test_pencere_sifir_reddedilir(self):
+        with self.assertRaisesRegex(ValueError, "brifing_penceresi_saat"):
+            self._takvim(brifing_penceresi_saat=0)
 
 
 class TakvimTesti(unittest.TestCase):
