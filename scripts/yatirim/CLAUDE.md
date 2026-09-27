@@ -383,6 +383,10 @@ A maddeleri kok `CLAUDE.md`'dedir ve buraya YAZILMAZ.
   Risk olcutleri (`volatilite:`, `risk_katkisi:`) o gunun pozisyonlari + `gecmis_gun` penceresiyle
   `riski_hesapla`'dan gelir ve `kosul_degeri` olarak SAKLANIR (--rapor fiyat cekmez). Sinif bacagi
   nakitsiz olculur; 0. gun (karar) da olculur. Bkz. BozanKosulTesti, RiskKosuluTesti.
+- **katalizor takvimi elle tutulur, bayatlamasi UYARI uretir** (B, 2026-09-27): son olay
+  `kapsama_uyari_gun` icine girince brifinge "takvimi guncelle" duser - bos takvim "olay yok"
+  diye okunmasin. Yalnizca dogrulanmis tarih (TUFE her ay 3'unde DEGIL, hafta sonu kayar).
+  Kapsam yazim hatasi okumada patlar. Sinyale donusmez. Bkz. test_katalizor.
 - **ongoru defteri karar yoluna BAGLANMAZ** (B, 2026-08-23): `tahmin.py` sinyal uretmez;
   `main.py`/`sinyal.py` onu import etmez ve Actions'ta AYRI adim olarak kosar. Sebep: bir
   ongoruye dayanarak pozisyon acmak, kalibre oldugu kanitlanmamis bir modele para baglamaktir.

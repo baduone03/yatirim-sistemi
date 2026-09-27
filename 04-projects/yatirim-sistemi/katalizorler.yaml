@@ -1,0 +1,70 @@
+# KATALIZOR TAKVIMI - onumuzdeki gunlerde fiyati oynatabilecek BILINEN olaylar.
+#
+# Tahmin degil, takvim. Sinyale/esige donusmez; brifingde ve raporda
+# "bu hafta su var" diye gosterilir. Elle tutulur - YALNIZCA resmi kaynakla
+# dogrulanmis tarih yaz, tahmini tarih yazma (TUFE her ay 3'unde DEGIL:
+# hafta sonuna denk gelirse kayar).
+#
+# Alanlar:
+#   tarih  : YYYY-AA-GG
+#   saat   : TR saati (opsiyonel)
+#   olay   : kisa ad
+#   kapsam : makro | sinif (bist, nasdaq, kripto, maden) | sembol (THYAO.IS)
+#            Sinif/sembol ise ve o pozisyon tutuluyorsa "portfoyunde" isaretlenir.
+#   etki   : yuksek | orta | dusuk
+#   kaynak : URL (dogrulama icin)
+#
+# Takvim `kapsama_uyari_gun` sonrasini kapsamazsa brifinge "takvimi guncelle"
+# uyarisi duser - bos takvim "bu hafta olay yok" diye okunmasin.
+#
+# Bakim kaynaklari:
+#   PPK      : tcmb.gov.tr -> Para Politikasi -> PPK -> 2026
+#   TUFE     : tuik.gov.tr/Kurumsal/Veri_Takvimi
+#   FOMC     : federalreserve.gov/monetarypolicy/fomccalendars.htm
+#   Bilanco  : kap.org.tr (sirket bildirimleri)
+
+pencere_gun: 7
+kapsama_uyari_gun: 21
+
+olaylar:
+  - tarih: 2026-10-05
+    saat: "10:00"
+    olay: "TUFE (Eylul) aciklamasi"
+    kapsam: makro
+    etki: yuksek
+    kaynak: https://www.birgun.net/haber/2026-eylul-ayi-enflasyon-verileri-ne-zaman-aciklanacak-tuik-eylul-ayi-enflasyon-beklentisi-ve-anketleri-736923
+
+  - tarih: 2026-10-22
+    saat: "14:00"
+    olay: "TCMB PPK faiz karari"
+    kapsam: makro
+    etki: yuksek
+    kaynak: https://www.tcmb.gov.tr/wps/wcm/connect/TR/TCMB+TR/Main+Menu/Temel+Faaliyetler/Para+Politikasi/PPK/2026
+
+  - tarih: 2026-10-28
+    saat: "21:00"
+    olay: "FOMC faiz karari"
+    kapsam: makro
+    etki: yuksek
+    kaynak: https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm
+
+  - tarih: 2026-11-12
+    olay: "TCMB Enflasyon Raporu"
+    kapsam: makro
+    etki: orta
+    kaynak: https://www.tcmb.gov.tr/wps/wcm/connect/TR/TCMB+TR/Main+Menu/Temel+Faaliyetler/Para+Politikasi/PPK/2026
+
+  # ABD kis saatine gecti (1 Kasim): 14:00 ET = 22:00 TR.
+  - tarih: 2026-12-09
+    saat: "22:00"
+    olay: "FOMC faiz karari (projeksiyonlu)"
+    kapsam: makro
+    etki: yuksek
+    kaynak: https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm
+
+  - tarih: 2026-12-10
+    saat: "14:00"
+    olay: "TCMB PPK faiz karari"
+    kapsam: makro
+    etki: yuksek
+    kaynak: https://www.tcmb.gov.tr/wps/wcm/connect/TR/TCMB+TR/Main+Menu/Temel+Faaliyetler/Para+Politikasi/PPK/2026

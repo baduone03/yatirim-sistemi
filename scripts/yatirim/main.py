@@ -26,6 +26,7 @@ from config import (  # noqa: E402
     yapilandirmayi_oku,
 )
 from fetch import fiyatlari_getir, maliyet_modelini_coz  # noqa: E402
+from katalizor import takvimi_oku  # noqa: E402
 from kiyas import simulasyon_kiyaslari  # noqa: E402
 from kurumsal_olay import bilinen_olay_anahtarlari, olaylari_oku  # noqa: E402
 from ledger import durumu_hesapla, islemleri_oku  # noqa: E402
@@ -86,6 +87,7 @@ SIM_DIZINI = PROJE_DIZINI / "simulasyon"
 SIM_DEFTERI = SIM_DIZINI / "islemler.yaml"
 SIM_OLAY_DEFTERI = SIM_DIZINI / "kurumsal-olaylar.yaml"
 SIM_RAPOR_DIZINI = SIM_DIZINI / "raporlar"
+KATALIZOR_DOSYASI = PROJE_DIZINI / "katalizorler.yaml"
 
 
 def _sistem_ozetini_guncelle(ozet: str) -> None:
@@ -379,15 +381,18 @@ def _onsozu_ekle(ozet, llm_ayarlari, ortam):
 def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
                          maliyet, ayarlar, ortam, simdi, gorev, rapor_adi,
                          duyarlilik=None, rapor_dosyasi=None,
-                         sapmalar=()) -> None:
+                         sapmalar=(), katalizor_takvimi=None) -> None:
     """Gorev tipine gore bildirim gonderir.
 
     TARAMA: yalnizca islem kararlari. Her tarama kosusunda tam ozet gondermek
     gunde 12 ayni mesaj demek - okunmaz.
     GUN_SONU / BRIFING: portfoy durumu + tum uyarilar.
     """
-    uyarilar = uyarilari_topla(fiyatlar, portfoy, karar, maliyet,
-                              yapilandirma.bayatlik, risk, duyarlilik)
+    bugun_tr = date.fromisoformat(rapor_adi)
+    uyarilar = uyarilari_topla(
+        fiyatlar, portfoy, karar, maliyet, yapilandirma.bayatlik, risk,
+        duyarlilik,
+        katalizor_takvimi.kapsama_uyarisi(bugun_tr) if katalizor_takvimi else None)
     giden = _islem_onerileri(karar, fiyatlar, portfoy, risk, yapilandirma,
                              maliyet, ayarlar, ortam, simdi)
     giden += _sinif_onerileri(karar, sapmalar, fiyatlar, portfoy, yapilandirma,
@@ -429,6 +434,10 @@ def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
         baslangic_try=taban,
         kiyaslar=simulasyon_kiyaslari(yapilandirma, fiyatlar, portfoy, durum,
                                       maliyet, gun),
+        katalizorler=(katalizor_takvimi.yaklasanlar(bugun_tr)
+                      if katalizor_takvimi else []),
+        tutulanlar=frozenset({p.sembol for p in portfoy.pozisyonlar}
+                             | {p.sinif for p in portfoy.pozisyonlar}),
     )
     ozet = _onsozu_ekle(ozet, yapilandirma.llm, ortam)
     sonuc = gonder_gun_sonu(ozet, ayarlar, ortam, simdi, gun=rapor_adi)
@@ -450,6 +459,9 @@ def main() -> int:
     if not argumanlar.sim:
         sablonu_reddet(yapilandirma)
     olaylar = olaylari_oku(SIM_OLAY_DEFTERI)
+    katalizor_takvimi = takvimi_oku(
+        KATALIZOR_DOSYASI, set(yapilandirma.varliklar),
+        {v.sinif for v in yapilandirma.varliklar.values()})
     ortam = env_oku()
 
     # Bildirim politikasi ve takvim. Gorev tipi saate gore belirlenir: TEK
@@ -561,7 +573,8 @@ def main() -> int:
         rapor_dosyasi = rapor_dizini / f"{ozet_gunu}.md"
         rapor_dosyasi.write_text(
             rapor_olustur(yapilandirma, fiyatlar, portfoy, sapmalar, risk, karar,
-                          durum, maliyet, duyarlilik),
+                          durum, maliyet, duyarlilik, katalizor_takvimi,
+                          date.fromisoformat(ozet_gunu)),
             encoding="utf-8",
         )
         if not durum:
@@ -584,7 +597,7 @@ def main() -> int:
             _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar,
                                  durum, maliyet, bildirim_ayarlari, ortam,
                                  simdi, gorev, ozet_gunu, duyarlilik,
-                                 rapor_dosyasi, sapmalar)
+                                 rapor_dosyasi, sapmalar, katalizor_takvimi)
         except TelegramHatasi as hata:
             # Rapor diske yazildi ve GECERLI - kaybolmadi.
             # Yine de exit 1 doneriyoruz: bu sistemin cikti kanali Telegram,

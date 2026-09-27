@@ -633,7 +633,8 @@ maliyet:
         # kaynak SUPHELI sayilir - arada faiz karari gecmis OLABILIR, yani
         # sayi gecikmis degil YANLIS olabilir. Takvim yilda ~8 toplanti:
         # tcmb.gov.tr -> Para Politikasi -> PPK Toplanti Takvimi
-        sonraki_gozden_gecirme: "2026-09-10"
+        # 2026-09-10 PPK: %37 sabit (6. toplanti ust uste). Sonraki: 22 Ekim.
+        sonraki_gozden_gecirme: "2026-10-22"
 
 # Nakit modellemesi.
 # Yatirilmamis TL sifir getiriyle DURMAZ; duruyormus gibi modellersen sistem

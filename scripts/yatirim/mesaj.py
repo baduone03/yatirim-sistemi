@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from haber_analiz import YUKSEK
+from katalizor import gun_etiketi
 from portfolio import Portfoy
 
 
@@ -254,6 +255,9 @@ class GunSonuOzeti:
     onsoz: str = ""
     # kiyas.KiyasSatiri listesi, degere gore sirali. Bossa satir DUSER.
     kiyaslar: list = field(default_factory=list)
+    # katalizor.Katalizor listesi (yaklasanlar) + tutulan sembol/siniflar.
+    katalizorler: list = field(default_factory=list)
+    tutulanlar: frozenset = frozenset()
 
 
 AYLAR = ("Ocak", "Subat", "Mart", "Nisan", "Mayis", "Haziran", "Temmuz",
@@ -383,6 +387,24 @@ def _kiyas_satiri(ozet: GunSonuOzeti) -> str:
             f"(tek basina konsaydi)")
 
 
+MESAJDA_AZAMI_KATALIZOR = 3     # gerisi ekli raporda
+
+
+def _katalizor_satiri(ozet: GunSonuOzeti) -> str:
+    """Yaklasan bilinen olaylar, tarih sirasiyla. Pozisyona dogrudan dokunan
+    olay 👉 ile isaretlenir. Olay yoksa satir DUSER."""
+    if not ozet.katalizorler:
+        return ""
+    parcalar = []
+    for k in ozet.katalizorler[:MESAJDA_AZAMI_KATALIZOR]:
+        saat = f" {k.saat}" if k.saat else ""
+        isaret = "👉 " if k.kapsam in ozet.tutulanlar else ""
+        parcalar.append(f"{isaret}{gun_etiketi(k.tarih, AYLAR)}{saat} {kacis(k.olay)}")
+    fazla = len(ozet.katalizorler) - MESAJDA_AZAMI_KATALIZOR
+    return ("📅 Yaklasan: " + " · ".join(parcalar)
+            + (f" (+{fazla} raporda)" if fazla > 0 else ""))
+
+
 def _islem_satiri(ozet: GunSonuOzeti) -> str:
     """Islem durumu VE sebebi. Sessiz sistem ile frenlenmis sistem ayni
     satiri uretirse okuyan calisan sistemle donmus sistemi ayirt edemez."""
@@ -444,7 +466,8 @@ def gun_sonu_mesaji(ozet: GunSonuOzeti) -> str:
     satirlar = [f"<b>{ozet.baslik} — {_gun_adi(ozet.veri_zamani)}</b>", "",
                 _durum_satiri(ozet), _gun_satiri(ozet)]
     satirlar += [s for s in (_kur_satiri(ozet), _kazanc_satiri(ozet),
-                             _kiyas_satiri(ozet), _islem_satiri(ozet)) if s]
+                             _kiyas_satiri(ozet), _islem_satiri(ozet),
+                             _katalizor_satiri(ozet)) if s]
     if ozet.onsoz:
         # Kaynagi isaretlenir: ustteki her sayi olculmustur, bu satir ise bir
         # modelin AYNI MESAJI okuyup yazdigi yorumdur.
@@ -475,7 +498,8 @@ def uyari_mesaji(tip: str, mesaj: str) -> str:
 
 
 def uyarilari_topla(fiyatlar, portfoy, karar, maliyet, bayatlik,
-                    risk=None, duyarlilik=None) -> list[str]:
+                    risk=None, duyarlilik=None,
+                    takvim_uyarisi: str | None = None) -> list[str]:
     """Gun sonu ozetine girecek TUM veri/model uyarilari.
 
     Tek yerde toplanmasi sart: eskiden uyari bloklari mesaj sablonunun icine
@@ -578,6 +602,9 @@ def uyarilari_topla(fiyatlar, portfoy, karar, maliyet, bayatlik,
     for sembol, gecikme in sorted(bayatlar.items()):
         uyarilar.append(f"Bayat fiyat {sembol}: {gecikme} islem gunu "
                         "guncellenmedi.")
+    # En sonda: veri bozuklugu degil, bakim hatirlatmasi.
+    if takvim_uyarisi:
+        uyarilar.append(takvim_uyarisi)
     return uyarilar
 
 

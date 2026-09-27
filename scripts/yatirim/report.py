@@ -11,6 +11,7 @@ from fetch import FiyatVerisi
 from bicim import oran as _oran
 from bicim import tl as _tl
 from bicim import yuzde as _yuzde
+from katalizor import gun_etiketi
 from kiyas import simulasyon_kiyaslari
 from maliyet import MaliyetDagilimi, MaliyetModeli, donem_orani
 from portfolio import Portfoy, SinifSapmasi
@@ -443,6 +444,37 @@ def _kiyas_bolumu(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
     return satirlar
 
 
+AYLAR_KISA = ("Oca", "Sub", "Mar", "Nis", "May", "Haz", "Tem", "Agu", "Eyl",
+              "Eki", "Kas", "Ara")
+
+
+def katalizor_bolumu(takvim, portfoy: Portfoy, bugun: date) -> list[str]:
+    """Yaklasan bilinen olaylar. Takvim yoksa bolum yok; takvim bayatladiysa
+    bolum uyariyla gelir - bos tablo 'olay yok' diye okunmasin."""
+    if takvim is None or not takvim.olaylar:
+        return []
+    yaklasan = takvim.yaklasanlar(bugun)
+    semboller = {p.sembol for p in portfoy.pozisyonlar}
+    siniflar = {p.sinif for p in portfoy.pozisyonlar}
+    satirlar = [f"## Yaklasan olaylar ({takvim.pencere_gun} gun)", ""]
+    uyari = takvim.kapsama_uyarisi(bugun)
+    if uyari:
+        satirlar += [f"> ⚠️ {uyari}", ""]
+    if not yaklasan:
+        return satirlar + ["Takvimde bu aralikta olay yok.", ""]
+    satirlar += ["| Gun | Saat | Olay | Etki | Portfoyune dokunuyor mu |",
+                 "|---|---|---|---|---|"]
+    for k in yaklasan:
+        dokunur = ("👉 evet" if k.ilgili_mi(semboller, siniflar)
+                   else "genel (makro)" if k.kapsam == "makro" else "hayir")
+        olay = f"[{k.olay}]({k.kaynak})" if k.kaynak else k.olay
+        satirlar.append(f"| {gun_etiketi(k.tarih, AYLAR_KISA)} | {k.saat or '-'} "
+                        f"| {olay} | {k.etki} | {dokunur} |")
+    satirlar += ["", "> Takvim tahmin degil: olayin fiyati NE YONDE oynatacagini "
+                 "soylemez, yalnizca oynatabilecegi gunu gosterir.", ""]
+    return satirlar
+
+
 def _islem_gecmisi_bolumu(durum) -> list[str]:
     satirlar = [
         "## Islem gecmisi",
@@ -496,7 +528,8 @@ def rapor_olustur(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
                   portfoy: Portfoy, sapmalar: list[SinifSapmasi],
                   risk: RiskRaporu, karar: Karar, durum=None,
                   maliyet: MaliyetModeli | None = None,
-                  duyarlilik=None) -> str:
+                  duyarlilik=None, katalizor_takvimi=None,
+                  bugun_tr: date | None = None) -> str:
     bugun = date.today().isoformat()
     varlik_adlari = {s: v.ad for s, v in yapilandirma.varliklar.items()}
     baslik = "Simulasyon Raporu" if durum else "Yatirim Raporu"
@@ -516,6 +549,8 @@ def rapor_olustur(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
                                   maliyet, gun)
     satirlar += _ozet_bolumu(portfoy, risk, fiyatlar, bool(durum), maliyet,
                              donem_getirisi, gun)
+    satirlar += katalizor_bolumu(katalizor_takvimi, portfoy,
+                                 bugun_tr or date.today())
     satirlar += _pozisyon_bolumu(portfoy)
     satirlar += _dagilim_bolumu(sapmalar, portfoy.toplam_deger_try,
                                 yapilandirma.esikler.rebalancing_sapma,
