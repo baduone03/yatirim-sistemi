@@ -1,0 +1,27 @@
+# MAKINE URETIR - elle duzenleme.
+# Sessiz saatte veya hiz siniri asilirken biriken bildirimler.
+# Silinirse biriken bildirimler kaybolur, sistem durmaz.
+bekleyenler:
+- tip: gunsonu
+  anahtar: gunsonu:2026-09-27
+  metin: '<b>🌙 Gun sonu — 27 Eylul</b>
+
+
+    💰 <b>21.504 TL</b> (baslangictan +7.5%, +1.504 TL)
+
+    📊 Son 24 saat: -0.1% (yatay)
+
+    ✅ Mevduattan IYI: portfoy +7.5%, mevduat +4.6% (45 gunde)
+
+    🏁 Portfoy 2./6: en iyisi Bitcoin +36.0% (tek basina konsaydi)
+
+    ⏸️ Islem yok: portfoy hedef dagilima yakin
+
+
+    <b>⚠️ Dikkat (1)</b>
+
+    • Mevduat faizi verisi 9 GUNLUK, kiyas eski orana dayaniyor
+
+
+    <i>Kagit para, gercek islem yok. Ayrinti ekli raporda.</i>'
+  olusma: '2026-09-27T22:59:07+00:00'
