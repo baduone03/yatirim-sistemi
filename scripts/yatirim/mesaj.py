@@ -252,6 +252,8 @@ class GunSonuOzeti:
     # Model uretimi uc cumlelik giris. Bos ise mesaj eskisi gibi baslar -
     # ozet bir kolayliktir, mesajin gecerliligi ona bagli DEGIL.
     onsoz: str = ""
+    # kiyas.KiyasSatiri listesi, degere gore sirali. Bossa satir DUSER.
+    kiyaslar: list = field(default_factory=list)
 
 
 AYLAR = ("Ocak", "Subat", "Mart", "Nisan", "Mayis", "Haziran", "Temmuz",
@@ -361,6 +363,26 @@ def _kazanc_satiri(ozet: GunSonuOzeti) -> str:
     return f"🔻 Mevduattan KOTU: {kiyas}"
 
 
+def _kiyas_satiri(ozet: GunSonuOzeti) -> str:
+    """Ayni sermaye tek bir yere konsaydi: lider ve portfoyun sirasi.
+
+    Tum tablo raporda; telefonda sorulan tek sey "baska yerde daha mi iyi
+    olurdu". Olculemeyen secenek siraya girmez - sayisi uydurulmaz.
+    """
+    olculen = [k for k in ozet.kiyaslar if k.deger_try is not None]
+    sira = next((i for i, k in enumerate(olculen, 1) if k.portfoy), None)
+    if sira is None or len(olculen) < 2:
+        return ""
+    if sira == 1:
+        ikinci = olculen[1]
+        return (f"🏁 Alternatiflerin ONUNDE: portfoy 1./{len(olculen)}, "
+                f"ikinci {_ad(ikinci.ad, ozet.adlar)} {ikinci.getiri * 100:+.1f}%")
+    lider = olculen[0]
+    return (f"🏁 Portfoy {sira}./{len(olculen)}: en iyisi "
+            f"{_ad(lider.ad, ozet.adlar)} {lider.getiri * 100:+.1f}% "
+            f"(tek basina konsaydi)")
+
+
 def _islem_satiri(ozet: GunSonuOzeti) -> str:
     """Islem durumu VE sebebi. Sessiz sistem ile frenlenmis sistem ayni
     satiri uretirse okuyan calisan sistemle donmus sistemi ayirt edemez."""
@@ -422,7 +444,7 @@ def gun_sonu_mesaji(ozet: GunSonuOzeti) -> str:
     satirlar = [f"<b>{ozet.baslik} — {_gun_adi(ozet.veri_zamani)}</b>", "",
                 _durum_satiri(ozet), _gun_satiri(ozet)]
     satirlar += [s for s in (_kur_satiri(ozet), _kazanc_satiri(ozet),
-                             _islem_satiri(ozet)) if s]
+                             _kiyas_satiri(ozet), _islem_satiri(ozet)) if s]
     if ozet.onsoz:
         # Kaynagi isaretlenir: ustteki her sayi olculmustur, bu satir ise bir
         # modelin AYNI MESAJI okuyup yazdigi yorumdur.

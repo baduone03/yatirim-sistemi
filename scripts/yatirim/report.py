@@ -11,7 +11,7 @@ from fetch import FiyatVerisi
 from bicim import oran as _oran
 from bicim import tl as _tl
 from bicim import yuzde as _yuzde
-from kiyas import kiyaslari_hesapla
+from kiyas import simulasyon_kiyaslari
 from maliyet import MaliyetDagilimi, MaliyetModeli, donem_orani
 from portfolio import Portfoy, SinifSapmasi
 from rapor_maliyet import (
@@ -409,14 +409,10 @@ def _kiyas_bolumu(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
                   portfoy: Portfoy, durum, maliyet: MaliyetModeli,
                   gun: int) -> list[str]:
     """Ayni sermaye baslangicta tek bir yere konsaydi bugun ne olurdu."""
-    if not yapilandirma.kiyas or not durum.baslangic_tarihi:
+    kiyaslar = simulasyon_kiyaslari(yapilandirma, fiyatlar, portfoy, durum,
+                                    maliyet, gun)
+    if not kiyaslar:
         return []
-    kiyaslar = kiyaslari_hesapla(
-        durum.baslangic_nakit_try, durum.baslangic_tarihi,
-        portfoy.toplam_deger_try, yapilandirma.kiyas,
-        {s: v.ad for s, v in yapilandirma.varliklar.items()},
-        fiyatlar.try_gecmis, fiyatlar.son_fiyatlar, durum.komisyon_orani,
-        maliyet.tl_risksiz_yillik, gun)
     satirlar = [
         "## Alternatif kiyasi",
         "",

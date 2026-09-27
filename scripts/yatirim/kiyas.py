@@ -84,3 +84,17 @@ def kiyaslari_hesapla(sermaye: float, baslangic: str, portfoy_degeri: float,
     olculen = sorted((s for s in satirlar if s.deger_try is not None),
                      key=lambda s: s.deger_try, reverse=True)
     return olculen + [s for s in satirlar if s.deger_try is None]
+
+
+def simulasyon_kiyaslari(yapilandirma, fiyatlar, portfoy, durum, maliyet,
+                         gun: int) -> list[KiyasSatiri]:
+    """Rapor ve Telegram AYNI listeyi kullanir - iki ayri cagri iki kanalda
+    farkli siralama uretebilirdi. Kiyas tanimsizsa veya sim degilse bos."""
+    if durum is None or not yapilandirma.kiyas or not durum.baslangic_tarihi:
+        return []
+    return kiyaslari_hesapla(
+        durum.baslangic_nakit_try, durum.baslangic_tarihi,
+        portfoy.toplam_deger_try, yapilandirma.kiyas,
+        {s: v.ad for s, v in yapilandirma.varliklar.items()},
+        fiyatlar.try_gecmis, fiyatlar.son_fiyatlar, durum.komisyon_orani,
+        maliyet.tl_risksiz_yillik, gun)

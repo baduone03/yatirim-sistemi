@@ -26,6 +26,7 @@ from config import (  # noqa: E402
     yapilandirmayi_oku,
 )
 from fetch import fiyatlari_getir, maliyet_modelini_coz  # noqa: E402
+from kiyas import simulasyon_kiyaslari  # noqa: E402
 from kurumsal_olay import bilinen_olay_anahtarlari, olaylari_oku  # noqa: E402
 from ledger import durumu_hesapla, islemleri_oku  # noqa: E402
 from maliyet import donem_orani  # noqa: E402
@@ -426,6 +427,8 @@ def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
         karar=karar,
         adlar={v.sembol: v.ad for v in yapilandirma.varliklar.values()},
         baslangic_try=taban,
+        kiyaslar=simulasyon_kiyaslari(yapilandirma, fiyatlar, portfoy, durum,
+                                      maliyet, gun),
     )
     ozet = _onsozu_ekle(ozet, yapilandirma.llm, ortam)
     sonuc = gonder_gun_sonu(ozet, ayarlar, ortam, simdi, gun=rapor_adi)
