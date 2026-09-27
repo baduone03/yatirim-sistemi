@@ -47,6 +47,12 @@ Kural: **esik tetiklensin veya tetiklenmesin fiyat kaydedilir.** Eski Yildiz
 Pazar botu vadesi dolan 377 sinyalin `outcome_price` alanini NULL biraktigi
 icin verisinin %88'i olcum icin kullanilamaz hale gelmisti.
 
+2026-09-28'den itibaren her karar bir **bozan kosul** da tasir: "ne olursa
+yanildim" (or: takas farki %-5'in altina inerse, BIST bacaginin
+volatilitesi %28'i asarsa). Karar aninda yazilir, her
+kontrol gununde makine denetler, ilk tetiklenme kalicidir. Alan tanimi
+`kararlar.yaml` basliginda.
+
 Sonuclar: [[00-karar-sonuclari]] · Ham olcum: `kararlar-olcum.yaml`
 
 Olcum gecmis fiyat serisinden yapilir, "bugun" fiyatindan degil - sistem

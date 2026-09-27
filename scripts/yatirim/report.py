@@ -11,6 +11,7 @@ from fetch import FiyatVerisi
 from bicim import oran as _oran
 from bicim import tl as _tl
 from bicim import yuzde as _yuzde
+from kiyas import simulasyon_kiyaslari
 from maliyet import MaliyetDagilimi, MaliyetModeli, donem_orani
 from portfolio import Portfoy, SinifSapmasi
 from rapor_maliyet import (
@@ -404,6 +405,44 @@ def _sim_bolumu(durum, portfoy: Portfoy) -> list[str]:
     return satirlar
 
 
+def _kiyas_bolumu(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
+                  portfoy: Portfoy, durum, maliyet: MaliyetModeli,
+                  gun: int) -> list[str]:
+    """Ayni sermaye baslangicta tek bir yere konsaydi bugun ne olurdu."""
+    kiyaslar = simulasyon_kiyaslari(yapilandirma, fiyatlar, portfoy, durum,
+                                    maliyet, gun)
+    if not kiyaslar:
+        return []
+    satirlar = [
+        "## Alternatif kiyasi",
+        "",
+        f"{_tl(durum.baslangic_nakit_try)} {durum.baslangic_tarihi} tarihinde "
+        f"tek bir yere konsaydi bugun ({gun} gun sonra):",
+        "",
+        "| Sira | Nereye | Bugunku deger | Getiri | Not |",
+        "|---:|---|---:|---:|---|",
+    ]
+    sira = 0
+    for satir in kiyaslar:
+        if satir.deger_try is None:
+            satirlar.append(f"| - | {satir.ad} | - | - | {satir.not_} |")
+            continue
+        sira += 1
+        ad = f"**{satir.ad}**" if satir.portfoy else satir.ad
+        satirlar.append(
+            f"| {sira} | {ad} | {_tl(satir.deger_try)} | "
+            f"{_yuzde(satir.getiri)} | {satir.not_} |")
+    satirlar += [
+        "",
+        "> Tek seferlik alim, baslangic gununun kapanisindan, alis komisyonu "
+        "dusulerek. Kisa pencerede siralama piyasa rejimini olcer, stratejiyi "
+        "degil: tek varlik bu donemde onde olabilir ama riski de tek basina "
+        "tasir. Anlamli karsilastirma icin en az birkac aylik veri gerekir.",
+        "",
+    ]
+    return satirlar
+
+
 def _islem_gecmisi_bolumu(durum) -> list[str]:
     satirlar = [
         "## Islem gecmisi",
@@ -473,6 +512,8 @@ def rapor_olustur(yapilandirma: Yapilandirma, fiyatlar: FiyatVerisi,
     satirlar += eksik_maliyet_bolumu(maliyet)
     if durum:
         satirlar += _sim_bolumu(durum, portfoy)
+        satirlar += _kiyas_bolumu(yapilandirma, fiyatlar, portfoy, durum,
+                                  maliyet, gun)
     satirlar += _ozet_bolumu(portfoy, risk, fiyatlar, bool(durum), maliyet,
                              donem_getirisi, gun)
     satirlar += _pozisyon_bolumu(portfoy)

@@ -377,6 +377,12 @@ A maddeleri kok `CLAUDE.md`'dedir ve buraya YAZILMAZ.
   dondugu icin `{v.sembol: ... for v in varliklar}` govdesi hic calismadi ve `AttributeError`
   uc cagri noktasinda birden uretime kadar gitti. Sahte veri uretimin **tipini** tasimali,
   yalnizca sekilini degil - bos liste/dict ile kurulan sahte, o kod yolunu HIC test etmez.
+- **bozan_kosul eksik veride "tutuyor" DEMEZ** (B, 2026-09-27): `takas_farki` rapor tablosunda
+  eksik sembolu 0 sayar; kosul denetimi sayarsa veri gelmeyen gun sessizce "tetiklenmedi" olur.
+  Ilk tetiklenme kalici, 2026-09-28 oncesi kararlar muaf (sonradan yazilan kosul bahanedir).
+  Risk olcutleri (`volatilite:`, `risk_katkisi:`) o gunun pozisyonlari + `gecmis_gun` penceresiyle
+  `riski_hesapla`'dan gelir ve `kosul_degeri` olarak SAKLANIR (--rapor fiyat cekmez). Sinif bacagi
+  nakitsiz olculur; 0. gun (karar) da olculur. Bkz. BozanKosulTesti, RiskKosuluTesti.
 - **ongoru defteri karar yoluna BAGLANMAZ** (B, 2026-08-23): `tahmin.py` sinyal uretmez;
   `main.py`/`sinyal.py` onu import etmez ve Actions'ta AYRI adim olarak kosar. Sebep: bir
   ongoruye dayanarak pozisyon acmak, kalibre oldugu kanitlanmamis bir modele para baglamaktir.
