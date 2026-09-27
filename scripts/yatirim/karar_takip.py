@@ -40,6 +40,81 @@ DEFTER_DOSYASI = SIM_DIZINI / "islemler.yaml"
 
 KONTROL_GUNLERI = (5, 10, 15, 20, 25, 30)
 
+# Bu tarihten itibaren her karar `bozan_kosul` tasimak ZORUNDA. Oncekiler
+# muaf: kosulu sonucu gordukten sonra yazmak tezi sonradan uydurmaktir.
+BOZAN_KOSUL_ZORUNLU = date(2026, 9, 28)
+
+PORTFOY_GETIRISI = "portfoy_getirisi"
+TAKAS_FARKI = "takas_farki"
+SEMBOL_GETIRISI = "getiri:"          # getiri:TUPRS.IS
+ALTI, USTU = "alti", "ustu"
+
+
+@dataclass(frozen=True)
+class BozanKosul:
+    """Karari YANLIS cikaracak olculebilir durum. Karar ANINDA yazilir.
+
+    Beklenti "ne olmali" der; bozan kosul "ne olursa yanildim" der. Beklenti
+    serbest metindir ve tutup tutmadigina okuyan karar verir - bu yuzden her
+    sonuc beklentiyi "aslinda tuttu" diye okumaya musaittir. Bozan kosul
+    makine tarafindan her kontrol gununde denetlenir; yoruma yer birakmaz.
+    """
+
+    olcut: str
+    yon: str
+    esik: float
+    aciklama: str = ""
+
+    def deger(self, karar: "Karar", olcum: "Olcum") -> float | None:
+        """Olcutun o olcumdeki degeri. Veri yoksa None - 'tutuyor' SAYILMAZ."""
+        if self.olcut == PORTFOY_GETIRISI:
+            return olcum.portfoy_getirisi
+        if self.olcut == TAKAS_FARKI:
+            semboller = [*karar.alinan, *karar.satilan]
+            if not all(s in olcum.getiriler for s in semboller):
+                return None
+            return takas_farki(karar, olcum)
+        return olcum.getiriler.get(self.olcut[len(SEMBOL_GETIRISI):])
+
+    def tetiklendi(self, deger: float) -> bool:
+        return deger < self.esik if self.yon == ALTI else deger > self.esik
+
+    def metin(self) -> str:
+        esik = f"{self.esik * 100:+.1f}%"
+        return (f"{self.olcut} {esik} {'altina inerse' if self.yon == ALTI else 'ustune cikarsa'}"
+                + (f" ({self.aciklama})" if self.aciklama else ""))
+
+
+def _bozan_kosulu_ayristir(ham: dict | None, karar_id: str, alinan: list[str],
+                           satilan: list[str]) -> BozanKosul | None:
+    if ham is None:
+        return None
+    kosul = BozanKosul(
+        olcut=str(ham.get("olcut", "")), yon=str(ham.get("yon", "")),
+        esik=float(ham["esik"]) if "esik" in ham else float("nan"),
+        aciklama=" ".join(str(ham.get("aciklama", "")).split()))
+    # Yazim hatasi okuma aninda patlar: sessizce "olculemedi" kalan bir kosul
+    # 30 gun boyunca hicbir seyi denetlemez ve kimse fark etmez.
+    if kosul.yon not in (ALTI, USTU):
+        raise ValueError(f"{karar_id}: bozan_kosul.yon 'alti' veya 'ustu' olmali")
+    if kosul.esik != kosul.esik:
+        raise ValueError(f"{karar_id}: bozan_kosul.esik eksik (kesir: -0.05 = %-5)")
+    if abs(kosul.esik) >= 1:
+        raise ValueError(f"{karar_id}: bozan_kosul.esik KESIR olmali, {kosul.esik} geldi "
+                         "(-5 degil -0.05)")
+    if kosul.olcut == TAKAS_FARKI and not (alinan and satilan):
+        raise ValueError(f"{karar_id}: takas_farki icin alinan VE satilan dolu olmali")
+    if kosul.olcut.startswith(SEMBOL_GETIRISI):
+        sembol = kosul.olcut[len(SEMBOL_GETIRISI):]
+        if sembol not in (*alinan, *satilan):
+            raise ValueError(f"{karar_id}: {kosul.olcut} - sembol alinan/satilan "
+                             "listesinde olmali, yoksa fiyati olculmez")
+    elif kosul.olcut not in (PORTFOY_GETIRISI, TAKAS_FARKI):
+        raise ValueError(
+            f"{karar_id}: bozan_kosul.olcut gecersiz: '{kosul.olcut}'. Gecerli: "
+            f"{PORTFOY_GETIRISI}, {TAKAS_FARKI}, {SEMBOL_GETIRISI}<SEMBOL>")
+    return kosul
+
 
 @dataclass(frozen=True)
 class Karar:
@@ -50,6 +125,7 @@ class Karar:
     beklenti: str
     satilan: list[str]
     alinan: list[str]
+    bozan_kosul: BozanKosul | None = None
 
     @property
     def tarih_gun(self) -> date:
@@ -71,18 +147,58 @@ def kararlari_oku(dosya: Path = KARARLAR_DOSYASI) -> list[Karar]:
     if not dosya.exists():
         return []
     ham = yaml.safe_load(dosya.read_text(encoding="utf-8")) or {}
-    return [
-        Karar(
-            id=str(k["id"]),
+    kararlar = []
+    for k in ham.get("kararlar") or []:
+        karar_id = str(k["id"])
+        satilan = list(k.get("satilan") or [])
+        alinan = list(k.get("alinan") or [])
+        karar = Karar(
+            id=karar_id,
             tarih=str(k["tarih"]),
             tip=str(k.get("tip", "")),
             ozet=str(k.get("ozet", "")),
             beklenti=" ".join(str(k.get("beklenti", "")).split()),
-            satilan=list(k.get("satilan") or []),
-            alinan=list(k.get("alinan") or []),
+            satilan=satilan,
+            alinan=alinan,
+            bozan_kosul=_bozan_kosulu_ayristir(k.get("bozan_kosul"), karar_id,
+                                               alinan, satilan),
         )
-        for k in (ham.get("kararlar") or [])
-    ]
+        if karar.bozan_kosul is None and karar.tarih_gun >= BOZAN_KOSUL_ZORUNLU:
+            raise ValueError(
+                f"{karar_id}: bozan_kosul zorunlu ({BOZAN_KOSUL_ZORUNLU} sonrasi "
+                "kararlar). 'Ne olursa yanildim' sorusu karar ANINDA cevaplanir.")
+        kararlar.append(karar)
+    return kararlar
+
+
+def takas_farki(karar: Karar, olcum: "Olcum") -> float:
+    """Alinanin getirisi - satilanin getirisi. Rapor ve bozan kosul AYNI formul."""
+    alinan = sum(olcum.getiriler.get(s, 0.0) for s in karar.alinan)
+    satilan = sum(olcum.getiriler.get(s, 0.0) for s in karar.satilan)
+    return alinan - satilan
+
+
+def kosul_durumu(karar: Karar, olcumler: list["Olcum"]) -> str:
+    """Bozan kosulun hukmu. Ilk tetiklenme KALICIDIR: sonradan toparlanmak
+    tezi geri getirmez - yanildigin an kayitlidir."""
+    kosul = karar.bozan_kosul
+    if kosul is None:
+        return ""
+    olculemeyen = []
+    for olcum in sorted(olcumler, key=lambda o: o.gun):
+        deger = kosul.deger(karar, olcum)
+        if deger is None:
+            olculemeyen.append(olcum.gun)
+        elif kosul.tetiklendi(deger):
+            return (f"**TEZ BOZULDU** - {olcum.gun}. gunde {kosul.olcut} "
+                    f"{deger * 100:+.2f}% (esik {kosul.esik * 100:+.1f}%)")
+    if not olcumler:
+        return ""
+    if len(olculemeyen) == len(olcumler):
+        return "Bozan kosul OLCULEMEDI - fiyat verisi yok, tutuyor SAYILMAZ"
+    ek = (f"; olculemeyen gun: {', '.join(map(str, olculemeyen))}"
+          if olculemeyen else "")
+    return f"Bozan kosul tetiklenmedi (son olcum {max(o.gun for o in olcumler)}. gun{ek})"
 
 
 def olcumleri_oku(dosya: Path = OLCUMLER_DOSYASI) -> list[Olcum]:
@@ -245,6 +361,8 @@ def rapor_olustur(kararlar: list[Karar], olcumler: list[Olcum]) -> str:
             "",
             f"*Beklenti:* {karar.beklenti}",
             "",
+            *([f"*Bozan kosul:* {karar.bozan_kosul.metin()}", ""]
+              if karar.bozan_kosul else []),
             f"Karar tarihi {karar.tarih} ({gecen} gun once).",
             "",
         ]
@@ -282,7 +400,7 @@ def rapor_olustur(kararlar: list[Karar], olcumler: list[Olcum]) -> str:
                 alinan_getiri = sum(olcum.getiriler.get(s, 0.0) for s in karar.alinan)
                 hucreler += [
                     _yuzde(satilan_getiri), _yuzde(alinan_getiri),
-                    f"**{_yuzde(alinan_getiri - satilan_getiri)}**",
+                    f"**{_yuzde(takas_farki(karar, olcum))}**",
                 ]
             satirlar.append("| " + " | ".join(hucreler) + " |")
 
@@ -294,6 +412,10 @@ def rapor_olustur(kararlar: list[Karar], olcumler: list[Olcum]) -> str:
                 "verildiyse bu satir tek basina yeterli degil.",
                 "",
             ]
+
+        durum = kosul_durumu(karar, kendi)
+        if durum:
+            satirlar += [durum, ""]
 
         kalan = [g for g in KONTROL_GUNLERI if g > kendi[-1].gun]
         if kalan:

@@ -17,7 +17,11 @@ from config import Ayarlar, Esikler, Varlik, Yapilandirma
 from fetch import FiyatVerisi
 from karar_takip import (
     KONTROL_GUNLERI,
+    BozanKosul,
     Karar,
+    Olcum,
+    kosul_durumu,
+    rapor_olustur,
     _fiyat_o_gun,
     _portfoy_degeri,
     eksik_olcumleri_tamamla,
@@ -185,3 +189,93 @@ class GercekKararDosyasiTesti(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+def _olcum(gun: int, portfoy: float = 0.0, getiriler=None) -> Olcum:
+    return Olcum(karar_id="k", gun=gun, olcum_tarihi="2026-10-01",
+                 portfoy_degeri=20_000.0, portfoy_getirisi=portfoy,
+                 fiyatlar={}, getiriler=getiriler or {})
+
+
+class BozanKosulTesti(unittest.TestCase):
+    """bozan_kosul: yazim hatasi okumada patlar, veri yoksa 'tutuyor' denmez,
+    ilk tetiklenme kalicidir."""
+
+    def _yaml(self, kosul: str, tarih: str = "2026-10-01",
+              alinan: str = "[TUPRS.IS]", satilan: str = "[GARAN.IS]") -> Path:
+        return gecici(
+            "kararlar:\n"
+            f"  - id: k\n    tarih: {tarih}\n    tip: TAKAS\n"
+            f"    beklenti: x\n    alinan: {alinan}\n    satilan: {satilan}\n"
+            + kosul, "kararlar.yaml")
+
+    def test_yeni_kararda_zorunlu(self):
+        with self.assertRaisesRegex(ValueError, "zorunlu"):
+            kararlari_oku(self._yaml(""))
+
+    def test_eski_karar_muaf(self):
+        # Sonucu gorulmus karara sonradan kosul yazilmaz.
+        self.assertIsNone(kararlari_oku(self._yaml("", tarih="2026-08-13"))[0].bozan_kosul)
+
+    def test_gecerli_kosul_okunur(self):
+        karar = kararlari_oku(self._yaml(
+            "    bozan_kosul:\n      olcut: takas_farki\n      yon: alti\n"
+            "      esik: -0.05\n"))[0]
+        self.assertEqual(karar.bozan_kosul,
+                         BozanKosul("takas_farki", "alti", -0.05))
+
+    def test_yuzde_yazilan_esik_reddedilir(self):
+        with self.assertRaisesRegex(ValueError, "KESIR"):
+            kararlari_oku(self._yaml(
+                "    bozan_kosul:\n      olcut: portfoy_getirisi\n"
+                "      yon: alti\n      esik: -5\n"))
+
+    def test_listede_olmayan_sembol_reddedilir(self):
+        with self.assertRaisesRegex(ValueError, "alinan/satilan"):
+            kararlari_oku(self._yaml(
+                "    bozan_kosul:\n      olcut: getiri:ASELS.IS\n"
+                "      yon: alti\n      esik: -0.1\n"))
+
+    def test_gecersiz_olcut_reddedilir(self):
+        with self.assertRaisesRegex(ValueError, "olcut gecersiz"):
+            kararlari_oku(self._yaml(
+                "    bozan_kosul:\n      olcut: volatilite\n"
+                "      yon: ustu\n      esik: 0.3\n"))
+
+    def test_takassiz_kararda_takas_farki_reddedilir(self):
+        with self.assertRaisesRegex(ValueError, "alinan VE satilan"):
+            kararlari_oku(self._yaml(
+                "    bozan_kosul:\n      olcut: takas_farki\n"
+                "      yon: alti\n      esik: -0.05\n", satilan="[]"))
+
+    def _karar(self, kosul: BozanKosul) -> Karar:
+        return Karar(id="k", tarih="2026-10-01", tip="TAKAS", ozet="", beklenti="",
+                     satilan=["GARAN.IS"], alinan=["TUPRS.IS"], bozan_kosul=kosul)
+
+    def test_ilk_tetiklenme_kalici(self):
+        karar = self._karar(BozanKosul("takas_farki", "alti", -0.05))
+        olcumler = [
+            _olcum(5, getiriler={"TUPRS.IS": 0.0, "GARAN.IS": 0.02}),
+            _olcum(10, getiriler={"TUPRS.IS": -0.04, "GARAN.IS": 0.03}),  # -7%
+            _olcum(15, getiriler={"TUPRS.IS": 0.10, "GARAN.IS": 0.0}),    # toparlandi
+        ]
+        durum = kosul_durumu(karar, olcumler)
+        self.assertIn("TEZ BOZULDU", durum)
+        self.assertIn("10. gunde", durum)
+
+    def test_tetiklenmedi(self):
+        karar = self._karar(BozanKosul("portfoy_getirisi", "alti", -0.05))
+        self.assertIn("tetiklenmedi", kosul_durumu(karar, [_olcum(5, -0.01)]))
+
+    def test_eksik_veri_tutuyor_sayilmaz(self):
+        # takas_farki eksik sembolu 0 sayarsa kosul sessizce "tutuyor" derdi.
+        karar = self._karar(BozanKosul("takas_farki", "alti", -0.05))
+        durum = kosul_durumu(karar, [_olcum(5, getiriler={"TUPRS.IS": -0.2})])
+        self.assertIn("OLCULEMEDI", durum)
+
+    def test_raporda_gorunur(self):
+        karar = self._karar(BozanKosul("getiri:TUPRS.IS", "alti", -0.1, "dip"))
+        rapor = rapor_olustur([karar], [
+            Olcum("k", 5, "2026-10-06", 20_000.0, 0.0, {}, {"TUPRS.IS": -0.12})])
+        self.assertIn("*Bozan kosul:* getiri:TUPRS.IS -10.0% altina inerse (dip)", rapor)
+        self.assertIn("TEZ BOZULDU", rapor)

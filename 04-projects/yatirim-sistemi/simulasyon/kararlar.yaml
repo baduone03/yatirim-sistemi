@@ -23,6 +23,21 @@
 #
 # satilan/alinan doluysa takas basarisi = alinanin getirisi - satilanin getirisi.
 # Bos ise yalnizca portfoy duzeyinde olculur.
+#
+# bozan_kosul (2026-09-28 ve sonrasi ZORUNLU): "ne olursa yanildim".
+# Karar ANINDA yazilir; sonucu gordukten sonra yazilan kosul tez degil
+# bahanedir. Her kontrol gununde makine denetler, ilk tetiklenme KALICIDIR.
+#   olcut   : portfoy_getirisi | takas_farki | getiri:<SEMBOL>
+#             (getiri: sembolu alinan/satilan icinde olmali)
+#   yon     : alti | ustu      (deger esigin altina/ustune gecerse bozulur)
+#   esik    : KESIR, karar gununden bu yana (-0.05 = %-5)
+#   aciklama: (opsiyonel) neden bu esik
+# Ornek:
+#   bozan_kosul:
+#     olcut: takas_farki
+#     yon: alti
+#     esik: -0.05
+#     aciklama: "risk icin yapildi ama %5'ten fazla getiri kaybi bedeli asar"
 
 kararlar:
   - id: 2026-08-13-acilis
