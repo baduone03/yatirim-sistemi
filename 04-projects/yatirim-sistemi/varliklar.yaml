@@ -657,6 +657,11 @@ enflasyon:
   bayatlik_gun: 45                 # aylik seri
   yillik: 0.2369                   # TCMB, AGUSTOS 2026 = %23.69 (beklenti)
 
+# Simulasyon kiyasi: ayni 20k TL baslangicta YALNIZCA bu sembollerden birine
+# konsaydi bugun ne olurdu. Mevduat satiri otomatik eklenir (TL risksiz oran).
+# Sembol varliklar listesinde olmak ZORUNDA - fiyati oradan cekiliyor.
+kiyas: [XU100.IS, QQQ, GC=F, BTC-USD]
+
 hedef_dagilim:
   bist: 0.30
   nasdaq: 0.25

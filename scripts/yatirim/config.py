@@ -219,6 +219,7 @@ class Yapilandirma:
     maliyet: MaliyetModeli = field(default_factory=MaliyetModeli)
     bekleme: Bekleme = field(default_factory=Bekleme)
     devre_kesici: DevreKesici = field(default_factory=DevreKesici)
+    kiyas: list[str] = field(default_factory=list)   # simulasyon alternatif kiyasi
 
     @property
     def fiyat_sembolleri(self) -> list[str]:
@@ -478,6 +479,14 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
     maliyet = modeli_kur(varlik_ham, sinif_haritasi)
     _maliyeti_dogrula(varlik_ham, varliklar)
 
+    kiyas = [str(s) for s in varlik_ham.get("kiyas") or []]
+    # Yazim hatasi sessizce "veri yok" satirina donusmesin: fiyati hic
+    # cekilmeyen sembol kiyasta hep olculemedi gorunur, sebebi anlasilmaz.
+    tanimsiz_kiyas = sorted(set(kiyas) - set(varliklar))
+    if tanimsiz_kiyas:
+        raise ValueError(
+            f"kiyas listesinde varliklar.yaml'da olmayan sembol: {tanimsiz_kiyas}")
+
     return Yapilandirma(
         ayarlar=Ayarlar(
             kur_sembolu=ayar_ham["kur_sembolu"],
@@ -498,6 +507,7 @@ def yapilandirmayi_oku(varliklar_dosyasi: Path = VARLIKLAR_DOSYASI,
         maliyet=maliyet,
         bekleme=bekleme,
         devre_kesici=devre_kesici,
+        kiyas=kiyas,
     )
 
 
