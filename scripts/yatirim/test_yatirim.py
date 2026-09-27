@@ -3996,7 +3996,10 @@ class HurdleTazeligiTesti(unittest.TestCase):
         yedege duserdik - yedek daha da eski olabilir. Bu test o yonu kilitler.
         """
         yapilandirma = yapilandirmayi_oku()
-        kayitlar = [{"seriKodu": yapilandirma.maliyet.risksiz_serisi,
+        # birincil_seri, risksiz_serisi DEGIL: ikincisi o an KAZANAN kaynagin
+        # serisi. Yedek ilan edilmis oran yururlukteyse kazanan odur ve
+        # serisi bostur - test o gunku YAML durumuna bagli kalirdi.
+        kayitlar = [{"seriKodu": yapilandirma.maliyet.birincil_seri,
                      "tarih": "07-08-2026", "deger": 44.0}]
         model = maliyet_modelini_coz(yapilandirma,
                                      getir=lambda *a, **k: kayitlar,
@@ -4010,14 +4013,19 @@ class HurdleTazeligiTesti(unittest.TestCase):
 
     def test_durdurma_ustundeki_canli_deger_reddedilir(self):
         yapilandirma = yapilandirmayi_oku()
-        kayitlar = [{"seriKodu": yapilandirma.maliyet.risksiz_serisi,
+        # birincil_seri, risksiz_serisi DEGIL: ikincisi o an KAZANAN kaynagin
+        # serisi. Yedek ilan edilmis oran yururlukteyse kazanan odur ve
+        # serisi bostur - test o gunku YAML durumuna bagli kalirdi.
+        kayitlar = [{"seriKodu": yapilandirma.maliyet.birincil_seri,
                      "tarih": "01-01-2026", "deger": 44.0}]
         model = maliyet_modelini_coz(yapilandirma,
                                      getir=lambda *a, **k: kayitlar,
                                      bugun=date(2026, 8, 19))
         self.assertNotAlmostEqual(model.tl_risksiz_yillik, 0.44)
+        # Kazanan yedek ilan edilmis oransa model.risksiz_serisi bostur ve
+        # "" her metinde gecer - dogrulama bos kalirdi. Reddedilen seri aranir.
         self.assertTrue([u for u in model.uyarilar
-                         if model.risksiz_serisi in u])
+                         if yapilandirma.maliyet.birincil_seri in u])
 
     def test_bayat_hurdle_uyari_olarak_gorunur(self):
         """Durdurmuyorsa bile SESSIZ kalmamali - asil korkulan sey buydu."""
