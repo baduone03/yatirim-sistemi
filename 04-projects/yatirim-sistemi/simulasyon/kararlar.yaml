@@ -27,17 +27,23 @@
 # bozan_kosul (2026-09-28 ve sonrasi ZORUNLU): "ne olursa yanildim".
 # Karar ANINDA yazilir; sonucu gordukten sonra yazilan kosul tez degil
 # bahanedir. Her kontrol gununde makine denetler, ilk tetiklenme KALICIDIR.
-#   olcut   : portfoy_getirisi | takas_farki | getiri:<SEMBOL>
-#             (getiri: sembolu alinan/satilan icinde olmali)
+#   olcut   : GETIRI (karar gununden bu yana degisim)
+#               portfoy_getirisi | takas_farki | getiri:<SEMBOL>
+#             RISK (o gunku seviye, gunluk raporla ayni yontem)
+#               volatilite:portfoy | volatilite:<sinif> (or: bist) |
+#               volatilite:<SEMBOL> | risk_katkisi:<SEMBOL>
+#             (<SEMBOL> alinan/satilan icinde olmali)
 #   yon     : alti | ustu      (deger esigin altina/ustune gecerse bozulur)
-#   esik    : KESIR, karar gununden bu yana (-0.05 = %-5)
+#   esik    : KESIR. Getiride -0.05 = %-5; riskte 0.28 = %28 (pozitif).
+#             Risk esigini karar gunundeki degerin OTESINE koy - karar gunu
+#             zaten saglanan kosul "anlamsiz" diye isaretlenir.
 #   aciklama: (opsiyonel) neden bu esik
 # Ornek:
 #   bozan_kosul:
-#     olcut: takas_farki
-#     yon: alti
-#     esik: -0.05
-#     aciklama: "risk icin yapildi ama %5'ten fazla getiri kaybi bedeli asar"
+#     olcut: volatilite:bist
+#     yon: ustu
+#     esik: 0.28
+#     aciklama: "takasin amaci BIST riskini dusurmekti"
 
 kararlar:
   - id: 2026-08-13-acilis

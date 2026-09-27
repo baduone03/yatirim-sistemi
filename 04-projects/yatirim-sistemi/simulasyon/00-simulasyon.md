@@ -48,7 +48,8 @@ Pazar botu vadesi dolan 377 sinyalin `outcome_price` alanini NULL biraktigi
 icin verisinin %88'i olcum icin kullanilamaz hale gelmisti.
 
 2026-09-28'den itibaren her karar bir **bozan kosul** da tasir: "ne olursa
-yanildim" (or: takas farki %-5'in altina inerse). Karar aninda yazilir, her
+yanildim" (or: takas farki %-5'in altina inerse, BIST bacaginin
+volatilitesi %28'i asarsa). Karar aninda yazilir, her
 kontrol gununde makine denetler, ilk tetiklenme kalicidir. Alan tanimi
 `kararlar.yaml` basliginda.
 

@@ -265,17 +265,119 @@ class BozanKosulTesti(unittest.TestCase):
 
     def test_tetiklenmedi(self):
         karar = self._karar(BozanKosul("portfoy_getirisi", "alti", -0.05))
-        self.assertIn("tetiklenmedi", kosul_durumu(karar, [_olcum(5, -0.01)]))
+        self.assertIn("Tez tutuyor", kosul_durumu(karar, [_olcum(5, -0.01)]))
 
     def test_eksik_veri_tutuyor_sayilmaz(self):
         # takas_farki eksik sembolu 0 sayarsa kosul sessizce "tutuyor" derdi.
         karar = self._karar(BozanKosul("takas_farki", "alti", -0.05))
         durum = kosul_durumu(karar, [_olcum(5, getiriler={"TUPRS.IS": -0.2})])
-        self.assertIn("OLCULEMEDI", durum)
+        self.assertIn("Olculemedi", durum)
 
     def test_raporda_gorunur(self):
         karar = self._karar(BozanKosul("getiri:TUPRS.IS", "alti", -0.1, "dip"))
         rapor = rapor_olustur([karar], [
             Olcum("k", 5, "2026-10-06", 20_000.0, 0.0, {}, {"TUPRS.IS": -0.12})])
-        self.assertIn("*Bozan kosul:* getiri:TUPRS.IS -10.0% altina inerse (dip)", rapor)
+        self.assertIn("*Bozan kosul:* TUPRS.IS getirisi -10.0% altina inerse tez bozulur - dip", rapor)
+        self.assertIn("-12.0% ❌", rapor)
         self.assertIn("TEZ BOZULDU", rapor)
+
+
+class RiskKosuluTesti(unittest.TestCase):
+    """volatilite / risk_katkisi: raporla ayni yontem, o gunku pozisyonlar."""
+
+    def setUp(self):
+        self.karar_gunu = date.today() - timedelta(days=40)
+        gunler = pd.date_range(self.karar_gunu - timedelta(days=200),
+                               periods=240, freq="D")
+        rng = np.random.default_rng(7)
+        seri = lambda vol: 100 * np.cumprod(1 + rng.normal(0, vol, 240))  # noqa: E731
+        self.fiyatlar = FiyatVerisi(
+            try_gecmis=pd.DataFrame({"A.IS": seri(0.02), "B.IS": seri(0.01),
+                                     "QQQ": seri(0.015)}, index=gunler),
+            usdtry=40.0, eksik_semboller=[])
+        self.yapilandirma = Yapilandirma(
+            ayarlar=AYARLAR, esikler=ESIKLER,
+            hedef_dagilim={"bist": 0.5, "nasdaq": 0.5},
+            varliklar={"A.IS": Varlik("A.IS", "A", "bist", "TRY"),
+                       "B.IS": Varlik("B.IS", "B", "bist", "TRY"),
+                       "QQQ": Varlik("QQQ", "Q", "nasdaq", "TRY")},
+            nakit_try=0.0, pozisyonlar=[])
+        # Tek pozisyon (A) + nakit: portfoy vol = agirlik x A vol, A katkisi 1.
+        defter = gecici(
+            "baslangic_nakit_try: 10000\nkomisyon_orani: 0.0\nislemler:\n"
+            f"  - {{tarih: {self.karar_gunu.isoformat()}, yon: AL, "
+            "sembol: A.IS, adet: 10, fiyat_try: 100}\n", "islemler.yaml")
+        self.islemler, self.nakit, self.komisyon, _ = islemleri_oku(defter)
+
+    def _karar(self, olcut: str, yon: str = "ustu", esik: float = 0.9) -> Karar:
+        return Karar(id="r", tarih=self.karar_gunu.isoformat(), tip="ALIS",
+                     ozet="", beklenti="", satilan=[], alinan=["A.IS"],
+                     bozan_kosul=BozanKosul(olcut, yon, esik))
+
+    def _olc(self, olcut: str, gun: int = 10) -> Olcum:
+        return olcum_yap(self._karar(olcut), gun, self.yapilandirma, self.fiyatlar,
+                         self.islemler, self.komisyon, self.nakit)
+
+    def _a_vol(self, gun: int) -> float:
+        olcum = self._olc("volatilite:A.IS", gun)
+        return olcum.kosul_degeri
+
+    def test_portfoy_volatilitesi_agirlikla_olcekli(self):
+        olcum = self._olc("volatilite:portfoy")
+        o_gun = self.karar_gunu + timedelta(days=10)
+        fiyat = float(self.fiyatlar.try_gecmis["A.IS"][:pd.Timestamp(o_gun)].iloc[-1])
+        agirlik = 10 * fiyat / (10 * fiyat + self.nakit - 1000)
+        self.assertAlmostEqual(olcum.kosul_degeri, agirlik * self._a_vol(10), places=6)
+
+    def test_sinif_bacagi_nakitsiz(self):
+        # BIST bacaginda yalnizca A var -> bacak vol = A vol (nakit seyreltmez).
+        self.assertAlmostEqual(self._olc("volatilite:bist").kosul_degeri,
+                               self._a_vol(10), places=6)
+
+    def test_tek_pozisyonun_risk_katkisi_tam(self):
+        self.assertAlmostEqual(self._olc("risk_katkisi:A.IS").kosul_degeri, 1.0, places=6)
+
+    def test_pozisyonu_olmayan_sinif_olculemez(self):
+        self.assertIsNone(self._olc("volatilite:nasdaq").kosul_degeri)
+
+    def test_karar_gunu_de_olculur_ve_saklanir(self):
+        karar = self._karar("volatilite:bist")
+        yeni = eksik_olcumleri_tamamla([karar], [], self.yapilandirma, self.fiyatlar,
+                                       self.islemler, self.komisyon, self.nakit)
+        self.assertEqual(yeni[0].gun, 0)
+        self.assertIsNotNone(yeni[0].kosul_degeri)
+        dosya = Path(tempfile.mkdtemp()) / "olcum.yaml"
+        olcumleri_yaz(yeni, dosya)
+        self.assertEqual([o.kosul_degeri for o in olcumleri_oku(dosya)],
+                         [round(o.kosul_degeri, 6) for o in yeni])
+
+    def test_karar_gunu_saglanan_kosul_anlamsiz(self):
+        karar = self._karar("volatilite:bist", yon="ustu", esik=0.01)
+        olcumler = [Olcum("r", 0, "x", 1.0, 0.0, {}, {}, kosul_degeri=0.30),
+                    Olcum("r", 5, "x", 1.0, 0.0, {}, {}, kosul_degeri=0.31)]
+        self.assertIn("Kosul anlamsiz", kosul_durumu(karar, olcumler))
+
+    def test_tutuyor_mesaji_karar_gununu_ve_mesafeyi_verir(self):
+        olcumler = [Olcum("r", 0, "x", 1.0, 0.0, {}, {}, kosul_degeri=0.292),
+                    Olcum("r", 20, "x", 1.0, 0.0, {}, {}, kosul_degeri=0.265)]
+        karar = self._karar("volatilite:bist", yon="ustu", esik=0.30)
+        self.assertEqual(
+            kosul_durumu(karar, olcumler),
+            "✅ **Tez tutuyor** - BIST bacaginin volatilitesi: karar gunu 29.2% → "
+            "20. gun 26.5%. Sinir 30.0%, araya 3.5 puan var.")
+
+    def test_dogrulama(self):
+        def oku(olcut, esik="0.3"):
+            return kararlari_oku(gecici(
+                "kararlar:\n  - id: r\n    tarih: 2026-10-01\n    alinan: [A.IS]\n"
+                f"    bozan_kosul: {{olcut: '{olcut}', yon: ustu, esik: {esik}}}\n",
+                "k.yaml"), siniflar={"bist", "nasdaq"})
+        self.assertIsNotNone(oku("volatilite:portfoy")[0].bozan_kosul)
+        self.assertIsNotNone(oku("volatilite:bist")[0].bozan_kosul)
+        self.assertIsNotNone(oku("risk_katkisi:A.IS")[0].bozan_kosul)
+        with self.assertRaisesRegex(ValueError, "varlik sinifi"):
+            oku("volatilite:kripto")
+        with self.assertRaisesRegex(ValueError, "alinan/satilan"):
+            oku("risk_katkisi:B.IS")
+        with self.assertRaisesRegex(ValueError, "pozitif"):
+            oku("volatilite:bist", esik="-0.1")
