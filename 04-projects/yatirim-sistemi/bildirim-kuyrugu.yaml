@@ -1,27 +1,4 @@
 # MAKINE URETIR - elle duzenleme.
 # Sessiz saatte veya hiz siniri asilirken biriken bildirimler.
 # Silinirse biriken bildirimler kaybolur, sistem durmaz.
-bekleyenler:
-- tip: gunsonu
-  anahtar: gunsonu:2026-10-14
-  metin: '<b>🌙 Gun sonu — 15 Ekim</b>
-
-
-    💰 <b>21.075 TL</b> (baslangictan +5.4%, +1.075 TL)
-
-    📊 Son 24 saat: +0.0% (yatay)
-
-    🔻 Mevduattan KOTU: portfoy +5.4%, mevduat +6.5% (63 gunde)
-
-    🏁 Portfoy 3./6: en iyisi Bitcoin +32.3% (tek basina konsaydi)
-
-    ⏸️ Islem yok: portfoy hedef dagilima yakin
-
-
-    <b>⚠️ Dikkat (1)</b>
-
-    • Mevduat faizi verisi 13 GUNLUK, kiyas eski orana dayaniyor
-
-
-    <i>Kagit para, gercek islem yok. Ayrinti ekli raporda.</i>'
-  olusma: '2026-10-15T04:28:55+00:00'
+bekleyenler: []
