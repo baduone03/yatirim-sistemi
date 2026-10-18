@@ -5,26 +5,14 @@
 gun: '2026-10-18'
 gunluk_sayi: 1
 siniflar:
-  bist:
-    acik: true
-    yon: azalt
-    son_sinyal: ''
   kripto:
     acik: true
     yon: azalt
     son_sinyal: ''
-  maden:
-    acik: true
-    yon: artir
-    son_sinyal: ''
   nakit:
-    acik: true
-    yon: azalt
+    acik: false
+    yon: ''
     son_sinyal: '2026-10-18T15:48:03+00:00'
-  nasdaq:
-    acik: true
-    yon: azalt
-    son_sinyal: ''
 semboller:
   BTC-USD:
     acik: true
