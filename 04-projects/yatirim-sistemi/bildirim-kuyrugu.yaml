@@ -1,29 +1,4 @@
 # MAKINE URETIR - elle duzenleme.
 # Sessiz saatte veya hiz siniri asilirken biriken bildirimler.
 # Silinirse biriken bildirimler kaybolur, sistem durmaz.
-bekleyenler:
-- tip: gunsonu
-  anahtar: gunsonu:2026-10-19
-  metin: '<b>🌙 Gun sonu — 19 Ekim</b>
-
-
-    💰 <b>18.940 TL</b> (baslangictan -5.3%, -1.060 TL)
-
-    📊 Son 24 saat: +0.2% (yatay)
-
-    🔻 Mevduattan KOTU: portfoy -5.3%, mevduat +6.8% (67 gunde)
-
-    🏁 Portfoy 5./6: en iyisi Bitcoin +33.9% (tek basina konsaydi)
-
-    ⏸️ Islem yok: portfoy hedef dagilima yakin
-
-
-    <b>⚠️ Dikkat (2)</b>
-
-    • Mevduat faizi verisi 10 GUNLUK, kiyas eski orana dayaniyor
-
-    • Fiyatlanamayan pozisyon: THYAO.IS
-
-
-    <i>Kagit para, gercek islem yok. Ayrinti ekli raporda.</i>'
-  olusma: '2026-10-19T23:34:35+00:00'
+bekleyenler: []
