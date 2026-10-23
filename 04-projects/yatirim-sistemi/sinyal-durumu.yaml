@@ -9,10 +9,6 @@ siniflar:
     acik: true
     yon: azalt
     son_sinyal: ''
-  maden:
-    acik: true
-    yon: artir
-    son_sinyal: ''
   nakit:
     acik: false
     yon: ''
