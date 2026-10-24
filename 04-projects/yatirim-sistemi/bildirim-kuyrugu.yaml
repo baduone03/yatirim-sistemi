@@ -1,27 +1,4 @@
 # MAKINE URETIR - elle duzenleme.
 # Sessiz saatte veya hiz siniri asilirken biriken bildirimler.
 # Silinirse biriken bildirimler kaybolur, sistem durmaz.
-bekleyenler:
-- tip: gunsonu
-  anahtar: gunsonu:2026-10-23
-  metin: '<b>📅 Hafta kapanisi — 23 Ekim</b>
-
-
-    💰 <b>20.383 TL</b> (baslangictan +1.9%, +383 TL)
-
-    📊 Son 24 saat: -0.2% (yatay)
-
-    🔻 Mevduattan KOTU: portfoy +1.9%, mevduat +7.2% (71 gunde)
-
-    🏁 Portfoy 3./6: en iyisi Bitcoin +32.4% (tek basina konsaydi)
-
-    ⏸️ Islem yok: portfoy hedef dagilima yakin
-
-
-    <b>⚠️ Dikkat (1)</b>
-
-    • Dogrulanmamis kripto fiyati BTC-USD, ETH-USD: kur piyasasi kapali (hafta sonu)
-
-
-    <i>Kagit para, gercek islem yok. Ayrinti ekli raporda.</i>'
-  olusma: '2026-10-23T23:05:46+00:00'
+bekleyenler: []
