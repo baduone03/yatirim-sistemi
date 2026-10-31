@@ -1,0 +1,618 @@
+# MAKINE URETIR - elle duzenleme.
+# haber_arsivi.py yazar. Ayni baglanti iki kez yazilmaz.
+# Bu dosya KAYITTIR, kaynak degil: buradaki bir baslik tek basina
+# bir iddiayi desteklemez, yalnizca o gun ne okundugunu gosterir.
+
+basliklar:
+- baslik: Binance hackers raced to move billions before it could be frozen
+  baglanti: https://cointelegraph.com/magazine/binance-hackers-raced-to-move-billions-before-could-be-frozen?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: 'Tampered Ledger reported in Singapore a month before news broke: Asia Express'
+  baglanti: https://cointelegraph.com/magazine/tampered-ledger-reported-in-singapore-a-month-before-news-broke-asia-express?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-29'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Will gold’s ‘infinite mint bug’ make Bitcoin more valuable?
+  baglanti: https://cointelegraph.com/magazine/will-golds-infinite-mint-bug-make-bitcoin-more-valuable?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Binance hack rattles markets as BNB falls 8%, Bitcoin nears $77K
+  baglanti: https://cointelegraph.com/markets/binance-hack-rattles-crypto-markets-bnb-bitcoin-slide?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-29'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Bitcoin price metrics hint at rebound as $1.6B liquidations follow Binance
+    hack
+  baglanti: https://cointelegraph.com/markets/bitcoin-price-metrics-hint-at-rebound-as-16b-liquidations-follow-binance-hack?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Bitcoin risks worst October in 12 years as tech sell-off spreads to gold
+  baglanti: https://cointelegraph.com/markets/bitcoin-risks-worst-october-in-12-years-as-tech-sell-off-spreads-to-gold?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Coinbase leads crypto stock selloff following $6.3B Binance hack
+  baglanti: https://cointelegraph.com/markets/coinbase-leads-crypto-stock-selloff-shares-tumble?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: HYPE teases all-time high as NYSE owner ICE eyes US Hyperliquid perps
+  baglanti: https://cointelegraph.com/markets/hype-price-all-time-high-ice-us-hyperliquid-perps?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-29'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: THORChain’s RUNE jumps 13% after Binance’s record $6.3B hack
+  baglanti: https://cointelegraph.com/markets/rune-token-surges-binance-hack?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Binance says it holds $5B in matching tokens to cover hack losses
+  baglanti: https://cointelegraph.com/news/binance-5-billion-replacement-crypto-in-custody?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: FBI and Secret Service join response to Binance’s $6.3B hack
+  baglanti: https://cointelegraph.com/news/binance-fbi-recover-assets-hack?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: 'Binance hack could accelerate shift to DEXs: Standard Chartered'
+  baglanti: https://cointelegraph.com/news/binance-hack-could-accelerate-shift-to-dexs-standard-chartered?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Binance points to engineer’s hacked laptop in $6.3B breach
+  baglanti: https://cointelegraph.com/news/binance-hack-may-involve-private-key-misuse-not-theft-blockaid-ceo?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: EIP-7702 didn’t cause Binance hack, but may have amplified losses
+  baglanti: https://cointelegraph.com/news/binance-hack-security-ethereum-eip-7702-role?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Binance hacker’s Bitcoin haul tops Coinbase’s corporate treasury
+  baglanti: https://cointelegraph.com/news/binance-hacker-bitcoin-holdings-exceed-coinbase-btc-treasury?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Binance hit by $6.3B hack, the largest in cryptocurrency history
+  baglanti: https://cointelegraph.com/news/binance-linked-wallet-faces-possible-exploit-blockchain-researcher-warns?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-29'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: 'Crypto Biz: Bitcoin’s quantum threat is becoming an economic problem'
+  baglanti: https://cointelegraph.com/news/bitcoin-quantum-threat-ripple-bank-usdc-vaneck-crypto-biz?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Nasdaq-listed Canton Strategic Holdings plans tokenized stock trading from
+    Nov. 2
+  baglanti: https://cointelegraph.com/news/canton-strategic-holdings-tokenized-stock-trading-november-2026?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-29'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Kalshi raises $1B at $40B valuation as non-sports revenue run rate tops
+    $1B
+  baglanti: https://cointelegraph.com/news/kalshi-closes-1b-funding-round-at-40b-valuation-as-non-sports-revenue-run-rate-tops-1b?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-29'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: KuCoin suspends services in Russia and Belarus
+  baglanti: https://cointelegraph.com/news/kucoin-services-russia-belarus-suspended?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-29'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: 'As it happened: Binance’s record $6.3B crypto hack'
+  baglanti: https://cointelegraph.com/news/live-updates-binance-63b-hack-linked-to-north-koreas-tradertraitor?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: North Korea’s TraderTraitor linked to $6.3B Binance hack
+  baglanti: https://cointelegraph.com/news/north-korea-linked-to-63b-binance-hack-by-crypto-investigators?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Polymarket suspended trading amid reports of user funds being drained
+  baglanti: https://cointelegraph.com/news/polymarket-suspends-trading-user-funds-compromised?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-29'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: 'Public companies double share of blockchain revenue since 2022: Report'
+  baglanti: https://cointelegraph.com/news/public-companies-double-share-of-blockchain-revenue-since-2022-report?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-29'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: 'Recap: How Binance’s record $6.3B hack unfolded'
+  baglanti: https://cointelegraph.com/news/recap-binances-record-63b-hack-unfolded?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Strategy eyes more Bitcoin buys as Saylor touts $30B credit capacity
+  baglanti: https://cointelegraph.com/news/strategy-30-billion-digital-credit-capacity-bitcoin-buys?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Tether’s excess reserves nearly double to $8B as Q3 profit hits $1.5B
+  baglanti: https://cointelegraph.com/news/tethers-excess-reserves-nearly-double-to-8b-as-q3-profit-hits-15b?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Trezor warns CryptoBilis buyers to move funds over suspected implant
+  baglanti: https://cointelegraph.com/news/trezor-cryptobilis-wallet-implant-funds-warning?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Here’s what happened in crypto today
+  baglanti: https://cointelegraph.com/news/what-happened-in-crypto-today?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Zcash grants group offers $124M compromise as governance backlash grows
+  baglanti: https://cointelegraph.com/news/zcash-grants-46m-proposal-governance-backlash?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: AB-Çin ticaretinde sırada ne var?
+  baglanti: https://tr.investing.com/news/economy-news/abcin-ticaretinde-srada-ne-var-4131901
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-10-31'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Çin’de fabrika faaliyeti Ekim’de daraldı
+  baglanti: https://tr.investing.com/news/economy-news/cinde-fabrika-faaliyeti-ekimde-darald-4131905
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-10-31'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: American Tower’ın başkan yardımcısı 290.823 dolar değerinde hisse sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/american-towern-baskan-yardmcs-290823-dolar-degerinde-hisse-satt-93CH-4131904
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-10-31'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: ANI Pharmaceuticals SVP ve CFO’su 207.679 dolar değerinde hisse sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/ani-pharmaceuticals-svp-ve-cfosu-207679-dolar-degerinde-hisse-satt-93CH-4131911
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-10-31'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Blue Biofuels yöneticisi Chris Kneppers 47.220 dolar hisse sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/blue-biofuels-yoneticisi-chris-kneppers-47220-dolar-hisse-satt-93CH-4131903
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-10-31'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Immunovant CFO’su Tiago Girao 188.271 dolar değerinde hisse sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/immunovant-cfosu-tiago-girao-188271-dolar-degerinde-hisse-satt-93CH-4131910
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-10-31'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Impinj yöneticisi Meera Rao 348.566 dolar değerinde hisse sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/impinj-yoneticisi-meera-rao-348566-dolar-degerinde-hisse-satt-93CH-4131899
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-10-31'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Penguin Solutions’ın SVP’si ve gelir direktörü 272.812 dolar hisse sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/penguin-solutionsn-svpsi-ve-gelir-direktoru-272812-dolar-hisse-satt-93CH-4131912
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-10-31'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Zoom Communications yöneticisi Subotovsky 144.400 dolar değerinde hisse
+    sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/zoom-communications-yoneticisi-subotovsky-144400-dolar-degerinde-hisse-satt-93CH-4131900
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-10-31'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Ajans yapay zekası heyecanı sonuçların önüne geçiyor
+  baglanti: https://tr.investing.com/news/stock-market-news/ajansal-yapay-zeka-heyecan-sonuclarn-onune-gecti-4131913
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-10-31'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: $6.3 billion Binance hack is largest crypto theft on record
+  baglanti: https://www.cnbc.com/2026/10/29/circle-tether-freeze-funds-impacted-by-potential-binance-security-issue.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Wall Street braces for Democratic gains as 2026 midterm election nears
+  baglanti: https://www.cnbc.com/2026/10/30/2026-midterm-election-wall-street-prepares-for-democratic-gains.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: 'Alaska Senate election: DOJ wants to ''segregate'' all ballots for 2nd
+    Sullivan candidate'
+  baglanti: https://www.cnbc.com/2026/10/30/alaska-senate-election-doj-lawsuit-sullivan-peltola.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Intel stock has worst day since 1970s, wiping about $12 billion off government's
+    stake
+  baglanti: https://www.cnbc.com/2026/10/30/amazon-intel-earnings-big-tech-ai-spending-concerns.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: 'Binance''s $6.3 billion hack: What we know and what comes next'
+  baglanti: https://www.cnbc.com/2026/10/30/billions-in-crypto-frozen-in-binance-hack-heres-what-happens-next-.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Why bitcoin held up better after the record Binance hack
+  baglanti: https://www.cnbc.com/2026/10/30/binance-hack-bitcoin-price.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: '''Bad time to troll'': Binance co-founder Zhao asks Musk for support after
+    hack'
+  baglanti: https://www.cnbc.com/2026/10/30/binance-hack-elon-musk-tesla-spacex.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: 'Binance hack: Investigators in a ''cat and mouse game'' to recover $6.3
+    billion in stolen funds'
+  baglanti: https://www.cnbc.com/2026/10/30/binance-hack-stolen-crypto-recovery.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Cheaper cars are selling considerably faster than at the beginning of the
+    year
+  baglanti: https://www.cnbc.com/2026/10/30/cheap-cars-selling-fast.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Chevron and Exxon hit all-time highs as refining profits soar in reaction
+    to Iran and Ukraine wars
+  baglanti: https://www.cnbc.com/2026/10/30/chevron-exxon-cvx-xom-earnings-q3-2026.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: 'Gamble on democracy: Inside suspicious election-contracts trading on prediction
+    markets'
+  baglanti: https://www.cnbc.com/2026/10/30/gamble-on-democracy-inside-suspicious-election-contracts-trading-on-prediction-markets-.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Gen Z is ditching bars for run clubs — and finding more than friends along
+    the way
+  baglanti: https://www.cnbc.com/2026/10/30/gen-z-diplo-run-club.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Halloween gets pricier as chocolate costs climb — Hershey may feel the pinch
+  baglanti: https://www.cnbc.com/2026/10/30/halloween-gets-pricier-as-chocolate-costs-rise-hershey-could-feel-it.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Iran claims four tankers struck mines in Hormuz as strike fears grow after
+    U.S. midterms
+  baglanti: https://www.cnbc.com/2026/10/30/iran-trump-hormuz-oil-middle-east-.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Jim Cramer says it's time to look beyond tech. Here are 4 consumer stocks
+    he likes
+  baglanti: https://www.cnbc.com/2026/10/30/jim-cramer-consumer-staples-stocks.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: 'Cramer’s week ahead: Expect more volatility as tech earnings, midterms
+    loom'
+  baglanti: https://www.cnbc.com/2026/10/30/jim-cramer-week-ahead-apple-amd-jobs-report.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Class action lawsuit blames Trump officials for student loan forgiveness
+    delays
+  baglanti: https://www.cnbc.com/2026/10/30/lawsuit-blames-trump-officials-for-student-loan-forgiveness-delays.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Meta outlook revised downward by S&P on cash flow and capex concerns
+  baglanti: https://www.cnbc.com/2026/10/30/meta-outlook-to-revised-to-negative-by-sp-after-cash-flow-negative.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Fed officials are already saying they’ll need to get back to hiking rates
+  baglanti: https://www.cnbc.com/2026/10/30/musalem-fed-monetary-policy-tightening.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: A pharma giant is moving past one patent cliff — but another is already
+    looming
+  baglanti: https://www.cnbc.com/2026/10/30/novartis-remibrutinib-multiple-sclerosis.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Reid Hoffman gives millions to Dems in late spending spree as Epstein fight
+    spills into election
+  baglanti: https://www.cnbc.com/2026/10/30/reid-hoffman-democrats-epstein-midterms-2026.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Russian strikes plunge Ukrainian city into blackout as Zelenskyy warns of
+    more missile attacks
+  baglanti: https://www.cnbc.com/2026/10/30/russia-ukraine-putin-zelenskyy-energy-strikes.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Swiss central bank posts bumper $23 billion profit thanks to gold, foreign
+    assets
+  baglanti: https://www.cnbc.com/2026/10/30/swiss-national-bank-q3-profit-gold-foreign-asset.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Tankers defy sharp escalation of Iranian attacks to keep crude oil flowing
+    through Strait of Hormuz
+  baglanti: https://www.cnbc.com/2026/10/30/tanker-attack-strait-hormuz-iran-war-oil.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Tech giants need legacy businesses to keep growing as they pour trillions
+    into the AI buildout
+  baglanti: https://www.cnbc.com/2026/10/30/tech-giants-alphabet-meta-microsoft-amazon-ai-buildouts.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Treasury Department announces new Series I bond rate of 5.51% for the next
+    six months
+  baglanti: https://www.cnbc.com/2026/10/30/treasury-i-bond-rate-through-april-2027.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Musk and Zuckerberg echo Trump's push to rebrand AI as 'super intelligence'
+    on earnings calls. Others do not
+  baglanti: https://www.cnbc.com/2026/10/30/trump-tech-allies-swap-ai-for-super-intelligence-in-earnings-calls.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: 'Trump rallies in Kansas and Iowa are back on after RNC said they were canceled:
+    Source'
+  baglanti: https://www.cnbc.com/2026/10/30/trump-vance-rally-midterm-elections-.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Tech gets crushed, defensive stocks shine. How we're making sense of it
+    all
+  baglanti: https://www.cnbc.com/investingclub/2026/10/30/tech-gets-crushed-defensive-stocks-shine-how-were-making-sense-of-it-all.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Binance loses $6.3 billion in crypto heist—what happens to your money when
+    an exchange gets hacked
+  baglanti: https://www.cnbc.com/make-it/2026/10/30/binance-crypto-hack-customer-funds.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: 'From rivals to partners: Polygon and Solana team to bring stablecoin payments
+    to banks'
+  baglanti: https://www.coindesk.com/business/2026/10/29/from-rivals-to-partners-polygon-and-solana-team-to-bring-stablecoin-payments-to-banks
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-29'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Binance loses over $6 billion in 'biggest crypto hack in history'
+  baglanti: https://www.coindesk.com/business/2026/10/29/potential-multi-billion-binance-hack-hitting-crypto-markets
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-29'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Stanley Druckenmiller's first X post backs Hyperliquid venture after $23
+    million indirect investment
+  baglanti: https://www.coindesk.com/business/2026/10/29/stanley-druckenmiller-s-first-x-post-backs-hyperliquid-venture-after-usd23-million-indirect-investment
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-29'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Binance arranges $6.34 billion to cover losses from record crypto hack
+  baglanti: https://www.coindesk.com/business/2026/10/30/binance-arranges-usd6-34-billion-to-cover-losses-from-record-crypto-hack
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Binance hack drained wallets backing customer assets, reserve data shows
+  baglanti: https://www.coindesk.com/business/2026/10/30/binance-hack-drained-wallets-backing-customer-assets-reserve-data-shows
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Experts divided over Binance hack asset freezes, warn recovery is another
+    matter
+  baglanti: https://www.coindesk.com/business/2026/10/30/experts-divided-over-binance-hack-asset-freezes-warn-recovery-is-another-matter
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: OpenAI reportedly cuts fundraising and valuation targets amid AI jitters
+  baglanti: https://www.coindesk.com/business/2026/10/30/openai-reportedly-cuts-fundraising-target-amid-ai-jitters
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-31'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Here's how big bitcoin traders responded after the Binance hack hit
+  baglanti: https://www.coindesk.com/daybook-us/2026/10/30/here-s-how-big-bitcoin-traders-responded-after-the-binance-hack-hit
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Polymarket suspends trading after third-party breach leads to user losses
+  baglanti: https://www.coindesk.com/markets/2026/10/29/polymarket-suspends-trading-after-third-party-breach-leads-to-user-losses
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-29'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Binance hacker dumps a little-known 2017 token and it crashes 90%
+  baglanti: https://www.coindesk.com/markets/2026/10/30/binance-hacker-dumps-a-little-known-2017-token-and-it-crashes-90
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Binance hacker splits $1.4 billion of bitcoin into 19 wallets that no one
+    can freeze
+  baglanti: https://www.coindesk.com/markets/2026/10/30/binance-hacker-splits-usd1-4-billion-of-bitcoin-into-19-wallets-that-no-one-can-freeze
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Bitcoin, ether and XRP selloff wipes out $1.5 billion in leveraged crypto
+    bets
+  baglanti: https://www.coindesk.com/markets/2026/10/30/bitcoin-ether-and-xrp-selloff-wipes-out-usd1-5-billion-in-leveraged-crypto-bets
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Binance hack bites India's largest crypto exchange as it curbs futures trading
+  baglanti: https://www.coindesk.com/markets/2026/10/30/coindcx-halts-new-crypto-futures-bets-as-binance-incident-disrupts-liquidity
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Crypto liquidations jump to $1.57 billion as Binance hack sends bitcoin,
+    ether lower
+  baglanti: https://www.coindesk.com/markets/2026/10/30/crypto-liquidations-jump-to-usd1-57-billion-as-binance-hack-sends-bitcoin-ether-lower
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Institutional crypto investors rush to pull funds from exchanges after Binance
+    hack
+  baglanti: https://www.coindesk.com/markets/2026/10/30/institutional-crypto-investors-rush-to-pull-funds-from-exchanges-after-binance-hack
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: 'Live updates: Bitcoin falls below $77,000 as Binance exploit combines with
+    tech woes'
+  baglanti: https://www.coindesk.com/markets/2026/10/30/live-news-binance-hack-rattles-crypto-as-intel-plunges-and-ai-spending-fears-hit-tech
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Strategy CFO Andrew Kang resigns as company posts record operating profit
+  baglanti: https://www.coindesk.com/markets/2026/10/30/strategy-cfo-resigns-as-company-posts-record-quarterly-profit-mstr-stock-falls-6
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Standard Chartered sees more pain after $6 billion Binance hack sends bitcoin
+    lower
+  baglanti: https://www.coindesk.com/markets/2026/10/30/usd6-billion-binance-hack-sends-bitcoin-ether-tumbling-standard-chartered-sees-more-losses-ahead
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Wall Street analysts urge investors to buy crypto stocks after $6.3 billion
+    Binance hack
+  baglanti: https://www.coindesk.com/markets/2026/10/30/wall-street-analysts-urge-investors-to-buy-crypto-stocks-on-weakness-after-usd6-3-billion-binance-hack
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Bitcoin stolen from Binance tops Tesla’s holdings and is over twice El Salvador’s
+    reserve
+  baglanti: https://www.coindesk.com/markets/2026/10/31/bitcoin-stolen-from-binance-tops-tesla-s-holdings-and-is-over-twice-el-salvador-s-reserve
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-31'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: 'Crypto''s longtime foe, North Korea''s Lazarus Group, likely behind Binance
+    hack: blockchain sleuths'
+  baglanti: https://www.coindesk.com/policy/2026/10/29/crypto-s-longtime-foe-north-korea-s-lazarus-group-likely-behind-binance-hack-blockchain-sleuths
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: KuCoin exits Russia and Belarus as crypto exchanges withdraw from Western-sanctioned
+    markets
+  baglanti: https://www.coindesk.com/policy/2026/10/29/kucoin-exits-russia-and-belarus-as-crypto-exchanges-withdraw-from-western-sanctioned-markets
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-29'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Binance uncovers wider breach in $6.3 billion exploit, targets Sunday withdrawal
+    restart
+  baglanti: https://www.coindesk.com/tech/2026/10/30/binance-uncovers-wider-breach-in-usd6-3-billion-exploit-targets-sunday-withdrawal-restart
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: Here’s how an Ethereum upgrade helped drain part of Binance’s $6 billion
+    loss
+  baglanti: https://www.coindesk.com/tech/2026/10/30/here-s-how-one-ethereum-permission-let-an-attacker-drain-usd2-5-billion-from-binance
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
+- baslik: XRP Ledger developers tighten the rules for who can hold 'restricted' tokens
+  baglanti: https://www.coindesk.com/tech/2026/10/30/xrp-ledger-developers-tighten-the-rules-for-who-can-hold-restricted-tokens
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-10-30'
+  ilk_gorulme: '2026-10-31T05:29:00+00:00'
