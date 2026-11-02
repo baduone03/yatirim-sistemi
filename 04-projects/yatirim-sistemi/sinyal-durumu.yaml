@@ -14,15 +14,7 @@ siniflar:
     yon: ''
     son_sinyal: '2026-10-21T18:34:15+00:00'
 semboller:
-  ASELS.IS:
-    acik: true
-    yon: kis
-    son_sinyal: ''
   BTC-USD:
-    acik: true
-    yon: kis
-    son_sinyal: ''
-  GC=F:
     acik: true
     yon: kis
     son_sinyal: ''
