@@ -77,3 +77,22 @@ kararlar:
       kaybettirir ama RISK olarak dogru kalir. Ikisini ayri olc.
     satilan: [ASELS.IS]
     alinan: [TUPRS.IS]
+
+  - id: 2026-11-07-agresif-tilt
+    tarih: 2026-11-07
+    tip: REBALANCING
+    ozet: "Hedef dagilim riske kaydirildi: nakit %15->%5, kripto %10->%20, nasdaq %25->%30, maden %20->%15. Altin 0,121 g satildi; QQQ 0,0399, BTC 0,000405, THYAO 1 lot alindi."
+    beklenti: >-
+      Bu bir risk-alma bahsi: nakit faizinden (yillik ~%42) vazgecilip risk
+      varliklarina 2.850 TL ek para konuldu. Portfoy volatilitesi %15,4'ten
+      yukari cikacak (beklenen ~%18-20). 30 gunde portfoy getirisi ayni
+      donemin mevduat getirisini (~%3) gecmezse tilt para kazandirmamis
+      demektir. BTC agirligi %20'de kisma tavanini (katki %20 + beta 1,50)
+      asacak; bu sinyal bilerek gormezden gelinen bir risktir.
+    satilan: [GC=F]
+    alinan: [BTC-USD, QQQ, THYAO.IS]
+    bozan_kosul:
+      olcut: portfoy_getirisi
+      yon: alti
+      esik: -0.10
+      aciklama: "Karar gununden %10 kayip = agresif tilt hatali, dagilimi geri al"

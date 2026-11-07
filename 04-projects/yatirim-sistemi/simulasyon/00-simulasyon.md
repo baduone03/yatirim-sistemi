@@ -211,6 +211,31 @@ BIST agirligi korundu.
 Not: ASELS bugun +%10,2 yaptigi icin agirligi buyudu. Kazanandan satmak
 his olarak yanlis gelir - [[rebalancing]] tam olarak bunu anlatiyor.
 
+### 2026-11-07 — Agresif tilt (Dodo karari)
+
+86 gun sonunda portfoy +%1,2, mevduat +%8,7. Kazancin tamami nakit faizinden
+geldi; risk varliklari net ~0 uretti. Ayni donemde beklenti kapisi yon
+ayirmadigi icin tum kisma/azaltma sinyalleri bastirildi (PR #4 ile duzeltildi).
+
+**Yeni hedef:** BIST %30 / Nasdaq %30 / kripto %20 / maden %15 / nakit %5.
+
+| Islem | Adet | Fiyat | Tutar |
+|---|---:|---:|---:|
+| SAT altin | 0,121 g | 6.571 TL | 795 TL |
+| AL QQQ | 0,0399 | 32.905 TL | 1.313 TL |
+| AL BTC | 0,000405 | 3.801.515 TL | 1.540 TL |
+| AL THYAO | 1 lot | 299 TL | 299 TL |
+
+Sonrasi: BIST %30,0 / Nasdaq %30,0 / kripto %20,0 / maden %15,0 / nakit %4,9.
+
+**Bilinen celiski:** BTC %20 agirlikta kisma kuralini (katki > %20 ve beta >
+1,50) tetikleyecek. Kural gevsetilmedi; sinyal geldiginde islem yapilmayacak,
+tilt'in bilincli maliyeti olarak kaydedilir. Nakitten cikmak yillik ~%42
+risksiz getiriden vazgecmek demek - olcut `kararlar.yaml` icinde.
+
+**Cumartesi karari:** BIST/QQQ/altin fiyati Cuma kapanisi. Ag kisiti
+yuzunden fiyatlar 2026-11-07 raporundaki deger/adet'ten turetildi (hata < %0,02).
+
 ---
 
 ## Sonraki karar icin tetikleyiciler

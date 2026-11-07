@@ -83,3 +83,35 @@ islemler:
     adet: 1
     fiyat_try: 346.75
     gerekce: "ASELS geliri nakde park edilmedi; risk 2.00 betadan 0.79 betaya kaydirildi."
+
+  # === 2026-11-07: Agresif tilt - hedef nakit .15->.05, kripto .10->.20,
+  # nasdaq .25->.30, maden .20->.15. Cumartesi karari: BIST/QQQ/altin icin
+  # son kapanis (Cuma) fiyati, BTC icin BTCTurk degerleme fiyati kullanildi.
+  # Fiyatlar 2026-11-07 raporundaki pozisyon degeri / adetten turetildi.
+  - tarih: 2026-11-07
+    yon: SAT
+    sembol: GC=F
+    adet: 0.121
+    fiyat_try: 6571.18
+    gerekce: "Agresif tilt: maden hedefi %20->%15. Altin 86 gunde TL'de -%4,2, mevduatin 13 puan gerisinde."
+
+  - tarih: 2026-11-07
+    yon: AL
+    sembol: QQQ
+    adet: 0.0399
+    fiyat_try: 32904.56
+    gerekce: "Agresif tilt: nasdaq hedefi %25->%30. Beta 0,90 - portfoyun en verimli risk tasiyicisi."
+
+  - tarih: 2026-11-07
+    yon: AL
+    sembol: BTC-USD
+    adet: 0.000405
+    fiyat_try: 3801515.15
+    gerekce: "Agresif tilt: kripto hedefi %10->%20. Bilincli risk: beta 1,87, kisma tavanini asacak."
+
+  - tarih: 2026-11-07
+    yon: AL
+    sembol: THYAO.IS
+    adet: 1
+    fiyat_try: 299.29
+    gerekce: "Agresif tilt: BIST %28,6->%30. Tam lot; 292 TL acik en yakin THYAO (299 TL) ile kapandi."
