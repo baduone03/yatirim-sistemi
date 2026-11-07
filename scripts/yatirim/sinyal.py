@@ -226,12 +226,14 @@ def _sinif_sonucu(sapma, esikler, maliyet, gecmis, simdi, bekleme_saat,
 
     yeni = replace(onceki, acik=True, yon=yon)
     genis = esikler.sapma_asildi(sapma.sapma, latch, hafta_sonu)
+    # Azaltmada para nakde (hurdle'in kendisine) gider: beklenti sorulmaz.
+    azaltma = yon == AZALT
     return _kapilar(SINIF, sapma.sinif, yon, onceki, genis, maliyet,
                     lambda: maliyet.sinif_sinyali_acik(sapma.sinif),
                     simdi, bekleme_saat, duyarlilik,
-                    lambda: duyarlilik.sinif_sinyali_acik_mi(sapma.sinif),
+                    lambda: duyarlilik.sinif_sinyali_acik_mi(sapma.sinif, azaltma),
                     duyarlilik.sinif_etiketi(sapma.sinif) if duyarlilik else "",
-                    lambda: duyarlilik.sinif_sebep_kodu(sapma.sinif)), yeni
+                    lambda: duyarlilik.sinif_sebep_kodu(sapma.sinif, azaltma)), yeni
 
 
 def _sembol_sonucu(varlik_riski, esikler, maliyet, gecmis, simdi, bekleme_saat,
@@ -248,9 +250,10 @@ def _sembol_sonucu(varlik_riski, esikler, maliyet, gecmis, simdi, bekleme_saat,
     return _kapilar(SEMBOL, sembol, KIS, onceki, genis, maliyet,
                     lambda: maliyet.sinyal_acik(sembol),
                     simdi, bekleme_saat, duyarlilik,
-                    lambda: duyarlilik.sinyal_acik_mi(sembol),
+                    # Kisma bir SATIS: beklenti kapisi sorulmaz.
+                    lambda: duyarlilik.sinyal_acik_mi(sembol, azaltma=True),
                     duyarlilik.etiket(sembol) if duyarlilik else "",
-                    lambda: duyarlilik.sebep_kodu(sembol)), yeni
+                    lambda: duyarlilik.sebep_kodu(sembol, azaltma=True)), yeni
 
 
 def kararlari_uret(sapmalar, risk, esikler, bekleme, devre_kesici,

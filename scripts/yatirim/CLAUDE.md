@@ -105,8 +105,11 @@ A maddeleri kok `CLAUDE.md`'dedir ve buraya YAZILMAZ.
   esigi asiyorsa `math.inf` doner - hicbir buyukluk yetmez, o varliktan cikmaktan baska secenek
   yok.
 - **duyarlilik IKI BOYUTLU**: (1) islem maliyeti - `gidis_donus` sapma esigini asiyor mu; (2)
-  tasima - beyan edilen beklenti GEREKEN getiriyi karsiliyor mu. Ikisi de gecmeden sinyal
-  acilmaz.
+  tasima - beyan edilen beklenti GEREKEN getiriyi karsiliyor mu. ALIM sinyali ikisini de
+  ister; AZALTMA/KISMA yalnizca (1)'i.
+- **beklenti kapisi YONLUDUR** (B, 2026-11-07): satisin parasi nakde = hurdle'in kendisine
+  gider, "beyan yok/yetersiz" satmanin gerekcesidir. Yonsuz kapi 86 gun her kisma/azaltmayi
+  bastirdi, sim tek islem uretmedi. Bkz. YonluBeklentiKapisiTesti.
 - **sistem beklenen getiri URETMEZ, GEREKENI hesaplar**: `gereken = tl_risksiz + yillik_tasima +
   gidis_donus / planlanan_yil`. Her girdisi olculebilir. Basabas formulunun cebirsel tersi ama
   onemli farkla: basabas beklenen getiriyi PAYDADA istiyordu ve o sayi sistemin uretemeyecegi

@@ -454,7 +454,7 @@ def komut_param(baglam: Baglam, arguman: str) -> str:
     if bekleyenler:
         satirlar += [
             "",
-            "BEKLENTI BEYAN EDILMEMIS - sinyal yok: "
+            "BEKLENTI BEYAN EDILMEMIS - alim sinyali yok (azaltma etkilenmez): "
             + kacis(", ".join(bekleyenler))
             + ". varliklar.yaml -> maliyet.tutma icine kendi beklentini yaz."]
 

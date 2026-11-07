@@ -3772,6 +3772,67 @@ class KapsamDenetimiTesti(unittest.TestCase):
         self.assertIn("yeni_gizli_alan", ihlaller[0])
 
 
+class YonluBeklentiKapisiTesti(unittest.TestCase):
+    """Beklenti (tasima) kapisi yalnizca ALIM yonunu bastirir.
+
+    2026-08-13 -> 2026-11-07: beklenti hic beyan edilmedigi icin her kisma ve
+    azaltma sinyali "BEKLENTI BEYAN EDILMEMIS" ile bastirildi, sim 86 gun tek
+    islem uretmedi. Satisin parasi nakde, yani hurdle'in kendisine gider;
+    "mevduati gececegine dair beyan yok" satmanin gerekcesidir, engeli degil.
+    """
+
+    @property
+    def _yardimci(self):
+        # GerekenGetiriTesti asagida tanimli; kurulum ondan odunc alinir.
+        return GerekenGetiriTesti()
+
+    def _rapor(self, **kwargs):
+        return self._yardimci._rapor(**kwargs)
+
+    def test_kisma_beklenti_yokken_acik(self):
+        rapor = self._rapor(beklenti=None)
+        self.assertFalse(rapor.sinyal_acik_mi("A.IS"))
+        self.assertTrue(rapor.sinyal_acik_mi("A.IS", azaltma=True))
+        self.assertEqual(rapor.sebep_kodu("A.IS", azaltma=True), "")
+
+        karar = karar_ver(risk=_riskler(VarlikRiski("A.IS", 0.3, -0.2, 0.9, 0.5)),
+                          duyarlilik=rapor)
+        sonuc = karar.sonuc(SEMBOL, "A.IS")
+        self.assertTrue(sonuc.acik)
+        self.assertEqual(sonuc.yon, KIS)
+
+    def test_kisma_beklenti_yetersizken_acik(self):
+        model = self._yardimci._model()
+        gereken = model.gereken_getiri("A.IS", 10_000.0, 41.0)
+        rapor = self._rapor(beklenti=gereken - 0.05)
+        karar = karar_ver(risk=_riskler(VarlikRiski("A.IS", 0.3, -0.2, 0.9, 0.5)),
+                          duyarlilik=rapor)
+        self.assertTrue(karar.sonuc(SEMBOL, "A.IS").acik)
+
+    def test_sinif_azalt_acik_artir_bastirilir(self):
+        rapor = self._rapor(beklenti=None)
+        fazla = karar_ver(sapmalar=[SinifSapmasi("bist", 0.35, 0.30)],
+                          duyarlilik=rapor)
+        self.assertTrue(fazla.sonuc(SINIF, "bist").acik)
+        self.assertEqual(fazla.sonuc(SINIF, "bist").yon, AZALT)
+
+        eksik = karar_ver(sapmalar=[SinifSapmasi("bist", 0.25, 0.30)],
+                          duyarlilik=rapor)
+        self.assertEqual(eksik.sonuc(SINIF, "bist").yon, ARTIR)
+        self.assertEqual(eksik.sonuc(SINIF, "bist").sebep, SINYAL_BEKLENTI_YOK)
+
+    def test_azaltmada_islem_maliyeti_kapisi_KALIR(self):
+        """Yon farki yalnizca tasima boyutunu kaldirir. Maliyet sapmayi
+        yutuyorsa satis da yapilmaz - duzelttiginden fazlasini goturur."""
+        rapor = self._rapor(beklenti=None, komisyon=0.03, spread=0.02)
+        varlik = rapor.varliklar["A.IS"]
+        self.assertFalse(varlik.islem_tamam)
+        self.assertFalse(rapor.sinyal_acik_mi("A.IS", azaltma=True))
+        karar = karar_ver(risk=_riskler(VarlikRiski("A.IS", 0.3, -0.2, 0.9, 0.5)),
+                          duyarlilik=rapor)
+        self.assertEqual(karar.sonuc(SEMBOL, "A.IS").sebep, MALIYET_YUTUYOR)
+
+
 class GerekenGetiriTesti(unittest.TestCase):
     """Ikinci boyut: sistem beklenen getiri URETMEZ, gerekeni HESAPLAR."""
 
@@ -3854,9 +3915,10 @@ class GerekenGetiriTesti(unittest.TestCase):
         self.assertIn("gereken yillik getiri", varlik.etiket)
         self.assertIn("A.IS", rapor.beklenti_bekleyenler)
 
-        karar = karar_ver(risk=_riskler(VarlikRiski("A.IS", 0.3, -0.2, 0.9, 0.5)),
+        # ALIM yonu bastirilir; kisma (satis) icin bkz. YonluBeklentiKapisiTesti.
+        karar = karar_ver(sapmalar=[SinifSapmasi("bist", 0.25, 0.30)],
                           duyarlilik=rapor)
-        self.assertEqual(karar.sonuc(SEMBOL, "A.IS").sebep, SINYAL_BEKLENTI_YOK)
+        self.assertEqual(karar.sonuc(SINIF, "bist").sebep, SINYAL_BEKLENTI_YOK)
 
     def test_beyan_gereken_altindaysa_bastiriliyor(self):
         model = self._model()
@@ -3871,9 +3933,9 @@ class GerekenGetiriTesti(unittest.TestCase):
                          "beyan edilen beklenti gereken getirinin altinda")
         self.assertIn("A.IS", dusuk.beklentisi_yetersizler)
 
-        karar = karar_ver(risk=_riskler(VarlikRiski("A.IS", 0.3, -0.2, 0.9, 0.5)),
+        karar = karar_ver(sapmalar=[SinifSapmasi("bist", 0.25, 0.30)],
                           duyarlilik=dusuk)
-        self.assertEqual(karar.sonuc(SEMBOL, "A.IS").sebep,
+        self.assertEqual(karar.sonuc(SINIF, "bist").sebep,
                          SINYAL_BEKLENTI_YETERSIZ)
 
         # Yeterli beyan -> sinyal acilir.

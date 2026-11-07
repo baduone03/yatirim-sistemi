@@ -143,8 +143,31 @@ class VarlikDuyarliligi:
         return bool(self.tutma_kararlari)
 
     @property
+    def islem_tamam(self) -> bool:
+        """Birinci boyut: islem maliyeti uc senaryoda da sapmadan kucuk mu?"""
+        return self.dayanikli and self.kararlar.get(TEMEL) == ISLEM_MANTIKLI
+
+    def yonlu_sinyal_acik(self, azaltma: bool) -> bool:
+        """Yon farkinda kapi. AZALTMA yalnizca islem boyutunu ister.
+
+        Tasima boyutu "bu varligi TUTMAK mevduati gecer mi" sorusudur ve
+        yalnizca ALIM yonunde anlamlidir. Azaltmada satisin geliri nakde,
+        yani tam olarak hurdle'in kendisine gider: beklenti beyan edilmemis
+        ya da yetersizse bu, satmanin GEREKCESIDIR, engeli degil. Eski kapi
+        yon ayirmiyordu ve 2026-08-13'ten 2026-11-07'ye kadar her kisma ve
+        azaltma sinyalini "BEKLENTI BEYAN EDILMEMIS" diye bastirdi - sistem
+        86 gun tek islem uretmedi. Bkz. YonluBeklentiKapisiTesti.
+        """
+        return self.islem_tamam if azaltma else self.sinyal_acik
+
+    def yonlu_sebep_kodu(self, azaltma: bool) -> str:
+        if azaltma and self.islem_tamam:
+            return ""
+        return self.sebep_kodu
+
+    @property
     def sinyal_acik(self) -> bool:
-        """Sinyal uretilebilir mi? IKI boyut da gecmeli.
+        """ALIM yonunde sinyal uretilebilir mi? IKI boyut da gecmeli.
 
         Dayaniklilik TEK BASINA yetmez: uc senaryoda da "maliyet yutuyor"
         cikan varlikta karar dayaniklidir ama yapilmasi gereken sey islem
@@ -154,9 +177,7 @@ class VarlikDuyarliligi:
         Ikinci boyut ayri bir soru soruyor: islem maliyeti kabul edilebilir
         olsa bile, bu varlik planlanan surede o maliyeti CIKARIYOR mu?
         """
-        islem_tamam = (self.dayanikli
-                       and self.kararlar.get(TEMEL) == ISLEM_MANTIKLI)
-        if not islem_tamam:
+        if not self.islem_tamam:
             return False
         return self.tutma_dayanikli if self.tutma_olculdu else True
 
@@ -258,20 +279,22 @@ class DuyarlilikRaporu:
     varliklar: dict[str, VarlikDuyarliligi] = field(default_factory=dict)
     esik: float = 0.0
 
-    def sinyal_acik_mi(self, sembol: str) -> bool:
+    def sinyal_acik_mi(self, sembol: str, azaltma: bool = False) -> bool:
         """Bilinmeyen sembol icin True: duyarlilik testi ek bir kapidir,
         eksik maliyet kapisinin yerine gecmez. Modelde hic olmayan sembolu
-        burada bastirmak, bastirma sebebini yanlis gosterirdi."""
+        burada bastirmak, bastirma sebebini yanlis gosterirdi.
+
+        `azaltma=True`: satis yonu, tasima (beklenti) boyutu sorulmaz."""
         varlik = self.varliklar.get(sembol)
-        return True if varlik is None else varlik.sinyal_acik
+        return True if varlik is None else varlik.yonlu_sinyal_acik(azaltma)
 
     def etiket(self, sembol: str) -> str:
         varlik = self.varliklar.get(sembol)
         return varlik.etiket if varlik else ""
 
-    def sebep_kodu(self, sembol: str) -> str:
+    def sebep_kodu(self, sembol: str, azaltma: bool = False) -> str:
         varlik = self.varliklar.get(sembol)
-        return varlik.sebep_kodu if varlik else ""
+        return varlik.yonlu_sebep_kodu(azaltma) if varlik else ""
 
     @property
     def dogrulanmamis_acilimlar(self) -> dict[str, VarlikDuyarliligi]:
@@ -307,7 +330,7 @@ class DuyarlilikRaporu:
     def _sinif_adaylari(self, sinif: str) -> list[VarlikDuyarliligi]:
         return [v for v in self.varliklar.values() if v.sinif == sinif]
 
-    def sinif_sinyali_acik_mi(self, sinif: str) -> bool:
+    def sinif_sinyali_acik_mi(self, sinif: str, azaltma: bool = False) -> bool:
         """Sinif tavsiyesi ancak dayanikli EN AZ BIR varlikla uygulanabilir.
 
         `MaliyetModeli.sinif_sinyali_acik` ile ayni mantik: bir sinifi azaltmak
@@ -315,7 +338,8 @@ class DuyarlilikRaporu:
         belirsizse tavsiye uygulanamaz bir emirdir.
         """
         adaylar = self._sinif_adaylari(sinif)
-        return True if not adaylar else any(v.sinyal_acik for v in adaylar)
+        return True if not adaylar else any(v.yonlu_sinyal_acik(azaltma)
+                                            for v in adaylar)
 
     def sinif_etiketi(self, sinif: str) -> str:
         belirsiz = sorted({p for v in self._sinif_adaylari(sinif)
@@ -348,8 +372,9 @@ class DuyarlilikRaporu:
                 kapsam_disi.setdefault(parametre, []).append(sembol)
         return kapsam_disi
 
-    def sinif_sebep_kodu(self, sinif: str) -> str:
-        kodlar = [v.sebep_kodu for v in self._sinif_adaylari(sinif) if v.sebep_kodu]
+    def sinif_sebep_kodu(self, sinif: str, azaltma: bool = False) -> str:
+        kodlar = [k for v in self._sinif_adaylari(sinif)
+                  if (k := v.yonlu_sebep_kodu(azaltma))]
         return kodlar[0] if kodlar else SEBEP_PARAMETRE
 
     @property
