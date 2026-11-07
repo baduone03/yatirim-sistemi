@@ -43,6 +43,16 @@ on:
     # Haftalik ozet de ayri cron istemez: Cuma gunu gun sonu kosusu
     # HAFTALIK gorevine donusur.
   workflow_dispatch:          # Actions sekmesinden elle tetiklenebilir
+    inputs:
+      gorev:
+        # Bos = saate gore secilir (zamanlanmis kosuyla ayni). Doluysa o gorev
+        # ZORLANIR: cumartesi aksami "raporu simdi gor" icin. Ayni gunun ozeti
+        # zaten gittiyse gonderilen.log ikinci gonderimi engeller.
+        description: "Gorev zorla (bos = saate gore)"
+        required: false
+        default: ""
+        type: choice
+        options: ["", gun_sonu, brifing, haftalik, tarama]
 
 permissions:
   contents: write             # uretilen raporu repoya geri commit etmek icin
@@ -87,6 +97,9 @@ jobs:
           # Gun sonu/brifing mesajinin basindaki uc cumlelik model ozeti icin.
           # Yoksa mesaj onsozsuz gider, kosu BASARILI sayilir.
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          # Ortam degiskeni uzerinden: `run:` icine ${{ }} gomulmez (kok
+          # CLAUDE.md, kabuk enjeksiyonu). Zamanlanmis kosuda bos gelir.
+          ZORLA_GOREV: ${{ inputs.gorev }}
         run: python scripts/yatirim/main.py --sim --telegram
 
       - name: Karar sonuclarini olc

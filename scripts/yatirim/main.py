@@ -8,6 +8,7 @@ Kullanim:
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from dataclasses import dataclass, replace
@@ -51,7 +52,7 @@ from notify import (  # noqa: E402
     kuyrugu_bosalt,
     mesaj_gonder,
 )
-from piyasa import BRIFING, GUN_SONU, HAFTALIK, TARAMA  # noqa: E402
+from piyasa import BRIFING, GUN_SONU, HAFTALIK, TARAMA, Plan  # noqa: E402
 from portfolio import (  # noqa: E402
     NAKIT_SINIFI,
     degisim_24s,
@@ -220,12 +221,12 @@ def _islem_onerileri(karar, fiyatlar, portfoy, risk, yapilandirma, maliyet,
         gidis_donus = maliyet.gidis_donus(sonuc.ad, azalt_try, fiyatlar.usdtry)
         sonuc_gonderim = gonder_islem_karari(
             islem,
-            [Tetikleyici("Risk katkisi", varlik_riski.risk_katkisi,
+            [Tetikleyici("Portföy riskindeki payı", varlik_riski.risk_katkisi,
                          yapilandirma.esikler.risk_katkisi_ust),
              Tetikleyici("Beta", varlik_riski.beta,
                          yapilandirma.esikler.risk_beta_ust, "sayi")],
-            [Etki("Agirlik", agirliklar.get(sonuc.ad, 0.0), hedef_agirlik),
-             Etki("Risk katkisi", varlik_riski.risk_katkisi,
+            [Etki("Portföydeki payı", agirliklar.get(sonuc.ad, 0.0), hedef_agirlik),
+             Etki("Risk payı", varlik_riski.risk_katkisi,
                   yapilandirma.esikler.risk_katkisi_ust)],
             gidis_donus,
             azalt_try * gidis_donus / 2 if gidis_donus is not None else None,
@@ -305,9 +306,12 @@ def _sinif_onerileri(karar, sapmalar, fiyatlar, portfoy, yapilandirma,
                 veri_kaynagi=_veri_kaynagi(fiyatlar, pozisyon.sembol))
             sonuc_gonderim = gonder_islem_karari(
                 islem,
-                [Tetikleyici(f"{sonuc.ad} sinif sapmasi", sapma.sapma,
-                             sapma_esigi if sapma.sapma > 0 else -sapma_esigi)],
-                [Etki(f"{sonuc.ad} agirligi", sapma.guncel_agirlik,
+                [Tetikleyici(f"{sonuc.ad} payı hedefin "
+                             f"{'üstünde' if sapma.sapma > 0 else 'altında'}",
+                             sapma.sapma,
+                             sapma_esigi if sapma.sapma > 0 else -sapma_esigi,
+                             "puan")],
+                [Etki(f"{sonuc.ad} payı", sapma.guncel_agirlik,
                       sapma.hedef_agirlik)],
                 gidis_donus,
                 pay * gidis_donus / 2 if gidis_donus is not None else None,
@@ -329,9 +333,9 @@ def _veri_kaynagi(fiyatlar, sembol: str) -> str:
 
 
 BASLIKLAR = {
-    BRIFING: "🌅 Gunun brifingi",
-    HAFTALIK: "📅 Hafta kapanisi",
-    GUN_SONU: "🌙 Gun sonu",
+    BRIFING: "🌅 Günün brifingi",
+    HAFTALIK: "📅 Hafta kapanışı",
+    GUN_SONU: "🌙 Gün sonu",
 }
 
 
@@ -420,7 +424,7 @@ def _bildirimleri_gonder(yapilandirma, fiyatlar, portfoy, risk, karar, durum,
         ayrimlar=kur_ayristir(fiyatlar, yapilandirma.varliklar,
                               [p.sembol for p in portfoy.pozisyonlar], gun),
         uyarilar=uyarilar,
-        baslik=BASLIKLAR.get(gorev, "🌙 Gun sonu"),
+        baslik=BASLIKLAR.get(gorev, "🌙 Gün sonu"),
         # Anlati girdileri. karar: "islem yapildi mi" bolumu icin; adlar:
         # mesajda 'GC=F' yerine 'Altin (gram)' yazabilmek icin; baslangic_try:
         # getiriyi sermaye tabanina gore ifade edebilmek icin.
@@ -479,6 +483,16 @@ def main() -> int:
     # telafi edilir, giden ozet ikinci kez uretilmez (LLM cagrisi yok).
     yapilan = gonderilen_anahtarlar() | {b.anahtar for b in kuyrugu_oku()}
     plan = bildirim_ayarlari.takvim.planla(simdi, yapilan)
+    # Elle tetiklemede gorev zorlanabilir (workflow_dispatch -> ZORLA_GOREV).
+    # Saate bakan secim cumartesi 20:30'da "tarama" der ve rapor yazilmaz;
+    # "raporu simdi gor" istegi icin tek yol bu. Gun TR bugunudur; ayni
+    # gunun ozeti zaten gittiyse gonderilen.log ikinci gonderimi engeller.
+    zorla = os.environ.get("ZORLA_GOREV", "").strip()
+    if zorla:
+        if zorla not in (GUN_SONU, BRIFING, HAFTALIK, TARAMA):
+            print(f"HATA - gecersiz ZORLA_GOREV: {zorla!r}", file=sys.stderr)
+            return 1
+        plan = Plan(zorla, (simdi + TR_OFSET).date())
     gorev = plan.gorev
     # Ozetin ait oldugu gun: telafide DUN. Rapor dosyasi ve gonderim
     # anahtari bunu kullanir; latch/sayac ise bugunun (rapor_adi) gunudur.

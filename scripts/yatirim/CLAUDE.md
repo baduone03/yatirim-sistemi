@@ -317,6 +317,12 @@ A maddeleri kok `CLAUDE.md`'dedir ve buraya YAZILMAZ.
   ile genisletilmis esigi asmayan sinyal `HAFTA_SONU` sebebiyle islem onerisi olmaktan cikar ama
   `karar.hafta_sonu_uyarilari` icinde kalir ve gun sonu uyarilarina girer. Bilgi kesilmez, cita
   yukselir.
+- **Telegram uyarisi `Uyari(metin, sade=...)`** (B, 2026-11-07): `sade` dolu uyari mesajda acik
+  cumleyle, bos olan yalnizca "N teknik not" SAYISIYLA gorunur (metni raporda). Kritik yeni
+  uyari eklerken `sade` VER, yoksa telefonda sayiya gomulur. Bkz. UyariSadelestirmeTesti.
+- **`ZORLA_GOREV`** (B, 2026-11-07): `workflow_dispatch` girdisi `gorev`, saate bakan secimi
+  ezer (cumartesi aksami "tarama" yerine gun sonu). Ortam degiskeniyle gecer, `run:` icine
+  gomulmez. Ayni gunun ozeti gittiyse `gonderilen.log` tekrar gondermez.
 - **`uyarilari_topla` TEK uyari kaynagi**: eskiden uyari bloklari mesaj sablonuna dagilmisti ve
   yeni bir uyari turu rapora girip Telegram'a girmeyebiliyordu. Yeni uyari turu eklerken bu
   fonksiyona ekle, sablona degil.
