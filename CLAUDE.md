@@ -212,7 +212,7 @@ ilgili alt klasorun `CLAUDE.md`'sindedir:
 
 - **sembol / hedef / esik degisikligi YALNIZCA YAML'da**: `04-projects/yatirim-sistemi/*.yaml`
   icinde yapilir, kodda degil. Karar esikleri `varliklar.yaml -> esikler` altinda; kodda sabit
-  tutma. Simulasyonda agresif (3 puan / %20), gercek parada gevsek (5 puan / %25) olmali -
+  tutma. Simulasyon: rebalancing 3 puan, kisma katki %30 + beta 2.20 (2026-11-07 agresif tilt); gercek parada 5 puan / %25 -
   komisyon %0.15, gidis-donus %0.30.
 - **simulasyon defteri append-only**: gecmis islem duzeltilmez, ters islemle kapatilir. Maliyet
   agirlikli ortalama.

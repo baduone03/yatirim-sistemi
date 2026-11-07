@@ -23,7 +23,7 @@ test etmek.
 | Kaldirac / acik pozisyon | yok |
 | Ek para girisi | yok - sadece baslangic sermayesi |
 | Rebalancing esigi | hedeften **3 puan** sapma (agresif) |
-| Kisma kurali | risk katkisi > **%20** VE beta > **1,50** |
+| Kisma kurali | risk katkisi > **%30** VE beta > **2,20** (2026-11-07 oncesi %20 / 1,50) |
 
 Defter `islemler.yaml` append-only. Gecmis islem silinmez; hata varsa
 ters islemle kapatilir.
@@ -230,7 +230,9 @@ Sonrasi: BIST %30,0 / Nasdaq %30,0 / kripto %20,0 / maden %15,0 / nakit %4,9.
 
 **Bilinen celiski:** BTC %20 agirlikta kisma kuralini (katki > %20 ve beta >
 1,50) tetikleyecek. Kural gevsetilmedi; sinyal geldiginde islem yapilmayacak,
-tilt'in bilincli maliyeti olarak kaydedilir. Nakitten cikmak yillik ~%42
+tilt'in bilincli maliyeti olarak kaydedilir.
+*Guncelleme (ayni gun):* Dodo freni de gevsetti - kisma katki %30 + beta 2,20.
+Tahmini BTC katkisi ~%36 ama beta ~1,8, yani kural artik BTC'yi kirpmaz. Nakitten cikmak yillik ~%42
 risksiz getiriden vazgecmek demek - olcut `kararlar.yaml` icinde.
 
 **Cumartesi karari:** BIST/QQQ/altin fiyati Cuma kapanisi. Ag kisiti
@@ -241,7 +243,7 @@ yuzunden fiyatlar 2026-11-07 raporundaki deger/adet'ten turetildi (hata < %0,02)
 ## Sonraki karar icin tetikleyiciler
 
 - Bir varlik sinifi hedeften **3 puan** saparsa -> rebalancing degerlendir
-- Bir varligin katkisi **%20**'yi VE betasi **1,50**'yi birlikte asarsa -> kis
+- Bir varligin katkisi **%30**'u VE betasi **2,20**'yi birlikte asarsa -> kis
 - Portfoy max drawdown -%20'yi asarsa -> dagilimi bastan gozden gecir
 - Aksi halde islem yok. **Islem yapmamak da bir karardir.**
 
