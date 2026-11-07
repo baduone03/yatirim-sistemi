@@ -176,3 +176,29 @@ olcumler:
   getiriler:
     GARAN.IS: 0.029321
     TUPRS.IS: 0.20448
+- karar_id: 2026-11-07-agresif-tilt
+  gun: 0
+  olcum_tarihi: '2026-11-07'
+  portfoy_degeri: 19958.41
+  portfoy_getirisi: 0.0
+  fiyatlar:
+    BTC-USD: 3799619.5345
+    GC=F: 6570.5734
+    QQQ: 32905.3044
+    THYAO.IS: 299.25
+  getiriler:
+    BTC-USD: 0.0
+    GC=F: 0.0
+    QQQ: 0.0
+    THYAO.IS: 0.0
+- karar_id: 2026-11-07-nasdaq-35
+  gun: 0
+  olcum_tarihi: '2026-11-07'
+  portfoy_degeri: 19958.41
+  portfoy_getirisi: 0.0
+  fiyatlar:
+    GC=F: 6570.5734
+    QQQ: 32905.3044
+  getiriler:
+    GC=F: 0.0
+    QQQ: 0.0

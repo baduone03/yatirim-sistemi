@@ -72,3 +72,39 @@ Karar tarihi 2026-08-13 (86 gun once).
 *Takas farki* = alinanin getirisi − satilanin getirisi. Pozitif ise takas getiri olarak kazandirdi. Karar risk icin verildiyse bu satir tek basina yeterli degil.
 
 **Takip tamamlandi** (30 gun doldu).
+
+## 2026-11-07-agresif-tilt
+
+**REBALANCING** — Hedef dagilim riske kaydirildi: nakit %15->%5, kripto %10->%20, nasdaq %25->%30, maden %20->%15. Altin 0,121 g satildi; QQQ 0,0399, BTC 0,000405, THYAO 1 lot alindi.
+
+*Beklenti:* Bu bir risk-alma bahsi: nakit faizinden (yillik ~%42) vazgecilip risk varliklarina 2.850 TL ek para konuldu. Portfoy volatilitesi %15,4'ten yukari cikacak (beklenen ~%18-20). 30 gunde portfoy getirisi ayni donemin mevduat getirisini (~%3) gecmezse tilt para kazandirmamis demektir. BTC agirligi %20'de kisma tavanini (katki %20 + beta 1,50) asacak; bu sinyal bilerek gormezden gelinen bir risktir.
+
+*Bozan kosul:* Portfoy getirisi -10.0% altina inerse tez bozulur - Karar gununden %10 kayip = agresif tilt hatali, dagilimi geri al
+
+Karar tarihi 2026-11-07 (0 gun once).
+
+| Gun | Tarih | Portfoy | Portfoy getirisi | Satilan | Alinan | Takas farki | Portfoy getirisi |
+|---|---|---|---|---|---|---|---|
+| 0 (karar) | 2026-11-07 | 19.958 TL | +0.00% | +0.00% | +0.00% | **+0.00%** | +0.0% |
+
+*Takas farki* = alinanin getirisi − satilanin getirisi. Pozitif ise takas getiri olarak kazandirdi. Karar risk icin verildiyse bu satir tek basina yeterli degil.
+
+Kalan kontrol gunleri: 5, 10, 15, 20, 25, 30.
+
+## 2026-11-07-nasdaq-35
+
+**TAKAS** — Altin 0,154 g satildi, QQQ 0,0307 alindi: nasdaq hedefi %30->%35, maden %15->%10.
+
+*Beklenti:* QQQ 30 gunde altini TL getirisi olarak gececek (takas farki > 0). Amac risk degil getiri: altin portfoyun tek dusuk korelasyonlu varligiydi (herkese 0,15-0,28), cikmasi portfoy volatilitesini artiracak - bu bilincli.
+
+*Bozan kosul:* Takas farki (alinan - satilan) -5.0% altina inerse tez bozulur - Altin QQQ'yu 5 puandan fazla gecerse savunmayi atmak hataydi
+
+Karar tarihi 2026-11-07 (0 gun once).
+
+| Gun | Tarih | Portfoy | Portfoy getirisi | Satilan | Alinan | Takas farki | Takas farki (alinan - satilan) |
+|---|---|---|---|---|---|---|---|
+| 0 (karar) | 2026-11-07 | 19.958 TL | +0.00% | +0.00% | +0.00% | **+0.00%** | +0.0% |
+
+*Takas farki* = alinanin getirisi − satilanin getirisi. Pozitif ise takas getiri olarak kazandirdi. Karar risk icin verildiyse bu satir tek basina yeterli degil.
+
+Kalan kontrol gunleri: 5, 10, 15, 20, 25, 30.
