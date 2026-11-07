@@ -96,3 +96,20 @@ kararlar:
       yon: alti
       esik: -0.10
       aciklama: "Karar gununden %10 kayip = agresif tilt hatali, dagilimi geri al"
+
+  - id: 2026-11-07-nasdaq-35
+    tarih: 2026-11-07
+    tip: TAKAS
+    ozet: "Altin 0,154 g satildi, QQQ 0,0307 alindi: nasdaq hedefi %30->%35, maden %15->%10."
+    beklenti: >-
+      QQQ 30 gunde altini TL getirisi olarak gececek (takas farki > 0).
+      Amac risk degil getiri: altin portfoyun tek dusuk korelasyonlu
+      varligiydi (herkese 0,15-0,28), cikmasi portfoy volatilitesini
+      artiracak - bu bilincli.
+    satilan: [GC=F]
+    alinan: [QQQ]
+    bozan_kosul:
+      olcut: takas_farki
+      yon: alti
+      esik: -0.05
+      aciklama: "Altin QQQ'yu 5 puandan fazla gecerse savunmayi atmak hataydi"
