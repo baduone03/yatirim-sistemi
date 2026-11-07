@@ -562,11 +562,17 @@ maliyet:
   # Buraya bir sayi yazmak "su getiriyi bekliyorum" demektir. Sistemin bunu
   # senin yerine doldurmasi, uretmedigi bir fiyat tahminini uretiyormus gibi
   # yapmak olurdu.
+  #
+  # 2026-11-07 BEYAN (Dodo, agresif tilt): bilerek gerekenin USTUNDE secildi ki
+  # alim sinyalleri acilsin. Anlami: "her risk varligi TL'de mevduati gecer".
+  # Gercekci tahmin (kripto .55 / bist .38 / nasdaq .35 / maden .28) yalnizca
+  # kriptoyu acardi. Beyanin tutup tutmadigi kararlar.yaml ->
+  # 2026-11-07-agresif-tilt ile olculuyor.
   tutma:
-    bist:   {planlanan_yil: 1.0, beklenen_getiri_yillik: null}
-    nasdaq: {planlanan_yil: 3.0, beklenen_getiri_yillik: null}
-    kripto: {planlanan_yil: 1.0, beklenen_getiri_yillik: null}
-    maden:  {planlanan_yil: 5.0, beklenen_getiri_yillik: null}
+    bist:   {planlanan_yil: 1.0, beklenen_getiri_yillik: 0.50, kaynak: kullanici-beyani}
+    nasdaq: {planlanan_yil: 3.0, beklenen_getiri_yillik: 0.50, kaynak: kullanici-beyani}
+    kripto: {planlanan_yil: 1.0, beklenen_getiri_yillik: 0.70, kaynak: kullanici-beyani}
+    maden:  {planlanan_yil: 5.0, beklenen_getiri_yillik: 0.45, kaynak: kullanici-beyani}
 
   # Firsat maliyeti - hurdle rate. ZORUNLU.
   # Deger yoksa (ne canli ne yedek) RAPOR URETILMEZ: sifira gore olculen

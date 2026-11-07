@@ -232,7 +232,12 @@ Sonrasi: BIST %30,0 / Nasdaq %30,0 / kripto %20,0 / maden %15,0 / nakit %4,9.
 1,50) tetikleyecek. Kural gevsetilmedi; sinyal geldiginde islem yapilmayacak,
 tilt'in bilincli maliyeti olarak kaydedilir.
 *Guncelleme (ayni gun):* Dodo freni de gevsetti - kisma katki %30 + beta 2,20.
-Tahmini BTC katkisi ~%36 ama beta ~1,8, yani kural artik BTC'yi kirpmaz. Nakitten cikmak yillik ~%42
+Tahmini BTC katkisi ~%36 ama beta ~1,8, yani kural artik BTC'yi kirpmaz.
+*Guncelleme 2:* Alim beklentileri beyan edildi (kullanici beyani, gerekenin
+bilerek ustunde): kripto %70 / BIST %50 / Nasdaq %50 / maden %45. Canli hurdle
+(~%42) ile THYAO, TUPRS, ASELS, BTC, altin alimlari acik; QQQ
+`kur_spread_tek_yon` belirsizligi yuzunden kapali. YAML yedek hurdle'a (%47,9)
+dusulurse TUPRS ve altin kapanir. Nakitten cikmak yillik ~%42
 risksiz getiriden vazgecmek demek - olcut `kararlar.yaml` icinde.
 
 **Cumartesi karari:** BIST/QQQ/altin fiyati Cuma kapanisi. Ag kisiti
