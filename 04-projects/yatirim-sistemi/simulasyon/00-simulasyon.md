@@ -237,7 +237,12 @@ Tahmini BTC katkisi ~%36 ama beta ~1,8, yani kural artik BTC'yi kirpmaz.
 bilerek ustunde): kripto %70 / BIST %50 / Nasdaq %50 / maden %45. Canli hurdle
 (~%42) ile THYAO, TUPRS, ASELS, BTC, altin alimlari acik; QQQ
 `kur_spread_tek_yon` belirsizligi yuzunden kapali. YAML yedek hurdle'a (%47,9)
-dusulurse TUPRS ve altin kapanir. Nakitten cikmak yillik ~%42
+dusulurse TUPRS ve altin kapanir.
+
+*Guncelleme 3:* Nasdaq %30->%35, maden %15->%10. Altin 0,154 g SAT (1.012 TL),
+QQQ 0,0307 AL (1.010 TL). QQQ alim sinyalini ACMAZ: tahmin araliklarinin
+kotumser ucunda minimum ekonomik pozisyon ~76.800 TL. Acmanin yolu Midas'tan
+kur spread / komisyon / kambiyo vergisi olcmek. Olcut: `2026-11-07-nasdaq-35`. Nakitten cikmak yillik ~%42
 risksiz getiriden vazgecmek demek - olcut `kararlar.yaml` icinde.
 
 **Cumartesi karari:** BIST/QQQ/altin fiyati Cuma kapanisi. Ag kisiti

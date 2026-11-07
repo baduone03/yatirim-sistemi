@@ -115,3 +115,19 @@ islemler:
     adet: 1
     fiyat_try: 299.29
     gerekce: "Agresif tilt: BIST %28,6->%30. Tam lot; 292 TL acik en yakin THYAO (299 TL) ile kapandi."
+
+  # === 2026-11-07 (2): Nasdaq %30->%35, maden %15->%10 (Dodo: "agresif,
+  # karari sen ver"). Ayni fiyat kaynagi: Cuma kapanisi / rapor deger-adet.
+  - tarih: 2026-11-07
+    yon: SAT
+    sembol: GC=F
+    adet: 0.154
+    fiyat_try: 6571.18
+    gerekce: "Maden %15->%10: savunma varligi agresif tilt'te ilk cikan; 86 gunde TL'de -%4,2 ile en zayif sinif."
+
+  - tarih: 2026-11-07
+    yon: AL
+    sembol: QQQ
+    adet: 0.0307
+    fiyat_try: 32904.56
+    gerekce: "Nasdaq %30->%35, altin satisinin geliriyle. Not: QQQ alim sinyali maliyet belirsizligi yuzunden hala kapali."

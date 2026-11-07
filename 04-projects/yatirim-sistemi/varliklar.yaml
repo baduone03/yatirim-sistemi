@@ -672,12 +672,13 @@ kiyas: [XU100.IS, QQQ, GC=F, BTC-USD]
 
 # 2026-11-07: agresif tilt (Dodo karari). Eski: bist .30 / nasdaq .25 /
 # kripto .10 / maden .20 / nakit .15. Gerekce ve olcut: simulasyon/kararlar.yaml
-# -> 2026-11-07-agresif-tilt.
+# -> 2026-11-07-agresif-tilt. Ayni gun ikinci adim: nasdaq .30->.35,
+# maden .15->.10 (kararlar.yaml -> 2026-11-07-nasdaq-35).
 hedef_dagilim:
   bist: 0.30
-  nasdaq: 0.30
+  nasdaq: 0.35
   kripto: 0.20
-  maden: 0.15
+  maden: 0.10
   nakit: 0.05
 
 varliklar:
