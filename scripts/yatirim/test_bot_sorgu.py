@@ -17,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bot_sorgu  # noqa: E402
+from mesaj import _gun_adi  # noqa: E402
 from bot_sorgu import (  # noqa: E402
     KOMUTLAR,
     Baglam,
@@ -509,7 +510,7 @@ class KomutGovdesiTesti(unittest.TestCase):
         self.baglam = Baglam(env=ENV, yukleyici=lambda env: dataclasses.replace(
             self.veri, maliyet=bayat))
         cevap = self._cevap("/durum")
-        self.assertIn("hurdle rate", cevap.lower())
+        self.assertIn("mevduat faizi verisi", cevap.lower())
         self.assertIn("2026-08-07", cevap)
 
     def test_veri_zamani_mesaj_zamani_degil(self):
@@ -518,18 +519,20 @@ class KomutGovdesiTesti(unittest.TestCase):
         Mesaj 14:30'da gidiyor diye fiyat 14:30'un fiyati olmuyor; ikisini
         karistirmak bayat veriyi taze gostermenin en kolay yolu.
         """
-        veri_gunu = self.veri.fiyatlar.son_tarih
+        # Okunur bicimde: '2026-08-19' degil '19 Agustos'.
+        veri_gunu = _gun_adi(self.veri.fiyatlar.son_tarih)
         for komut in ("/portfoy", "/risk", "/durum", "/fiyat THYAO.IS", "/son"):
             self.assertIn(veri_gunu, self._cevap(komut), komut)
 
     def test_simulasyon_ibaresi(self):
         for komut in ("/portfoy", "/risk", "/durum", "/yardim"):
-            self.assertIn("SIMULASYON", self._cevap(komut), komut)
+            self.assertIn("Kağıt portföy", self._cevap(komut), komut)
 
     def test_belirsiz_parametre_uyarisi_ekleniyor(self):
         """Tahminli kalem karari ceviriyorsa mesajda uyari satiri olmali."""
         self.assertTrue(self.veri.duyarlilik.belirsizler, "fixture belirsizlik uretmeli")
-        self.assertIn("parametre belirsizligi", self._cevap("/portfoy"))
+        self.assertIn("parametre belirsizliği", self._cevap("/portfoy"))
+        self.assertIn("/param", self._cevap("/portfoy"))   # ayrinti orada
 
     def test_fiyat_bilinmeyen_sembol_liste_doner(self):
         cevap = self._cevap("/fiyat ../../etc/passwd")
@@ -539,20 +542,24 @@ class KomutGovdesiTesti(unittest.TestCase):
 
     def test_fiyat_supheli_sembolde_sebep_yazar(self):
         cevap = self._cevap("/fiyat GC=F")
-        self.assertIn("kurumsal olay suphesi", cevap)
+        self.assertIn("kurumsal olay şüphesi", cevap)
 
     def test_fiyat_kaynak_ve_bayatlik_yazar(self):
         cevap = self._cevap("/fiyat THYAO.IS")
-        for beklenen in ("Veri zamani:", "Kaynak:", "Bayat:"):
-            self.assertIn(beklenen, cevap)
+        self.assertIn("kaynak: yahoo", cevap)
+        self.assertIn(_gun_adi(self.veri.fiyatlar.son_tarih), cevap)
+        # Bayatlik yalnizca VARSA yazilir; taze fiyatta satir yok.
+        self.assertNotIn("gecikmeli", cevap)
 
     def test_son_islem_tetikleyiciyi_yazar(self):
         cevap = self._cevap("/son")
-        self.assertIn("THYAO.IS", cevap)
+        self.assertIn("THY", cevap)          # sembol degil okunur ad
         self.assertIn("acilis", cevap)
 
     def test_risk_dislanan_sembolu_bildirir(self):
-        self.assertIn("GC=F", self._cevap("/risk"))
+        cevap = self._cevap("/risk")
+        self.assertIn("hesaba katılmadı", cevap)
+        self.assertIn("Altin", cevap)
 
 
     def test_param_referans_pozisyonu_yazar(self):
