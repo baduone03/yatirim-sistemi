@@ -356,8 +356,9 @@ def gereken_getiri_bolumu(rapor: DuyarlilikRaporu) -> list[str]:
     bekleyenler = rapor.beklenti_bekleyenler
     if bekleyenler:
         satirlar += [
-            "> **BEKLENTI BEYAN EDILMEMIS** - bu varliklarda sinyal "
-            "URETILMEZ: " + ", ".join(f"`{s}`" for s in bekleyenler) + ". "
+            "> **BEKLENTI BEYAN EDILMEMIS** - bu varliklarda ALIM sinyali "
+            "URETILMEZ (azaltma/kisma sinyali etkilenmez - satisin parasi "
+            "nakde, yani hurdle'in kendisine gider): " + ", ".join(f"`{s}`" for s in bekleyenler) + ". "
             "`varliklar.yaml -> maliyet.tutma.<sinif>.beklenen_getiri_yillik` "
             "alanina kendi beklentini yaz. Sistemin bu sayiyi senin yerine "
             "doldurmasi, uretmedigi bir fiyat tahminini uretiyormus gibi "
