@@ -76,33 +76,19 @@ class KiyasBolumuTesti(unittest.TestCase):
 
 
 class KiyasMesajTesti(unittest.TestCase):
-    """Telegram gun sonu: lider + portfoyun sirasi, tek satir."""
+    """Telegram gun sonu SADE bicimde (2026-11-07) alternatif siralamasi
+    TASIMAZ: mevduat satiri "riske deger miydi" sorusunu tek basina cevapliyor,
+    tam siralama ekli raporda."""
 
-    def _mesaj(self, kiyaslar):
+    def test_kiyas_mesaja_girmez(self):
         portfoy = Portfoy(pozisyonlar=[], nakit_try=20_500.0, fiyatlanamayan=[])
-        return gun_sonu_mesaji(GunSonuOzeti(
+        mesaj = gun_sonu_mesaji(GunSonuOzeti(
             portfoy=portfoy, risk=None, veri_zamani="2026-09-26",
-            baslangic_try=20_000.0, kiyaslar=kiyaslar))
-
-    def test_portfoy_geride(self):
-        mesaj = self._mesaj([
-            KiyasSatiri("BIST 100", 22_000, 0.10),
-            KiyasSatiri("Bu portfoy", 20_500, 0.025, portfoy=True),
-            KiyasSatiri("Mevduat", 20_400, 0.02),
-            KiyasSatiri("QQQ", None, None, "veri yok"),
-        ])
-        # Olculemeyen secenek paydaya girmez: 2./3, 2./4 degil.
-        self.assertIn("Portfoy 2./3: en iyisi BIST 100 +10.0%", mesaj)
-
-    def test_portfoy_onde(self):
-        mesaj = self._mesaj([
-            KiyasSatiri("Bu portfoy", 20_500, 0.025, portfoy=True),
-            KiyasSatiri("Altin (gram)", 20_300, 0.015),
-        ])
-        self.assertIn("Alternatiflerin ONUNDE: portfoy 1./2, ikinci Altin (gram) +1.5%", mesaj)
-
-    def test_kiyas_yoksa_satir_duser(self):
-        self.assertNotIn("🏁", self._mesaj([]))
+            baslangic_try=20_000.0,
+            kiyaslar=[KiyasSatiri("BIST 100", 22_000, 0.10),
+                      KiyasSatiri("Bu portfoy", 20_500, 0.025, portfoy=True)]))
+        self.assertNotIn("BIST 100", mesaj)
+        self.assertNotIn("🏁", mesaj)
 
 
 if __name__ == "__main__":

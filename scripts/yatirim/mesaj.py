@@ -29,6 +29,33 @@ def _tl(deger: float) -> str:
     return f"{deger:,.0f} TL".replace(",", ".")
 
 
+def _yuzde(oran: float, isaret: bool = True) -> str:
+    """0.0114 -> '+%1,1'. Turkce yazim: yuzde isareti onde, ondalik virgul."""
+    metin = f"%{abs(oran) * 100:.1f}".replace(".", ",")
+    if not isaret:
+        return metin
+    return ("+" if oran >= 0 else "-") + metin
+
+
+class Uyari(str):
+    """Uyari metni + Telegram'da gosterilecek SADE karsiligi.
+
+    `str` alt sinifi: rapor ve diger tuketiciler uzun metni oldugu gibi
+    kullanmaya devam eder. `sade` doluysa uyari telefonda acik cumleyle
+    gosterilir; bossa "teknik not" sayilir ve yalnizca SAYISI mesaja girer,
+    metni ekli raporda kalir. Ayrim kaynakta (uyarilari_topla) yapilir -
+    mesaj metnine bakip kategori tahmin etmek, yeni bir uyari eklendiginde
+    sessizce yanlis siniflardi.
+    """
+
+    sade: str
+
+    def __new__(cls, metin: str, sade: str = ""):
+        nesne = super().__new__(cls, metin)
+        nesne.sade = sade
+        return nesne
+
+
 def _islem_satirlari(durum, tarih: str) -> list[str]:
     """O gun yapilan alim/satimlari mesaja ekler.
 
@@ -152,8 +179,10 @@ def _deger(sayi: float, bicim: str) -> str:
     if bicim == "tl":
         return _tl(sayi)
     if bicim == "sayi":
-        return f"{sayi:.2f}"
-    return f"{sayi * 100:.2f}%"
+        return f"{sayi:.2f}".replace(".", ",")
+    if bicim == "puan":
+        return f"{abs(sayi) * 100:.1f} puan".replace(".", ",")
+    return _yuzde(sayi, isaret=False)
 
 
 def islem_karari_mesaji(islem: IslemOnerisi, tetikleyen: list[Tetikleyici],
@@ -162,63 +191,42 @@ def islem_karari_mesaji(islem: IslemOnerisi, tetikleyen: list[Tetikleyici],
                         uyarilar: list[str] | None = None,
                         adlar: dict[str, str] | None = None,
                         sapma_esigi: float | None = None) -> str:
-    """Islem karari bildirimi - ANLATI bicimi.
+    """Islem karari bildirimi - SADE bicim (2026-11-07).
 
-    VERI ZAMANI yazar, mesaj zamani DEGIL. Ayrim kritik: mesaj 19:04'te gitse
-    de fiyat Cuma kapanisina aitse karar Cuma verisiyle verilmistir. Mesaj
-    zamanini gostermek bayat veriyi guncel gibi sunar - bu sistemde en pahali
-    hata turu.
+    Dort soru, dort satir: ne yapilacak, neden, sonra ne olacak, maliyeti ne.
+    Ayrinti ekli raporda.
 
-    Onceki surum tetikleyici/etki/maliyet kalemlerini madde madde diziyordu.
-    Okuyanin "hangi olcut, hangi esik, ne degisti" uclusunu kafasinda
-    birlestirmesi gerekiyordu; simdi cumle bunu zaten kuruyor.
+    VERI ZAMANI yazar, mesaj zamani DEGIL: mesaj 19:04'te gitse de fiyat Cuma
+    kapanisina aitse karar Cuma verisiyle verilmistir. Mesaj zamanini
+    gostermek bayat veriyi guncel gibi sunar.
     """
-    simge = {"AL": "🟩", "SAT": "🟥"}.get(islem.yon, "🟨")
+    eylem = {"AL": "🟩 AL", "SAT": "🟥 SAT"}.get(islem.yon, f"🟨 {kacis(islem.yon)}")
     ad = _ad(islem.sembol, adlar)
     satirlar = [
-        f"<b>{simge} {kacis(islem.yon)} {ad}</b>",
-        f"{islem.adet:g} adet, {_tl(islem.tutar_try)} "
-        f"(birim {_tl(islem.fiyat_try)})",
+        f"<b>{eylem}: {ad}</b>",
+        f"≈ {_tl(islem.tutar_try)} ({islem.adet:g} adet × {_tl(islem.fiyat_try)})",
+        "",
     ]
 
     if tetikleyen:
         ilk = tetikleyen[0]
-        satirlar += ["", "<b>Neden</b>",
-                     f"{kacis(ilk.olcut)} {_deger(ilk.deger, ilk.bicim)} oldu ve "
-                     f"{_deger(ilk.esik, ilk.bicim)} esigini asti."]
-        for baska in tetikleyen[1:]:
-            satirlar.append(
-                f"Ayrica {kacis(baska.olcut)} "
-                f"{_deger(baska.deger, baska.bicim)} "
-                f"(esik {_deger(baska.esik, baska.bicim)}).")
+        satirlar.append(f"<b>Neden:</b> {kacis(ilk.olcut)} {_deger(ilk.deger, ilk.bicim)}"
+                        f" (sınır {_deger(ilk.esik, ilk.bicim)})")
+    for e in etki[:1]:
+        satirlar.append(f"<b>Sonra:</b> {kacis(e.olcut)} {_deger(e.once, e.bicim)}"
+                        f" → {_deger(e.sonra, e.bicim)}")
 
-    if etki:
-        satirlar += ["", "<b>Ne degisecek</b>"]
-        satirlar += [f"{kacis(e.olcut)} {_deger(e.once, e.bicim)} yerine "
-                     f"{_deger(e.sonra, e.bicim)} olacak." for e in etki]
-
-    satirlar += ["", "<b>Maliyet</b>"]
     if komisyon_try is None or gidis_donus is None:
-        satirlar.append(
-            "Bu islemin maliyeti TAM OLCULEMEDI - eksik maliyet kalemi var. "
-            "Karsiz cikma ihtimali gercek; ekli rapordaki eksik kalemlere bak.")
+        satirlar.append("<b>Maliyet:</b> tam ölçülemedi ⚠️ (eksik maliyet "
+                        "kalemi, ayrıntı raporda)")
     else:
-        satirlar.append(
-            f"Komisyon {_tl(komisyon_try)}; al-sat turu toplam "
-            f"{gidis_donus * 100:.2f}%.")
-        if sapma_esigi is not None:
-            ekonomik = gidis_donus < sapma_esigi
-            satirlar.append(
-                f"Bu, duzeltilen sapmanin ({sapma_esigi * 100:.2f}%) "
-                + ("ALTINDA - islem duzelttigi seyden ucuz."
-                   if ekonomik else
-                   "USTUNDE - islem duzelttigi sapmadan pahali."))
+        maliyet = f"<b>Maliyet:</b> ≈ {_tl(komisyon_try)}"
+        if sapma_esigi is not None and gidis_donus >= sapma_esigi:
+            maliyet += " ⚠️ düzelttiğinden pahalı"
+        satirlar.append(maliyet)
 
-    # Kaynak metni zaten parantez tasiyabiliyor ("yahoo (gunluk kapanis)");
-    # bir kez daha parantezlemek ic ice parantez uretiyordu.
-    satirlar += ["", f"<i>Veri: {_gun_adi(islem.veri_zamani)}, kaynak "
-                 f"{kacis(islem.veri_kaynagi)}. Kagit portfoy.</i>"]
-
+    satirlar += ["", f"<i>{_gun_adi(islem.veri_zamani)} fiyatı · "
+                 f"{kacis(islem.veri_kaynagi)} · kağıt portföy</i>"]
     for uyari in uyarilar or []:
         satirlar.append(f"⚠️ {kacis(uyari)}")
     return "\n".join(satirlar)
@@ -243,7 +251,7 @@ class GunSonuOzeti:
     kur_maruziyeti: float = 0.0
     ayrimlar: list = field(default_factory=list)
     uyarilar: list[str] = field(default_factory=list)
-    baslik: str = "🌙 Gun sonu"
+    baslik: str = "🌙 Gün sonu"
     # Anlati icin gereken uc alan. Hepsi opsiyonel: eksikse ilgili bolum
     # mesajdan tumuyle DUSER, uydurma cumle uretilmez.
     karar: object | None = None          # sinyal.Karar - islem bolumu icin
@@ -256,8 +264,8 @@ class GunSonuOzeti:
     kiyaslar: list = field(default_factory=list)
 
 
-AYLAR = ("Ocak", "Subat", "Mart", "Nisan", "Mayis", "Haziran", "Temmuz",
-         "Agustos", "Eylul", "Ekim", "Kasim", "Aralik")
+AYLAR = ("Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz",
+         "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık")
 
 
 def _gun_adi(iso: str) -> str:
@@ -283,30 +291,19 @@ def _ad(sembol: str, adlar: dict[str, str] | None) -> str:
     return kacis((adlar or {}).get(sembol, sembol))
 
 
-def _buyukluk(oran: float) -> str:
-    mutlak = abs(oran)
-    if mutlak < 0.005:
-        return "yatay"
-    if mutlak < 0.02:
-        return "hafif"
-    return "sert"
-
-
 def _kur_satiri(ozet: GunSonuOzeti) -> str:
     """Hareket KURDAN geldiyse tek satir; gelmediyse bos.
 
-    Mesajin en cok is goren bilgisi: +%3 TL getirisi dolar %3 degerlendigi
-    icin cikmissa bu yatirim basarisi DEGIL - ayni sonucu doviz tutarak da
-    alirdin. Kur belirleyici degilse satir DUSER; "kur etkili olmadi" demek
-    okuyana is yaptirmayan bir satir daha olurdu.
+    +%3 TL getirisi dolar %3 degerlendigi icin cikmissa bu yatirim basarisi
+    DEGIL - ayni sonucu doviz tutarak da alirdin. Kur belirleyici degilse
+    satir DUSER.
     """
     if ozet.degisim_24s is None:
         return ""
     usd = [a for a in ozet.ayrimlar if a.para_birimi == "USD"]
-    # KUR PAYI: her varlikta TL getirisinin ne kadari kurdan geldi.
-    # Ortalama mutlak getirileri karsilastirmak yerine bunu kullanmanin
-    # sebebi: tek bir buyuk yerel hareket ortalamayi ele gecirip geri kalan
-    # varliklarda kurun hakim oldugunu gizliyordu.
+    # KUR PAYI: her varlikta TL getirisinin ne kadari kurdan geldi. Ortalama
+    # mutlak getiri kullanilsaydi tek bir buyuk yerel hareket ortalamayi ele
+    # gecirip geri kalan varliklarda kurun hakim oldugunu gizlerdi.
     paylar = []
     for a in usd:
         toplam_hareket = abs(a.kur_getirisi) + abs(a.yerel_getiri)
@@ -315,88 +312,61 @@ def _kur_satiri(ozet: GunSonuOzeti) -> str:
     if not paylar or sum(paylar) / len(paylar) < 0.6:
         return ""
     ort_kur = sum(a.kur_getirisi for a in usd) / len(usd)
-    yon = "degerlendi" if ort_kur > 0 else "geriledi"
-    satir = (f"💱 Hareketin kaynagi KUR: dolar {abs(ort_kur) * 100:.1f}% {yon}, "
-             "dolarli varliklari TL'de "
-             f"{'yukari' if ort_kur > 0 else 'asagi'} tasidi")
-    # Dolar bazinda EN KOTU giden varlik: kurun ne kadarini yuttugunu en
-    # net o gosterir.
-    ornek = min(usd, key=lambda a: a.yerel_getiri)
-    if ornek.toplam_tl > ornek.yerel_getiri:
-        satir += (f" (orn. {_ad(ornek.sembol, ozet.adlar)}: dolarda "
-                  f"{ornek.yerel_getiri * 100:+.1f}%, TL'de "
-                  f"{ornek.toplam_tl * 100:+.1f}%)")
-    return satir
+    yon = "yükseldi" if ort_kur > 0 else "düştü"
+    return (f"💱 Bugünkü hareketin çoğu KURDAN: dolar {_yuzde(ort_kur, False)} "
+            f"{yon}")
 
 
-def _durum_satiri(ozet: GunSonuOzeti) -> str:
-    """Portfoy satiri: guncel deger + baslangica gore fark."""
+def _durum_satirlari(ozet: GunSonuOzeti) -> list[str]:
     toplam = ozet.portfoy.toplam_deger_try
-    if not ozet.baslangic_try:
-        return f"💰 <b>{_tl(toplam)}</b>"
-    fark = toplam - ozet.baslangic_try
-    oran = fark / ozet.baslangic_try
-    return (f"💰 <b>{_tl(toplam)}</b> (baslangictan {oran * 100:+.1f}%, "
-            f"{'+' if fark >= 0 else '-'}{_tl(abs(fark))})")
-
-
-def _gun_satiri(ozet: GunSonuOzeti) -> str:
+    satirlar = [f"💰 Portföy: <b>{_tl(toplam)}</b>"]
+    if ozet.baslangic_try:
+        fark = toplam - ozet.baslangic_try
+        satirlar.append(
+            f"{'📈' if fark >= 0 else '📉'} Başlangıçtan beri: "
+            f"{'+' if fark >= 0 else '-'}{_tl(abs(fark))} "
+            f"({_yuzde(fark / ozet.baslangic_try)})")
     if ozet.degisim_24s is None:
-        return "📊 Son 24 saat: olculemedi (fiyat verisi eksik)"
-    return (f"📊 Son 24 saat: {ozet.degisim_24s * 100:+.1f}% "
-            f"({_buyukluk(ozet.degisim_24s)})")
+        satirlar.append("📊 Son 24 saat: ölçülemedi (fiyat verisi eksik)")
+    else:
+        satirlar.append(f"📊 Son 24 saat: {_yuzde(ozet.degisim_24s)}")
+    return satirlar
 
 
 def _kazanc_satiri(ozet: GunSonuOzeti) -> str:
-    """Riske deger miydi: portfoy getirisi ile ayni surede mevduat YAN YANA.
+    """Riske deger miydi: ayni para mevduatta olsaydi ne olurdu.
 
-    Ciplak "+%4 kazandin" eksik - mevduat da kazandiriyordu. Fark puani tek
-    basina da eksik - okuyan hangi iki sayinin farki oldugunu bilmiyor.
+    Ciplak "+%1 kazandin" eksik - mevduat da kazandiriyordu. TL karsiligi
+    yuzde farkindan daha kolay okunur.
     """
     if ozet.asiri_getiri is None or ozet.risksiz is None:
-        return "❔ Mevduat karsilastirmasi yapilamadi (faiz verisi yok)"
-    getiri = ozet.asiri_getiri + ozet.risksiz
-    kiyas = (f"portfoy {getiri * 100:+.1f}%, mevduat "
-             f"{ozet.risksiz * 100:+.1f}% ({ozet.donem_gun} gunde)")
-    if ozet.asiri_getiri >= 0:
-        return f"✅ Mevduattan IYI: {kiyas}"
-    return f"🔻 Mevduattan KOTU: {kiyas}"
-
-
-def _kiyas_satiri(ozet: GunSonuOzeti) -> str:
-    """Ayni sermaye tek bir yere konsaydi: lider ve portfoyun sirasi.
-
-    Tum tablo raporda; telefonda sorulan tek sey "baska yerde daha mi iyi
-    olurdu". Olculemeyen secenek siraya girmez - sayisi uydurulmaz.
-    """
-    olculen = [k for k in ozet.kiyaslar if k.deger_try is not None]
-    sira = next((i for i, k in enumerate(olculen, 1) if k.portfoy), None)
-    if sira is None or len(olculen) < 2:
-        return ""
-    if sira == 1:
-        ikinci = olculen[1]
-        return (f"🏁 Alternatiflerin ONUNDE: portfoy 1./{len(olculen)}, "
-                f"ikinci {_ad(ikinci.ad, ozet.adlar)} {ikinci.getiri * 100:+.1f}%")
-    lider = olculen[0]
-    return (f"🏁 Portfoy {sira}./{len(olculen)}: en iyisi "
-            f"{_ad(lider.ad, ozet.adlar)} {lider.getiri * 100:+.1f}% "
-            f"(tek basina konsaydi)")
+        return "❔ Mevduat karşılaştırması yapılamadı (faiz verisi yok)"
+    if not ozet.baslangic_try:
+        getiri = ozet.asiri_getiri + ozet.risksiz
+        return (f"🏦 Portföy {_yuzde(getiri)}, mevduat "
+                f"{_yuzde(ozet.risksiz)} ({ozet.donem_gun} günde)")
+    mevduat = ozet.baslangic_try * (1 + ozet.risksiz)
+    fark = ozet.portfoy.toplam_deger_try - mevduat
+    durum = "önde ✅" if fark >= 0 else "geride 🔻"
+    return (f"🏦 Mevduatta olsaydı: {_tl(mevduat)} → portföy "
+            f"{_tl(abs(fark))} {durum}")
 
 
 def _islem_satiri(ozet: GunSonuOzeti) -> str:
-    """Islem durumu VE sebebi. Sessiz sistem ile frenlenmis sistem ayni
-    satiri uretirse okuyan calisan sistemle donmus sistemi ayirt edemez."""
+    """Islem durumu. Frenlenmis sistem sessiz sistemle ayni satiri uretirse
+    okuyan calisan sistemle donmus sistemi ayirt edemez."""
     karar = ozet.karar
     if karar is None:
         return ""
     if karar.devre_kesildi:
-        return (f"🛑 Fren devrede (devre kesici): gunluk {karar.gunluk_maks} "
-                "karar siniri doldu, yeni sinyaller yarina")
+        return ("🛑 Sistem kendini durdurdu: bugün sınırdan fazla sinyal "
+                "çıktı, yeni öneriler yarın")
     acik = karar.sinyaller()
     if not acik:
-        return "⏸️ Islem yok: portfoy hedef dagilima yakin"
-    return f"🔔 {len(acik)} sinyal acik: " + ", ".join(
-        _ad(s.ad, ozet.adlar) for s in acik)
+        return "✅ Bugün yapılacak işlem yok"
+    return (f"🔔 {len(acik)} işlem önerisi: "
+            + ", ".join(_ad(s.ad, ozet.adlar) for s in acik)
+            + " (ayrı mesajda)")
 
 
 MESAJDA_AZAMI_UYARI = 3     # gerisi ekli raporda
@@ -408,58 +378,46 @@ def _uyari_kisalt(metin: str) -> str:
     return metin.split(" - ", 1)[0].split(". ", 1)[0].rstrip(" .")
 
 
-def _uyarilari_sadelestir(uyarilar: list[str]) -> list[str]:
-    """Kisaltir ve ayni sorunu yasayan sembolleri tek satirda birlestirir.
+def _uyari_satirlari(uyarilar: list[str]) -> list[str]:
+    """Sade karsiligi olan uyari acik cumleyle, geri kalani SAYI olarak.
 
-    'Dogrulanmamis kripto fiyati BTC-USD: X' ve '... ETH-USD: X' iki satir
-    degil, iki sembolu olan tek sorundur. Anahtar: iki noktadan onceki son
-    kelime (sembol) haric her sey.
+    Teknik notlar (kur ucgenlemesi, olculmemis maliyet parametresi, bayat
+    seri...) bakim isidir; telefonda okunmalari hicbir karari degistirmez.
+    Yok sayilmazlar: sayilari her mesajda gorunur, metinleri ekli raporda.
     """
-    gruplar: dict[tuple[str, str], list[str]] = {}
-    for uyari in uyarilar:
-        kisa = _uyari_kisalt(uyari)
-        bas, ayrac, govde = kisa.partition(": ")
-        kelimeler = bas.split(" ")
-        if ayrac and len(kelimeler) > 1:
-            anahtar = (" ".join(kelimeler[:-1]), govde)
-            gruplar.setdefault(anahtar, []).append(kelimeler[-1])
-        else:
-            gruplar.setdefault((kisa, ""), [])
-    satirlar = []
-    for (bas, govde), semboller in gruplar.items():
-        satirlar.append(f"{bas} {', '.join(semboller)}: {govde}"
-                        if semboller else bas)
+    onemli = list(dict.fromkeys(
+        u.sade for u in uyarilar if getattr(u, "sade", "")))
+    teknik = sum(1 for u in uyarilar if not getattr(u, "sade", ""))
+    satirlar = [f"⚠️ {kacis(u)}" for u in onemli[:MESAJDA_AZAMI_UYARI]]
+    if len(onemli) > MESAJDA_AZAMI_UYARI:
+        teknik += len(onemli) - MESAJDA_AZAMI_UYARI
+    if teknik:
+        satirlar.append(f"ℹ️ {teknik} teknik not (raporda)")
     return satirlar
 
 
 def gun_sonu_mesaji(ozet: GunSonuOzeti) -> str:
-    """Gun sonu / brifing ozeti - TEK EKRAN.
+    """Gun sonu / brifing ozeti - SADE bicim (2026-11-07).
 
-    Tasarim karari (2026-09-26): onceki surum ayni bilgiyi uc kez soyluyordu
-    (model onsozu, dort satirlik blok, altinda uc paragraf) ve uyarilari ham
-    teknik metinle dokuyordu - mesaj 30 satiri buluyordu. Simdi her soru TEK
-    satirda cevaplanir: ne kadar, bugun ne oldu, riske deger mi, islem var
-    mi. Gerekceler ve tum sayilar ekli raporda; mesaj silmez, SIKISTIRIR.
+    Her satir tek soruya cevap: ne kadar, bugun ne oldu, mevduattan iyi mi,
+    islem var mi. Teknik uyarilar yalnizca SAYI olarak girer. Tum tablolar
+    ekli raporda; mesaj silmez, SIKISTIRIR.
     """
-    satirlar = [f"<b>{ozet.baslik} — {_gun_adi(ozet.veri_zamani)}</b>", "",
-                _durum_satiri(ozet), _gun_satiri(ozet)]
+    satirlar = [f"<b>{ozet.baslik} · {_gun_adi(ozet.veri_zamani)}</b>", ""]
+    satirlar += _durum_satirlari(ozet)
     satirlar += [s for s in (_kur_satiri(ozet), _kazanc_satiri(ozet),
-                             _kiyas_satiri(ozet), _islem_satiri(ozet)) if s]
+                             _islem_satiri(ozet)) if s]
     if ozet.onsoz:
         # Kaynagi isaretlenir: ustteki her sayi olculmustur, bu satir ise bir
         # modelin AYNI MESAJI okuyup yazdigi yorumdur.
-        satirlar += ["", f"💬 <i>{kacis(ozet.onsoz)}</i> (model yorumu)"]
+        satirlar += ["", f"🤖 <i>{kacis(ozet.onsoz)}</i> (model yorumu)"]
 
-    if ozet.uyarilar:
-        sade = _uyarilari_sadelestir(ozet.uyarilar)
-        satirlar += ["", f"<b>⚠️ Dikkat ({len(sade)})</b>"]
-        satirlar += [f"• {kacis(u)}" for u in sade[:MESAJDA_AZAMI_UYARI]]
-        if len(sade) > MESAJDA_AZAMI_UYARI:
-            satirlar.append(f"<i>+{len(sade) - MESAJDA_AZAMI_UYARI} not daha "
-                            "ekli raporda</i>")
+    uyari = _uyari_satirlari(ozet.uyarilar)
+    if uyari:
+        satirlar += [""] + uyari
 
-    satirlar += ["", "<i>Kagit para, gercek islem yok. "
-                 "Ayrinti ekli raporda.</i>"]
+    satirlar += ["", "<i>Kağıt portföy, gerçek para yok. Ayrıntı ekteki "
+                 "raporda.</i>"]
     return "\n".join(satirlar)
 
 
@@ -489,23 +447,26 @@ def uyarilari_topla(fiyatlar, portfoy, karar, maliyet, bayatlik,
     uyarilar: list[str] = []
 
     if karar is not None and karar.devre_kesildi:
-        uyarilar.append(
+        uyarilar.append(Uyari(
             f"ANORMAL ISLEM YOGUNLUGU: bugun {karar.gunluk_sayi} sinyal olustu "
             f"(tavan {karar.gunluk_maks}). Sinyal uretimi DURDURULDU - bu "
-            "genellikle portfoyun degil verinin bozuk oldugunu gosterir.")
+            "genellikle portfoyun degil verinin bozuk oldugunu gosterir.",
+            sade=f"Bugün {karar.gunluk_sayi} sinyal çıktı (sınır "
+                 f"{karar.gunluk_maks}); veri bozuk olabilir, öneriler durdu"))
 
     # Hurdle YEDEK kaynaktan geliyor. Bu satir bastirilamaz: yedek politika
     # faizi mevduattan ~11 puan dusuk, yani gereken getiri citasi da o kadar
     # DUSUK hesaplaniyor. Sessizce gevsemis bir cita, gevsemis olduguna dair
     # hicbir isaret tasimayan bir citadir.
     if maliyet is not None and maliyet.risksiz_yedege_dusuldu:
-        uyarilar.append(
+        uyarilar.append(Uyari(
             f"Mevduat kiyasi iyimser olabilir: faiz YEDEK kaynaktan "
             f"({maliyet.risksiz_kaynagi}, "
             f"%{(maliyet.tl_risksiz_yillik or 0) * 100:.2f}) - birincil kaynak "
             f"kullanilamadi. Gercek mevduat alternatifin bundan YUKSEK "
             f"olabilir; o durumda cita oldugundan dusuk, varliklar "
-            f"oldugundan iyi gorunur.")
+            f"oldugundan iyi gorunur.",
+            sade="Güncel mevduat faizi alınamadı; karşılaştırma eski oranla"))
 
     # Hurdle rate durdurmayacak kadar ama guvenilecek kadar da taze degil.
     # Rapor uretiliyor; bayatligin GORUNMEMESI asil tehlike oldugu icin
@@ -535,15 +496,20 @@ def uyarilari_topla(fiyatlar, portfoy, karar, maliyet, bayatlik,
 
     if karar is not None:
         for sonuc in karar.hafta_sonu_uyarilari:
-            uyarilar.append(
+            uyarilar.append(Uyari(
                 f"{sonuc.ad}: hedeften sapti ({sonuc.yon}) ama hafta sonu "
                 "islem onerilmedi - ince likidite, hafta sonu genis esigi "
-                "asilmadi, yalnizca uyari.")
+                "asilmadi, yalnizca uyari.",
+                sade=f"{sonuc.ad} hedeften saptı; hafta sonu olduğu için "
+                     "öneri verilmedi"))
 
     supheliler = fiyatlar.kurumsal_olay_supheleri if fiyatlar is not None else {}
     for sembol, gerekce in sorted(supheliler.items()):
-        uyarilar.append(f"Olasi kurumsal olay {sembol}: {gerekce} "
-                        "- degerleme durduruldu, risk hesabindan cikarildi.")
+        uyarilar.append(Uyari(
+            f"Olasi kurumsal olay {sembol}: {gerekce} "
+            "- degerleme durduruldu, risk hesabindan cikarildi.",
+            sade=f"{sembol} fiyatında açıklanamayan sıçrama; değerlemesi "
+                 "durduruldu"))
 
     if risk is not None and risk.gozlem_guvenilirligi_dustu:
         uyarilar.append(
@@ -569,9 +535,11 @@ def uyarilari_topla(fiyatlar, portfoy, karar, maliyet, bayatlik,
                         f"(kur: {sonuc.kur_kaynagi})")
 
     if portfoy is not None and portfoy.fiyatlanamayan:
-        uyarilar.append(
+        uyarilar.append(Uyari(
             f"Fiyatlanamayan pozisyon: {', '.join(portfoy.fiyatlanamayan)}. "
-            "Agirliklar ve rebalancing tavsiyesi bu yuzden guvenilmez.")
+            "Agirliklar ve rebalancing tavsiyesi bu yuzden guvenilmez.",
+            sade=f"Fiyatı alınamadı: {', '.join(portfoy.fiyatlanamayan)}; "
+                 "dağılım güvenilmez"))
 
     bayatlar = (fiyatlar.bayat_semboller(bayatlik)
                 if fiyatlar is not None and bayatlik is not None else {})

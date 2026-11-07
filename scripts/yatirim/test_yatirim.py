@@ -11,6 +11,7 @@ Boylece test agdan ve piyasa saatlerinden bagimsiz, tekrarlanabilir kalir.
 from __future__ import annotations
 
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -126,6 +127,7 @@ from mesaj import (
     GunSonuOzeti,
     IslemOnerisi,
     Tetikleyici,
+    Uyari,
     _islem_satirlari,
     _uyari_kisalt,
     gun_sonu_mesaji,
@@ -748,7 +750,7 @@ class BildirimTesti(unittest.TestCase):
             portfoy=portfoy, risk=rapor, veri_zamani="2026-08-17",
             uyarilar=uyarilari_topla(fiyatlar, portfoy,
                                      karar_ver(sapmalar, rapor), None, None)))
-        self.assertIn("Gun sonu", mesaj)
+        self.assertIn("Gün sonu", mesaj)
         self.assertNotIn("<script", mesaj.lower())
 
 
@@ -998,7 +1000,7 @@ class AnlatiTesti(unittest.TestCase):
 
     def test_tarih_okunur_bicimde(self):
         """Ham ISO tarih okuyana bir sey soylemez."""
-        self.assertIn("19 Agustos", gun_sonu_mesaji(self._ozet()))
+        self.assertIn("19 Ağustos", gun_sonu_mesaji(self._ozet()))
 
     def test_cozulemeyen_tarih_uydurulmaz(self):
         mesaj = gun_sonu_mesaji(self._ozet(veri_zamani="bilinmiyor"))
@@ -1008,9 +1010,8 @@ class AnlatiTesti(unittest.TestCase):
         """Asil is goren cumle: getiri varliktan mi kurdan mi geldi."""
         mesaj = gun_sonu_mesaji(self._ozet(
             ayrimlar=[_SahteAyrim("QQQ", -0.003, 0.030, 0.027)]))
-        self.assertIn("KUR", mesaj)
-        self.assertIn("Nasdaq 100 ETF", mesaj)     # sembol degil AD
-        self.assertNotIn("QQQ", mesaj)
+        self.assertIn("hareketin çoğu KURDAN", mesaj)
+        self.assertNotIn("QQQ", mesaj)             # sade satir sembol tasimaz
 
     def test_varlik_hakimse_kur_suclanmaz(self):
         """Kur kucukken 'sebep kur' demek yanlis atif olurdu."""
@@ -1032,19 +1033,18 @@ class AnlatiTesti(unittest.TestCase):
 
     def test_olculemeyen_degisim_uydurulmaz(self):
         mesaj = gun_sonu_mesaji(self._ozet(degisim_24s=None))
-        self.assertIn("olculemedi", mesaj)
-        self.assertNotIn("(yatay)", mesaj)
+        self.assertIn("Son 24 saat: ölçülemedi", mesaj)
 
     def test_islem_yoksa_SEBEBI_yazilir(self):
-        """'Islem yok' tek basina bilgi degil - neden yok?"""
+        """Islem yoklugu acikca soylenir - sessiz mesaj donmus sistemden ayrilamaz."""
         mesaj = gun_sonu_mesaji(self._ozet())
-        self.assertIn("Islem yok: portfoy hedef dagilima yakin", mesaj)
+        self.assertIn("Bugün yapılacak işlem yok", mesaj)
 
     def test_devre_kesici_islem_yoklugundan_ayrilir(self):
         """Sessiz sistem ile frenlenmis sistem ayni mesaji vermemeli."""
         mesaj = gun_sonu_mesaji(self._ozet(karar=_SahteKarar(devre=True)))
-        self.assertIn("devre kesici", mesaj)
-        self.assertNotIn("Islem yok", mesaj)
+        self.assertIn("kendini durdurdu", mesaj)
+        self.assertNotIn("işlem yok", mesaj)
 
     def test_karar_yoksa_bolum_tumuyle_duser(self):
         mesaj = gun_sonu_mesaji(self._ozet(karar=None))
@@ -1053,27 +1053,25 @@ class AnlatiTesti(unittest.TestCase):
     def test_getiri_risksize_gore_konumlanir(self):
         """Ciplak '+4.2% kazandin' eksik: mevduat da kazandiriyordu."""
         mesaj = gun_sonu_mesaji(self._ozet())
-        # getiri = asiri + risksiz: iki sayi YAN YANA, fark puani degil.
-        self.assertIn("Mevduattan IYI: portfoy +4.2%, mevduat +0.7% (6 gunde)",
+        # Ayni para mevduatta olsaydi: 20.000 x 1.0065 = 20.130 TL.
+        self.assertIn("Mevduatta olsaydı: 20.130 TL → portföy 718 TL önde",
                       mesaj)
 
     def test_risksizin_altinda_kalmak_gizlenmez(self):
-        mesaj = gun_sonu_mesaji(self._ozet(asiri_getiri=-0.012))
-        self.assertIn("Mevduattan KOTU", mesaj)
+        # 19.900 TL, mevduat 20.130 TL -> 230 TL geride.
+        mesaj = gun_sonu_mesaji(self._ozet(portfoy=Portfoy(
+            pozisyonlar=[], nakit_try=19_900.0, fiyatlanamayan=[])))
+        self.assertIn("portföy 230 TL geride", mesaj)
 
     def test_risksiz_yoksa_yorum_uydurulmaz(self):
         mesaj = gun_sonu_mesaji(self._ozet(asiri_getiri=None, risksiz=None))
-        self.assertIn("yapilamadi", mesaj)
-        self.assertNotIn("Mevduattan", mesaj)
+        self.assertIn("karşılaştırması yapılamadı", mesaj)
+        self.assertNotIn("Mevduatta olsaydı", mesaj)
 
     def test_simulasyon_ibaresi_her_mesajda(self):
         """Kagit portfoy gercek gibi sunulmamali."""
-        self.assertIn("Kagit para", gun_sonu_mesaji(self._ozet()))
+        self.assertIn("Kağıt portföy, gerçek para yok", gun_sonu_mesaji(self._ozet()))
 
-    def test_adi_bilinmeyen_sembol_uydurulmaz(self):
-        mesaj = gun_sonu_mesaji(self._ozet(
-            adlar={}, ayrimlar=[_SahteAyrim("QQQ", -0.003, 0.030, 0.027)]))
-        self.assertIn("QQQ", mesaj)
 
     def test_telegram_sinirinin_altinda(self):
         self.assertLess(len(gun_sonu_mesaji(self._ozet())), 4096)
@@ -2365,7 +2363,8 @@ class DevreKesiciTesti(unittest.TestCase):
         mesaj = gun_sonu_mesaji(GunSonuOzeti(
             portfoy=portfoy, risk=risk, veri_zamani="2026-08-17",
             uyarilar=uyarilar))
-        self.assertIn("ANORMAL ISLEM YOGUNLUGU", mesaj)
+        # Telefonda teknik etiket degil, sade karsiligi gorunur.
+        self.assertIn("veri bozuk olabilir", mesaj)
 
 
 class IdempotencyTesti(unittest.TestCase):
@@ -2684,10 +2683,10 @@ class VeriZamaniTesti(unittest.TestCase):
         metin = islem_karari_mesaji(
             self._islem(), [Tetikleyici("Risk katkisi", 0.25, 0.20)],
             [Etki("Agirlik", 0.30, 0.20)], 0.0318, 15.9)
-        self.assertIn("14 Agustos", metin)     # okunur bicim, ham ISO degil
+        self.assertIn("14 Ağustos fiyatı", metin)     # okunur bicim, ham ISO degil
         self.assertIn("yahoo", metin)
         self.assertNotIn(date.today().isoformat(), metin)
-        self.assertNotIn(str(date.today().day) + " Agustos", metin)
+        self.assertNotIn(str(date.today().day) + " Ağustos", metin)
 
     def test_tetikleyen_ve_etki_yazilir(self):
         metin = islem_karari_mesaji(
@@ -2695,28 +2694,27 @@ class VeriZamaniTesti(unittest.TestCase):
             [Tetikleyici("Risk katkisi", 0.25, 0.20),
              Tetikleyici("Beta", 1.90, 1.50, "sayi")],
             [Etki("Agirlik", 0.30, 0.20)], 0.0318, 15.9)
-        # Anlati bicimi: olcut, deger ve esik AYNI CUMLEDE gecmeli -
-        # okuyanin uc madde arasinda baglanti kurmasi beklenmemeli.
-        self.assertIn("Risk katkisi 25.00% oldu ve 20.00% esigini asti", metin)
-        self.assertIn("Beta 1.90", metin)
-        self.assertIn("esik 1.50", metin)
-        self.assertIn("Agirlik 30.00% yerine 20.00% olacak", metin)
-        self.assertIn("3.18%", metin)
+        # Olcut, deger ve sinir AYNI SATIRDA. Sade bicim yalnizca ilk
+        # tetikleyiciyi ve ilk etkiyi yazar; gerisi ekli raporda.
+        self.assertIn("<b>Neden:</b> Risk katkisi %25,0 (sınır %20,0)", metin)
+        self.assertNotIn("Beta", metin)
+        self.assertIn("<b>Sonra:</b> Agirlik %30,0 → %20,0", metin)
+        self.assertIn("≈ 16 TL", metin)
 
     def test_eksik_maliyet_uyarisi(self):
         """Gidis-donus olculemezse islem KARSIZ olabilir - bu yazilmali."""
         metin = islem_karari_mesaji(self._islem(), [], [], None, None)
-        self.assertIn("OLCULEMEDI", metin)
-        self.assertIn("Karsiz cikma ihtimali", metin)
+        self.assertIn("tam ölçülemedi", metin)
+        self.assertIn("eksik maliyet kalemi", metin)
 
     def test_maliyet_sapmayla_karsilastirilir(self):
         """Ciplak '%0.31 maliyet' okuyana bir sey soylemez - neye gore?"""
         ucuz = islem_karari_mesaji(self._islem(), [], [], 0.0031, 15.9,
                                    sapma_esigi=0.03)
-        self.assertIn("ALTINDA", ucuz)
+        self.assertNotIn("pahalı", ucuz)          # sorun yoksa satir sade kalir
         pahali = islem_karari_mesaji(self._islem(), [], [], 0.05, 15.9,
                                      sapma_esigi=0.03)
-        self.assertIn("USTUNDE", pahali)
+        self.assertIn("düzelttiğinden pahalı", pahali)
 
     def test_sapma_esigi_yoksa_kiyas_uydurulmaz(self):
         metin = islem_karari_mesaji(self._islem(), [], [], 0.0031, 15.9)
@@ -4393,31 +4391,34 @@ class OzetBlokuTesti(unittest.TestCase):
         return gun_sonu_mesaji(GunSonuOzeti(**varsayilan))
 
     def _ilk_ekran(self, mesaj: str) -> str:
-        """Uyari bolumune kadar olan kisim."""
-        return mesaj.split("<b>⚠️ Dikkat")[0]
+        """Uyari satirlarina kadar olan kisim."""
+        return re.split(r"\n(?:⚠️|ℹ️)", mesaj)[0]
 
     def test_deger_ve_fark_ilk_ekranda(self):
         ilk = self._ilk_ekran(self._mesaj())
         self.assertIn("21.259", ilk)
-        self.assertIn("+6.3%", ilk)
+        self.assertIn("+%6,3", ilk)
 
     def test_gunluk_degisim_ilk_ekranda(self):
         self.assertIn("Son 24 saat", self._ilk_ekran(self._mesaj()))
 
     def test_mevduat_karsilastirmasi_ilk_ekranda(self):
         """Asil soru bu: riski almaya deger miydi."""
-        self.assertIn("IYI", self._ilk_ekran(self._mesaj()))
-        self.assertIn("KOTU", self._ilk_ekran(self._mesaj(asiri_getiri=-0.012)))
+        self.assertIn("önde", self._ilk_ekran(self._mesaj()))
+        # 20.000 TL, mevduat 20.000 x 1.0139 = 20.278 TL
+        geride = self._mesaj(portfoy=Portfoy(pozisyonlar=[], nakit_try=20000.0,
+                                             fiyatlanamayan=[]))
+        self.assertIn("278 TL geride", self._ilk_ekran(geride))
 
     def test_olculemeyen_karsilastirma_uydurulmaz(self):
         ilk = self._ilk_ekran(self._mesaj(asiri_getiri=None, risksiz=None))
-        self.assertIn("yapilamadi", ilk)
-        self.assertNotIn("IYI", ilk)
+        self.assertIn("yapılamadı", ilk)
+        self.assertNotIn("önde", ilk)
 
     def test_islem_durumu_ilk_ekranda(self):
-        self.assertIn("Islem yok", self._ilk_ekran(self._mesaj()))
+        self.assertIn("işlem yok", self._ilk_ekran(self._mesaj()))
         frenli = self._ilk_ekran(self._mesaj(karar=_SahteKarar(devre=True)))
-        self.assertIn("Fren devrede", frenli)
+        self.assertIn("kendini durdurdu", frenli)
 
     def test_mesaj_tek_ekran(self):
         """Regresyon (2026-09-26): ayni bilgi uc kez soyleniyordu, brifing
@@ -4442,26 +4443,43 @@ class UyariSadelestirmeTesti(unittest.TestCase):
             portfoy=portfoy, risk=None, veri_zamani="2026-09-26",
             uyarilar=uyarilar))
 
-    def test_gerekce_kesilir_sorun_kalir(self):
+    def test_teknik_not_yalnizca_sayilir(self):
+        """Teknik uyari metni telefona gitmez; SAYISI gider, metni raporda."""
         mesaj = self._mesaj(["Bayat fiyat X: 9 islem gunu guncellenmedi - "
-                             "uzun teknik gerekce"])
-        self.assertIn("Bayat fiyat X: 9 islem gunu guncellenmedi", mesaj)
-        self.assertNotIn("uzun teknik gerekce", mesaj)
+                             "uzun teknik gerekce",
+                             "Dogrulanmamis kripto fiyati BTC-USD: kur kapali"])
+        self.assertIn("ℹ️ 2 teknik not (raporda)", mesaj)
+        self.assertNotIn("Bayat fiyat", mesaj)
+        self.assertNotIn("Dogrulanmamis", mesaj)
 
-    def test_ayni_sorun_tek_satirda_birlesir(self):
-        mesaj = self._mesaj([
-            "Dogrulanmamis kripto fiyati BTC-USD: kur kapali - ayrinti",
-            "Dogrulanmamis kripto fiyati ETH-USD: kur kapali - ayrinti"])
-        self.assertIn("Dogrulanmamis kripto fiyati BTC-USD, ETH-USD: kur kapali",
-                      mesaj)
-        self.assertIn("Dikkat (1)", mesaj)
+    def test_sade_karsiligi_olan_acik_yazilir(self):
+        mesaj = self._mesaj([Uyari("Olasi kurumsal olay X: sicrama - ayrinti",
+                                   sade="X fiyatında açıklanamayan sıçrama"),
+                             "teknik ayrinti"])
+        self.assertIn("⚠️ X fiyatında açıklanamayan sıçrama", mesaj)
+        self.assertNotIn("Olasi kurumsal olay", mesaj)
+        self.assertIn("ℹ️ 1 teknik not", mesaj)
 
-    def test_fazlasi_rapora_yonlendirilir(self):
-        mesaj = self._mesaj([f"Sorun {i}: aciklama {i}" for i in range(5)])
-        self.assertIn("Dikkat (5)", mesaj)
-        self.assertIn("aciklama 2", mesaj)
-        self.assertNotIn("aciklama 3", mesaj)
-        self.assertIn("+2 not daha ekli raporda", mesaj)
+    def test_ayni_sade_uyari_tek_satir(self):
+        mesaj = self._mesaj([Uyari("a BTC", sade="Ayni sorun"),
+                             Uyari("a ETH", sade="Ayni sorun")])
+        self.assertEqual(mesaj.count("Ayni sorun"), 1)
+
+    def test_fazlasi_sayiya_doner(self):
+        mesaj = self._mesaj([Uyari(f"uzun {i}", sade=f"Sorun {i}")
+                             for i in range(5)])
+        self.assertIn("Sorun 2", mesaj)
+        self.assertNotIn("Sorun 3", mesaj)
+        self.assertIn("ℹ️ 2 teknik not", mesaj)
+
+    def test_uyari_str_gibi_davranir(self):
+        """Rapor ve diger tuketiciler uzun metni oldugu gibi kullanir."""
+        uyari = Uyari("uzun metin", sade="kisa")
+        self.assertEqual(uyari, "uzun metin")
+        self.assertIn("uzun", uyari)
+        self.assertEqual(uyari.sade, "kisa")
 
     def test_uyari_yoksa_bolum_yok(self):
-        self.assertNotIn("Dikkat", self._mesaj([]))
+        bos = self._mesaj([])
+        self.assertNotIn("⚠️", bos)
+        self.assertNotIn("teknik not", bos)
