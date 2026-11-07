@@ -41,9 +41,11 @@ esikler:
   #
   # Bant yalnizca katkiya uygulanir: beta = katki/agirlik oldugu icin katki
   # bandi betanin salinimini da sonumler. Beta tavani her iki yonde de duz esik.
-  risk_katkisi_ust: 0.20
-  risk_katkisi_geri_donus: 0.17
-  risk_beta_ust: 1.50
+  # 2026-11-07: fren gevsetildi (Dodo karari, agresif tilt). Eski .20 / .17 / 1.50.
+  # BTC %20 agirlikta tahmini katki ~%36, beta ~1.8: eski kural her gun kisardi.
+  risk_katkisi_ust: 0.30
+  risk_katkisi_geri_donus: 0.26
+  risk_beta_ust: 2.20
 
   # HAFTA SONU: tum esikler bu carpanla genisler (Cumartesi-Pazar, TR takvimi).
   #
