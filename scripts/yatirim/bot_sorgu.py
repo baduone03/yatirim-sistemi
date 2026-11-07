@@ -54,7 +54,7 @@ from fetch import fiyatlari_getir, maliyet_modelini_coz  # noqa: E402
 from kurumsal_olay import bilinen_olay_anahtarlari, olaylari_oku  # noqa: E402
 from ledger import durumu_hesapla, islemleri_oku  # noqa: E402
 from maliyet import TEMEL  # noqa: E402
-from mesaj import haber_dosyasi, haber_mesaji, kacis  # noqa: E402
+from mesaj import _gun_adi, _yuzde, haber_dosyasi, haber_mesaji, kacis  # noqa: E402
 from notify import API_KOKU, ZAMAN_ASIMI, dosya_gonder, env_oku  # noqa: E402
 from portfolio import (  # noqa: E402
     degisim_24s,
@@ -79,7 +79,7 @@ BILDIRIM_DOSYASI = PROJE_DIZINI / "bildirim.yaml"
 # Workflow cron adimi. Kodda tek yerde: YAML dogrulamasi buna gore yapilir.
 CRON_DAKIKA = 30
 
-BASLIK = "SIMULASYON"
+BASLIK = "Kağıt portföy"
 SON_ISLEM_SAYISI = 5
 
 
@@ -236,18 +236,25 @@ def veriyi_yukle(env: dict[str, str]) -> Veri:
 # --------------------------------------------------------------------------
 
 def _basliklar(veri: Veri) -> list[str]:
-    return [f"<b>{BASLIK}</b> - veri gunu {kacis(veri.veri_zamani)}", ""]
+    # Veri GUNU yazilir, mesaj zamani degil: mesaj 14:30'da gidiyor diye
+    # fiyat 14:30'un fiyati olmuyor.
+    return [f"<b>📊 {BASLIK} · {kacis(_gun_adi(veri.veri_zamani))} "
+            "fiyatlarıyla</b>", ""]
+
+
+def _ad(veri: Veri, sembol: str) -> str:
+    """'GC=F' okuyana bir sey soylemez; adi yoksa sembol, uydurulmaz."""
+    varlik = veri.yapilandirma.varliklar.get(sembol)
+    return kacis(varlik.ad if varlik and varlik.ad else sembol)
 
 
 def _belirsizlik_uyarisi(veri: Veri) -> list[str]:
+    """Teknik ayrinti /param'da; burada yalnizca VAR oldugu soylenir."""
     belirsizler = veri.duyarlilik.belirsizler
     if not belirsizler:
         return []
-    parametreler = sorted({p for v in belirsizler.values()
-                           for p in v.belirsiz_parametreler})
-    return ["", "UYARI - parametre belirsizligi: "
-            + kacis(", ".join(parametreler))
-            + f" ({len(belirsizler)} varlikta sinyal bastirildi)."]
+    return ["", f"ℹ️ {len(belirsizler)} varlıkta maliyet tam ölçülmediği için "
+            "öneri kapalı (parametre belirsizliği, ayrıntı /param)"]
 
 
 def komut_portfoy(baglam: Baglam, arguman: str) -> str:
@@ -257,24 +264,27 @@ def komut_portfoy(baglam: Baglam, arguman: str) -> str:
     net = portfoy.toplam_deger_try - baslangic
     # Saf FIYAT etkisi: pozisyonlar sabit tutulup fiyatlar geri alinir.
     gunluk = degisim_24s(portfoy, veri.fiyatlar)
+    dolar = kur_maruziyeti(portfoy, veri.yapilandirma.varliklar)
 
-    satirlar = _basliklar(veri) + ["<b>Pozisyonlar</b>"]
+    satirlar = _basliklar(veri) + [
+        f"💰 Toplam: <b>{tl(portfoy.toplam_deger_try)}</b>",
+        f"{'📈' if net >= 0 else '📉'} Başlangıçtan: "
+        f"{'+' if net >= 0 else '-'}{tl(abs(net))}"
+        + (f" ({_yuzde(net / baslangic)})" if baslangic else ""),
+        "📊 Son 24 saat: " + (_yuzde(gunluk) if gunluk is not None
+                             else "ölçülemedi"),
+        f"💵 Nakit: {tl(portfoy.nakit_try)}",
+        f"💱 Dolara bağlı kısım: {_yuzde(dolar, isaret=False)}",
+        "",
+        "<b>Pozisyonlar</b> (değer, kâr/zarar)",
+    ]
     for pozisyon in sorted(portfoy.pozisyonlar, key=lambda p: -p.deger_try):
         satirlar.append(
-            f"{kacis(pozisyon.sembol)}: {tl(pozisyon.deger_try)} "
-            f"({yuzde(pozisyon.kar_zarar_yuzde)})")
+            f"• {_ad(veri, pozisyon.sembol)}: {tl(pozisyon.deger_try)} "
+            f"({_yuzde(pozisyon.kar_zarar_yuzde)})")
     if portfoy.fiyatlanamayan:
-        satirlar.append("Fiyatlanamayan: "
-                        + kacis(", ".join(portfoy.fiyatlanamayan)))
-
-    satirlar += [
-        "",
-        f"Toplam: {tl(portfoy.toplam_deger_try)}",
-        f"Nakit: {tl(portfoy.nakit_try)}",
-        f"24 saat: {yuzde(gunluk) if gunluk is not None else 'veri yok'}",
-        f"Baslangictan: {tl(net)} ({yuzde(net / baslangic if baslangic else 0.0)})",
-        f"Kur maruziyeti: {oran(kur_maruziyeti(portfoy, veri.yapilandirma.varliklar))}",
-    ]
+        satirlar.append("⚠️ Fiyatı alınamadı: " + ", ".join(
+            _ad(veri, s) for s in portfoy.fiyatlanamayan))
     return "\n".join(satirlar + _belirsizlik_uyarisi(veri))
 
 
@@ -282,71 +292,79 @@ def komut_risk(baglam: Baglam, arguman: str) -> str:
     veri = baglam.veri
     risk = veri.risk
     satirlar = _basliklar(veri) + [
-        f"Portfoy volatilitesi: {oran(risk.portfoy_volatilitesi)}",
-        f"Max drawdown: {oran(risk.portfoy_max_drawdown)}",
-        f"Pencere: {risk.gozlem_sayisi} islem gunu",
+        f"📉 Yıllık oynaklık: {_yuzde(risk.portfoy_volatilitesi, isaret=False)}",
+        f"⬇️ Kötü bir yılda olası düşüş: "
+        f"{_yuzde(abs(risk.portfoy_max_drawdown), isaret=False)}",
         "",
-        "<b>Risk katkisi / beta</b>",
+        "<b>Para payı · risk payı</b>",
     ]
-    for varlik in risk.varlik_riskleri:
+    # Beta yerine iki sayi yan yana: "paranin %20'si, riskin %37'si" betayi
+    # (katki / agirlik) okuyana hesap yaptirmadan anlatir.
+    for varlik in sorted(risk.varlik_riskleri, key=lambda v: -v.risk_katkisi):
+        if not varlik.agirlik:
+            continue
         satirlar.append(
-            f"{kacis(varlik.sembol)}: katki {oran(varlik.risk_katkisi)}, "
-            f"beta {varlik.beta:.2f}")
+            f"• {_ad(veri, varlik.sembol)}: para "
+            f"{_yuzde(varlik.agirlik, isaret=False)} · risk "
+            f"{_yuzde(varlik.risk_katkisi, isaret=False)}")
 
-    ihlaller = [s for s in veri.karar.sonuclar.values()
-                if s.tur == SEMBOL and s.yon and not s.acik]
     acik = veri.karar.sinyaller(SEMBOL)
+    bastirilan = [s for s in veri.karar.sonuclar.values()
+                  if s.tur == SEMBOL and s.yon and not s.acik]
     satirlar.append("")
     if acik:
-        satirlar.append("Esik ihlali (SINYAL ACIK): "
-                        + kacis(", ".join(s.ad for s in acik)))
-    if ihlaller:
-        satirlar.append("Esik asildi ama bastirildi:")
-        satirlar += [f"  {kacis(s.ad)} - {kacis(s.etiket)}" for s in ihlaller]
-    if not acik and not ihlaller:
-        satirlar.append("Esik ihlali yok.")
+        satirlar.append("🔔 Risk sınırını aştı, azaltma önerisi: "
+                        + ", ".join(_ad(veri, s.ad) for s in acik))
+    for s in bastirilan:
+        satirlar.append(f"⏸️ {_ad(veri, s.ad)} sınırı aştı ama öneri verilmedi "
+                        f"({kacis(s.sebep.lower())})")
+    if not acik and not bastirilan:
+        satirlar.append("✅ Risk sınırını aşan varlık yok")
     if risk.dislanan:
-        satirlar.append("Risk hesabi disi: " + kacis(", ".join(sorted(risk.dislanan))))
-    return "\n".join(satirlar + _belirsizlik_uyarisi(veri))
+        satirlar.append("ℹ️ Fiyatı şüpheli, hesaba katılmadı: "
+                        + ", ".join(_ad(veri, s) for s in sorted(risk.dislanan)))
+    return "\n".join(satirlar)
 
 
 def komut_durum(baglam: Baglam, arguman: str) -> str:
     veri = baglam.veri
     bayatlar = veri.fiyatlar.bayat_semboller(veri.yapilandirma.bayatlik)
     karar = veri.karar
-    satirlar = _basliklar(veri) + [
-        f"Fiyat verisi gunu: {kacis(veri.fiyatlar.son_tarih)}",
-        f"Bayat sembol: "
-        + (kacis(", ".join(f"{s} ({g} islem gunu)"
-                           for s, g in sorted(bayatlar.items())))
-           if bayatlar else "yok"),
-        f"Fiyat gelmeyen: "
-        + (kacis(", ".join(veri.fiyatlar.eksik_semboller))
-           if veri.fiyatlar.eksik_semboller else "yok"),
-        "",
-        f"Devre kesici: {'KESILDI' if karar.devre_kesildi else 'acik'} "
-        f"({karar.gunluk_sayi}/{karar.gunluk_maks} sinyal)",
-        f"Acik sinyal: {len(karar.sinyaller())}",
-    ]
+    satirlar = _basliklar(veri)
+    if bayatlar:
+        satirlar.append("⚠️ Gecikmeli fiyat: " + ", ".join(
+            f"{_ad(veri, s)} ({g} iş günü)" for s, g in sorted(bayatlar.items())))
+    else:
+        satirlar.append("✅ Fiyatlar güncel")
+    if veri.fiyatlar.eksik_semboller:
+        satirlar.append("⚠️ Fiyatı gelmeyen: " + ", ".join(
+            _ad(veri, s) for s in veri.fiyatlar.eksik_semboller))
+    if karar.devre_kesildi:
+        satirlar.append(f"🛑 Sistem kendini durdurdu: bugün {karar.gunluk_sayi} "
+                        f"öneri çıktı (sınır {karar.gunluk_maks})")
+    else:
+        satirlar.append(f"⚙️ Sistem çalışıyor (bugün {karar.gunluk_sayi}/"
+                        f"{karar.gunluk_maks} öneri)")
+    satirlar.append(f"🔔 Açık öneri: {len(karar.sinyaller())}")
+
     if veri.risk.gozlem_guvenilirligi_dustu:
-        satirlar.append(
-            f"UYARI - volatilite tahmini guvenilirligi dustu "
-            f"(veri kaybi {oran(veri.risk.gozlem_dususu)}).")
+        satirlar.append(f"⚠️ Oynaklık tahmini zayıf (veri kaybı "
+                        f"{_yuzde(veri.risk.gozlem_dususu, isaret=False)})")
     engellenen = veri.maliyet.engellenenler
     if engellenen:
-        satirlar.append(f"Eksik maliyet: {len(engellenen)} varlikta sinyal yok.")
-    # Hurdle bayatligi BURAYA DA yazilir. /durum'un isi veri tazeligi ve bu
-    # sayi gereken getiriyi, asiri getiriyi ve nakit getirisini belirliyor.
-    # Gun sonu ozetinde gorunup burada gorunmemesi, iki ayri uyari yuzeyi
-    # olmasindan kaynaklanan klasik boslugun ta kendisi olurdu.
+        satirlar.append(f"⚠️ {len(engellenen)} varlıkta maliyet bilgisi eksik, "
+                        "öneri yok")
+    # Mevduat faizi (hurdle rate) bayatligi BURAYA DA yazilir: gun sonu
+    # ozetinde gorunup burada gorunmemesi, iki ayri uyari yuzeyinin klasik
+    # boslugu olurdu.
     if not veri.maliyet.risksiz_taze_mi():
         yas = veri.maliyet.risksiz_gun_yasi()
         satirlar.append(
-            f"UYARI - hurdle rate {yas} gunluk "
-            f"({kacis(veri.maliyet.risksiz_tarih)}), taze esigi "
-            f"{veri.maliyet.risksiz_bayatlik_gun} gun."
+            f"⚠️ Mevduat faizi verisi (hurdle rate) {yas} günlük "
+            f"({kacis(veri.maliyet.risksiz_tarih)}); "
+            f"{veri.maliyet.risksiz_bayatlik_gun} günden eskisi bayat"
             if yas is not None else
-            "UYARI - hurdle rate tarihi bilinmiyor.")
+            "⚠️ Mevduat faizi verisinin (hurdle rate) tarihi bilinmiyor")
     return "\n".join(satirlar + _belirsizlik_uyarisi(veri))
 
 
@@ -360,7 +378,7 @@ def komut_fiyat(baglam: Baglam, arguman: str) -> str:
     istenen = arguman.strip().upper()
     bilinen = {s.upper(): s for s in veri.yapilandirma.varliklar}
     if istenen not in bilinen:
-        return ("Bilinmeyen sembol. Tanimli semboller:\n"
+        return ("Bilinmeyen sembol. Şunlardan birini yaz (ör. /fiyat BTC-USD):\n"
                 + kacis(", ".join(sorted(veri.yapilandirma.varliklar))))
 
     sembol = bilinen[istenen]
@@ -371,37 +389,47 @@ def komut_fiyat(baglam: Baglam, arguman: str) -> str:
     ucgen_fiyatlari = veri.fiyatlar.ucgenleme.degerleme_fiyatlari()
     kaynak = "btcturk" if sembol in ucgen_fiyatlari else "yahoo"
 
-    satirlar = _basliklar(veri) + [f"<b>{kacis(sembol)}</b>"]
+    ad = _ad(veri, sembol)
+    satirlar = _basliklar(veri) + [
+        f"<b>{ad}</b>" + (f" ({kacis(sembol)})" if ad != kacis(sembol) else "")]
     if fiyat is None:
-        satirlar.append("Fiyat YOK - degerleme durduruldu veya veri gelmedi.")
+        satirlar.append("⚠️ Fiyat yok: değerleme durduruldu veya veri gelmedi.")
         gerekce = veri.fiyatlar.kurumsal_olay_supheleri.get(sembol)
         if gerekce:
-            satirlar.append("Sebep: kurumsal olay suphesi - " + kacis(gerekce))
+            satirlar.append("Sebep: fiyatta açıklanamayan sıçrama "
+                            f"(kurumsal olay şüphesi: {kacis(gerekce)})")
         return "\n".join(satirlar)
 
     satirlar += [
-        f"Fiyat: {tl(fiyat)}",
-        f"Veri zamani: {kacis(veri.veri_zamani)}",
-        f"Kaynak: {kacis(kaynak)}",
-        f"Bayat: {'EVET - ' + str(bayatlar[sembol]) + ' islem gunu' if sembol in bayatlar else 'hayir'}",
+        f"💲 {tl(fiyat)}",
+        f"🕒 {kacis(_gun_adi(veri.veri_zamani))} · kaynak: {kacis(kaynak)}",
     ]
+    if sembol in bayatlar:
+        satirlar.append(f"⚠️ Fiyat {bayatlar[sembol]} iş günü gecikmeli")
     if not veri.duyarlilik.sinyal_acik_mi(sembol):
-        satirlar.append("Sinyal kapali: " + kacis(veri.duyarlilik.etiket(sembol)))
+        satirlar.append("ℹ️ Bu varlıkta alım önerisi şu an kapalı (ayrıntı /param)")
     return "\n".join(satirlar)
+
+
+SON_GEREKCE_UZUNLUGU = 90
 
 
 def komut_son(baglam: Baglam, arguman: str) -> str:
     veri = baglam.veri
     islemler = veri.durum.islemler[-SON_ISLEM_SAYISI:]
     if not islemler:
-        return "\n".join(_basliklar(veri) + ["Henuz islem yok."])
+        return "\n".join(_basliklar(veri) + ["Henüz işlem yok."])
 
-    satirlar = _basliklar(veri) + [f"<b>Son {len(islemler)} simule islem</b>"]
+    satirlar = _basliklar(veri) + [f"<b>Son {len(islemler)} işlem</b>"]
     for islem in reversed(islemler):
-        tetik = islem.gerekce or "kayitli tetikleyici yok"
+        simge = "🟩 AL" if islem.yon == "AL" else "🟥 SAT"
         satirlar.append(
-            f"{kacis(islem.tarih)} {kacis(islem.yon)} {kacis(islem.sembol)} "
-            f"{tl(islem.tutar_try)} - {kacis(tetik)}")
+            f"• {kacis(_gun_adi(islem.tarih))} {simge} {_ad(veri, islem.sembol)}"
+            f" — {tl(islem.tutar_try)}")
+        gerekce = islem.gerekce or "kayıtlı gerekçe yok"
+        if len(gerekce) > SON_GEREKCE_UZUNLUGU:
+            gerekce = gerekce[:SON_GEREKCE_UZUNLUGU].rstrip() + "…"
+        satirlar.append(f"  <i>{kacis(gerekce)}</i>")
     return "\n".join(satirlar)
 
 
@@ -521,16 +549,16 @@ def komut_param(baglam: Baglam, arguman: str) -> str:
 
 def komut_yardim(baglam: Baglam, arguman: str) -> str:
     return "\n".join([
-        f"<b>{BASLIK} sorgu botu</b> - salt okunur, islem acmaz.",
+        f"<b>📊 {BASLIK} botu</b> — yalnızca bilgi verir, işlem yapmaz.",
         "",
-        "/portfoy - pozisyonlar, deger, K/Z, nakit, kur maruziyeti",
-        "/risk - beta, risk katkisi, esik ihlalleri",
-        "/durum - veri tazeligi, uyarilar, devre kesici",
-        "/fiyat SEMBOL - fiyat, veri zamani, kaynak, bayatlik",
-        "/son - son 5 simule islem",
-        "/param - olculmesi gereken parametreler",
-        "/haber - guncel basliklar (makro, piyasa, kripto) + ayrinti dosyasi",
-        "/yardim - bu liste",
+        "/portfoy — toplam değer ve pozisyonlar",
+        "/risk — risk hangi varlıkta toplanıyor",
+        "/durum — veriler güncel mi, sistem çalışıyor mu",
+        "/fiyat SEMBOL — tek varlığın fiyatı (ör. /fiyat BTC-USD)",
+        "/son — son 5 işlem",
+        "/haber — günün başlıkları",
+        "/param — teknik: maliyet parametreleri",
+        "/yardim — bu liste",
     ])
 
 
