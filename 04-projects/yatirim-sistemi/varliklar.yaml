@@ -662,12 +662,15 @@ enflasyon:
 # Sembol varliklar listesinde olmak ZORUNDA - fiyati oradan cekiliyor.
 kiyas: [XU100.IS, QQQ, GC=F, BTC-USD]
 
+# 2026-11-07: agresif tilt (Dodo karari). Eski: bist .30 / nasdaq .25 /
+# kripto .10 / maden .20 / nakit .15. Gerekce ve olcut: simulasyon/kararlar.yaml
+# -> 2026-11-07-agresif-tilt.
 hedef_dagilim:
   bist: 0.30
-  nasdaq: 0.25
-  kripto: 0.10
-  maden: 0.20
-  nakit: 0.15
+  nasdaq: 0.30
+  kripto: 0.20
+  maden: 0.15
+  nakit: 0.05
 
 varliklar:
   # --- BIST ---
