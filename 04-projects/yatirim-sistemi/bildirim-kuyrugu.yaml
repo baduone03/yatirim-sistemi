@@ -1,31 +1,4 @@
 # MAKINE URETIR - elle duzenleme.
 # Sessiz saatte veya hiz siniri asilirken biriken bildirimler.
 # Silinirse biriken bildirimler kaybolur, sistem durmaz.
-bekleyenler:
-- tip: gunsonu
-  anahtar: gunsonu:2026-11-06
-  metin: '<b>📅 Hafta kapanisi — 7 Kasim</b>
-
-
-    💰 <b>20.177 TL</b> (baslangictan +0.9%, +177 TL)
-
-    📊 Son 24 saat: +0.0% (yatay)
-
-    🔻 Mevduattan KOTU: portfoy +0.9%, mevduat +8.7% (86 gunde)
-
-    🏁 Portfoy 3./6: en iyisi Bitcoin +25.3% (tek basina konsaydi)
-
-    ⏸️ Islem yok: portfoy hedef dagilima yakin
-
-
-    <b>⚠️ Dikkat (3)</b>
-
-    • Mevduat faizi verisi 8 GUNLUK, kiyas eski orana dayaniyor
-
-    • BTC-USD: hedeften sapti (kis) ama hafta sonu islem onerilmedi
-
-    • Dogrulanmamis kripto fiyati BTC-USD, ETH-USD: kur piyasasi kapali (hafta sonu)
-
-
-    <i>Kagit para, gercek islem yok. Ayrinti ekli raporda.</i>'
-  olusma: '2026-11-07T00:04:11+00:00'
+bekleyenler: []
