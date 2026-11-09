@@ -1,25 +1,4 @@
 # MAKINE URETIR - elle duzenleme.
 # Sessiz saatte veya hiz siniri asilirken biriken bildirimler.
 # Silinirse biriken bildirimler kaybolur, sistem durmaz.
-bekleyenler:
-- tip: gunsonu
-  anahtar: gunsonu:2026-11-08
-  metin: '<b>🌙 Gün sonu · 8 Kasım</b>
-
-
-    💰 Portföy: <b>20.193 TL</b>
-
-    📈 Başlangıçtan beri: +193 TL (+%1,0)
-
-    📊 Son 24 saat: -%0,2
-
-    🏦 Mevduatta olsaydı: 21.752 TL → portföy 1.559 TL geride 🔻
-
-    ✅ Bugün yapılacak işlem yok
-
-
-    ℹ️ 3 teknik not (raporda)
-
-
-    <i>Kağıt portföy, gerçek para yok. Ayrıntı ekteki raporda.</i>'
-  olusma: '2026-11-08T23:40:12+00:00'
+bekleyenler: []
