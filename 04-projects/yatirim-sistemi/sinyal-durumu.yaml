@@ -6,15 +6,11 @@ gun: '2026-11-11'
 gunluk_sayi: 1
 siniflar:
   bist:
-    acik: true
-    yon: artir
+    acik: false
+    yon: ''
     son_sinyal: '2026-11-11T09:16:52+00:00'
   nakit:
     acik: false
     yon: ''
     son_sinyal: '2026-10-21T18:34:15+00:00'
-  nasdaq:
-    acik: true
-    yon: azalt
-    son_sinyal: ''
 semboller: {}
