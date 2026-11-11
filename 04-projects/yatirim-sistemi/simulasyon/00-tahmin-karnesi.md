@@ -1,6 +1,6 @@
 ---
 title: Tahmin Karnesi
-date_created: 2026-11-10
+date_created: 2026-11-11
 tags: [yatirim, tahmin, olcum, kalibrasyon]
 status: active
 related: ["[[00-simulasyon]]", "[[00-karar-sonuclari]]"]
