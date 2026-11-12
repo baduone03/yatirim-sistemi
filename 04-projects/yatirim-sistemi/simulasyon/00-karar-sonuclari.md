@@ -1,6 +1,6 @@
 ---
 title: Karar Sonuclari
-date_created: 2026-11-11
+date_created: 2026-11-12
 tags: [yatirim, karar, olcum, geribildirim]
 status: active
 related: ["[[00-simulasyon]]", "[[00-sistem]]"]
@@ -18,7 +18,7 @@ Her karar **5/10/15/20/25/30.** gunlerde olculur. Esik tetiklensin veya tetiklen
 
 *Beklenti:* Portfoy volatilitesi (%15,6) en dusuk volatiliteli tekil varligin (QQQ) altinda kalacak - cesitlendirme calisiyorsa boyle olmali.
 
-Karar tarihi 2026-08-13 (90 gun once).
+Karar tarihi 2026-08-13 (91 gun once).
 
 | Gun | Tarih | Portfoy | Portfoy getirisi |
 |---|---|---|---|
@@ -37,7 +37,7 @@ Karar tarihi 2026-08-13 (90 gun once).
 
 *Beklenti:* TUPRS'un BIST bacagina ortalama korelasyonu 0,17 (GARAN 0,61 idi). Amac getiri degil risk: BIST bacak volatilitesi %29,2'den %26,9'a inmeli ve orada kalmali. TUPRS'un GARAN'i getiri olarak GECMESI beklenmiyor - geride kalirsa bile karar dogru olabilir, olcut volatilite.
 
-Karar tarihi 2026-08-13 (90 gun once).
+Karar tarihi 2026-08-13 (91 gun once).
 
 | Gun | Tarih | Portfoy | Portfoy getirisi | Satilan | Alinan | Takas farki |
 |---|---|---|---|---|---|---|
@@ -58,7 +58,7 @@ Karar tarihi 2026-08-13 (90 gun once).
 
 *Beklenti:* ASELS'in risk katkisi %20 tavaninin altina inip orada kalacak. ASELS +%10,2 yaptigi gun satildi; kazanandan satmak his olarak yanlis gelir. Eger ASELS bundan sonra da yukselirse bu karar GETIRI olarak kaybettirir ama RISK olarak dogru kalir. Ikisini ayri olc.
 
-Karar tarihi 2026-08-13 (90 gun once).
+Karar tarihi 2026-08-13 (91 gun once).
 
 | Gun | Tarih | Portfoy | Portfoy getirisi | Satilan | Alinan | Takas farki |
 |---|---|---|---|---|---|---|
@@ -77,34 +77,40 @@ Karar tarihi 2026-08-13 (90 gun once).
 
 **REBALANCING** — Hedef dagilim riske kaydirildi: nakit %15->%5, kripto %10->%20, nasdaq %25->%30, maden %20->%15. Altin 0,121 g satildi; QQQ 0,0399, BTC 0,000405, THYAO 1 lot alindi.
 
+✅ **Tez tutuyor** - Portfoy getirisi: karar gunu +0.0% → 5. gun +1.8%. Sinir -10.0%, araya 11.8 puan var.
+
 *Beklenti:* Bu bir risk-alma bahsi: nakit faizinden (yillik ~%42) vazgecilip risk varliklarina 2.850 TL ek para konuldu. Portfoy volatilitesi %15,4'ten yukari cikacak (beklenen ~%18-20). 30 gunde portfoy getirisi ayni donemin mevduat getirisini (~%3) gecmezse tilt para kazandirmamis demektir. BTC agirligi %20'de kisma tavanini (katki %20 + beta 1,50) asacak; bu sinyal bilerek gormezden gelinen bir risktir.
 
 *Bozan kosul:* Portfoy getirisi -10.0% altina inerse tez bozulur - Karar gununden %10 kayip = agresif tilt hatali, dagilimi geri al
 
-Karar tarihi 2026-11-07 (4 gun once).
+Karar tarihi 2026-11-07 (5 gun once).
 
 | Gun | Tarih | Portfoy | Portfoy getirisi | Satilan | Alinan | Takas farki | Portfoy getirisi |
 |---|---|---|---|---|---|---|---|
 | 0 (karar) | 2026-11-07 | 19.958 TL | +0.00% | +0.00% | +0.00% | **+0.00%** | +0.0% |
+| 5 | 2026-11-12 | 20.310 TL | +1.77% | -1.97% | +7.94% | **+9.91%** | +1.8% |
 
 *Takas farki* = alinanin getirisi − satilanin getirisi. Pozitif ise takas getiri olarak kazandirdi. Karar risk icin verildiyse bu satir tek basina yeterli degil.
 
-Kalan kontrol gunleri: 5, 10, 15, 20, 25, 30.
+Kalan kontrol gunleri: 10, 15, 20, 25, 30.
 
 ## 2026-11-07-nasdaq-35
 
 **TAKAS** — Altin 0,154 g satildi, QQQ 0,0307 alindi: nasdaq hedefi %30->%35, maden %15->%10.
 
+✅ **Tez tutuyor** - Takas farki (alinan - satilan): karar gunu +0.0% → 5. gun +7.3%. Sinir -5.0%, araya 12.3 puan var.
+
 *Beklenti:* QQQ 30 gunde altini TL getirisi olarak gececek (takas farki > 0). Amac risk degil getiri: altin portfoyun tek dusuk korelasyonlu varligiydi (herkese 0,15-0,28), cikmasi portfoy volatilitesini artiracak - bu bilincli.
 
 *Bozan kosul:* Takas farki (alinan - satilan) -5.0% altina inerse tez bozulur - Altin QQQ'yu 5 puandan fazla gecerse savunmayi atmak hataydi
 
-Karar tarihi 2026-11-07 (4 gun once).
+Karar tarihi 2026-11-07 (5 gun once).
 
 | Gun | Tarih | Portfoy | Portfoy getirisi | Satilan | Alinan | Takas farki | Takas farki (alinan - satilan) |
 |---|---|---|---|---|---|---|---|
 | 0 (karar) | 2026-11-07 | 19.958 TL | +0.00% | +0.00% | +0.00% | **+0.00%** | +0.0% |
+| 5 | 2026-11-12 | 20.310 TL | +1.77% | -1.97% | +5.34% | **+7.31%** | +7.3% |
 
 *Takas farki* = alinanin getirisi − satilanin getirisi. Pozitif ise takas getiri olarak kazandirdi. Karar risk icin verildiyse bu satir tek basina yeterli degil.
 
-Kalan kontrol gunleri: 5, 10, 15, 20, 25, 30.
+Kalan kontrol gunleri: 10, 15, 20, 25, 30.
