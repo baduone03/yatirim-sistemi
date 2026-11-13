@@ -1,0 +1,616 @@
+# MAKINE URETIR - elle duzenleme.
+# haber_arsivi.py yazar. Ayni baglanti iki kez yazilmaz.
+# Bu dosya KAYITTIR, kaynak degil: buradaki bir baslik tek basina
+# bir iddiayi desteklemez, yalnizca o gun ne okundugunu gosterir.
+
+basliklar:
+- baslik: Are Alt-L1s over? Security, costs drive smaller chains to Ethereum
+  baglanti: https://cointelegraph.com/magazine/are-alt-l1s-over-security-costs-drive-smaller-chains-to-ethereum?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: 'NK hackers join memecoin trenches, xStocks adds Hong Kong equities: Asia
+    Express'
+  baglanti: https://cointelegraph.com/magazine/nk-hackers-join-memecoin-trenches-xstocks-adds-hong-kong-equities-asia-express?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Bitcoin hovers near $74K as stocks rise despite US bond yield rebound
+  baglanti: https://cointelegraph.com/markets/bitcoin-74k-stocks-us-bond-yield-inflation-cpi?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-11'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Bitcoin slides toward $71K as Nvidia stock tumbles after Huang steps down
+  baglanti: https://cointelegraph.com/markets/bitcoin-price-drops-71k-stocks-nvidia-huang-resignation?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: BlackRock Bitcoin ETF outflows hit $2B over nine sessions
+  baglanti: https://cointelegraph.com/markets/blackrock-bitcoin-etf-ibit-outflows-nine-day-streak?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Gemini’s quarterly retail trading volume sinks to 3-year low
+  baglanti: https://cointelegraph.com/markets/geminis-quarterly-retail-trading-volume-sinks-to-3-year-low?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-13'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Stablecoin supply falls $14.2B in biggest 30-day drop since June 2022
+  baglanti: https://cointelegraph.com/markets/stablecoin-supply-drops-worst-slump-since-mid-2022?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Strategy stock sheds 5% amid MSCI index removal, Bitcoin sell-off
+  baglanti: https://cointelegraph.com/markets/strategy-shares-fall-5-msci-index-removal-bitcoin?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Binance CSO unwittingly foreshadowed $6.3B hack tactic months before attack
+  baglanti: https://cointelegraph.com/news/binance-cso-foreshadowed-6b-hack-tactic-months-before-attack?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Bit Digital stock falls 5% in pre-market after Q3 revenue miss
+  baglanti: https://cointelegraph.com/news/bit-digital-stock-falls-q3-revenue-miss?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: 'Crypto hack losses equal 57 cents per $1 earned onchain: Ark’s Valente'
+  baglanti: https://cointelegraph.com/news/crypto-hackers-stole-57-cents-every-1-earned-ark?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Uber’s UK banking partner Griffin raises $20M for stablecoin services
+  baglanti: https://cointelegraph.com/news/digital-bank-griffin-100m-valuation-card-stablecoin?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: DTCC Plans Solana Expansion as Wallet Rules Limit Access
+  baglanti: https://cointelegraph.com/news/dtcc-plans-solana-expansion-wallet-rules-limit-access?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Ethlabs drops Hegotá slot proposal in push for 2027 quantum readiness
+  baglanti: https://cointelegraph.com/news/ethlabs-ethereum-quantum-security-2027-quick-slots?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: EU DeFi proposals could push users to riskier platforms, says Coinbase exec
+  baglanti: https://cointelegraph.com/news/eu-defi-riskier-platforms-coinbase-exec?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Jensen Huang resigns as Nvidia CEO, exits board; shares plunge
+  baglanti: https://cointelegraph.com/news/jensen-huang-resigns-nvidia-ceo-board-member?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: 'Kalshi ends Donald Trump Jr. advisory role over Polymarket investment:
+    Reuters'
+  baglanti: https://cointelegraph.com/news/kalshi-ends-donald-trump-jr-advisory-role-polymarket-investment?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Maple Finance’s strategy rift sends co-founder, COO to the exits
+  baglanti: https://cointelegraph.com/news/maple-finance-strategy-rift-co-founder-coo-exit?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: MSCI confirms Strategy’s removal from indexes at end of November
+  baglanti: https://cointelegraph.com/news/msci-confirms-strategys-removal-from-indexes-end-november?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: 'Nomura explores sale of crypto unit Laser Digital: Bloomberg'
+  baglanti: https://cointelegraph.com/news/nomura-sale-crypto-unit-laser-digital?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-11'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: 'Nvidia preparing to oust CEO Jensen Huang after affairs: WSJ'
+  baglanti: https://cointelegraph.com/news/nvidia-preparing-to-oust-ceo-jensen-huang-reports?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-11'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: OKXICE moves ahead with tokenized stocks as blue chips push back
+  baglanti: https://cointelegraph.com/news/okxice-tokenized-stocks-blue-chips-push-back?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-11'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: South Korea to permit crypto withdrawal freezes during hacking threats
+  baglanti: https://cointelegraph.com/news/south-korea-crypto-withdrawal-freezes-suspected-hacks?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Suiet wallet to shut down in latest exit from Sui ecosystem
+  baglanti: https://cointelegraph.com/news/suiet-wallet-shut-down-latest-exit-sui-ecosystem?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-11'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Thailand proposes $148K daily cap on stablecoin deposits and withdrawals
+  baglanti: https://cointelegraph.com/news/thailand-tighter-stablecoin-rules-crypto-exchange?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Tron and Tether bring in Chainalysis after T3 crime unit folds
+  baglanti: https://cointelegraph.com/news/tron-tether-chainalysis-cybercrime-task-force-laundering?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Uncalled US House races could send more crypto allies to Congress
+  baglanti: https://cointelegraph.com/news/uncalled-midterm-races-add-more-crypto-supporters-congress?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-11'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: US data center restrictions could give Bitcoin miners an edge in AI, though
+    challenges remain
+  baglanti: https://cointelegraph.com/news/us-data-center-restrictions-bitcoin-miners-edge-ai?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-11'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: US Justice Department, business groups and DeFi firms challenge Illinois
+    crypto tax
+  baglanti: https://cointelegraph.com/news/us-justice-department-business-groups-defi-illinois-crypto-tax?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Here’s what happened in crypto today
+  baglanti: https://cointelegraph.com/news/what-happened-in-crypto-today?utm_source=rss_feed&utm_medium=rss&utm_campaign=rss_partner_inbound
+  kaynak: Cointelegraph
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Innospec yöneticisi Leslie J. Parrette 27.493 dolar değerinde hisse aldı
+  baglanti: https://tr.investing.com/news/insider-trading-news/innospec-yoneticisi-leslie-j-parrette-27493-dolar-degerinde-hisse-ald-93CH-4155872
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-11-13'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: MediaAlpha yöneticisi Eugene Nonko 613.564 dolar değerinde hisse sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/mediaalpha-yoneticisi-eugene-nonko-613564-dolar-degerinde-hisse-satt-93CH-4155874
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-11-13'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Quest Diagnostics SVP Plewman 3,01 milyon dolarlık hisse sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/quest-diagnostics-svp-plewman-301-milyon-dolarlk-hisse-satt-93CH-4155873
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-11-13'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Snap Inc. CCO Ronan Harris 1,01 milyon dolarlık hisse sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/snap-inc-cco-ronan-harris-101-milyon-dolarlk-hisse-satt-93CH-4155860
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-11-13'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Tapestry CEO’su Crevoiserat 3,67 milyon dolarlık hisse sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/tapestry-ceosu-crevoiserat-367-milyon-dolarlk-hisse-satt-93CH-4155861
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-11-13'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Tapestry CFO/COO Roe 7,4 milyon dolarlık hisse sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/tapestry-cfocoo-roe-74-milyon-dolarlk-hisse-satt-93CH-4155862
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-11-13'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Warby Parker yöneticisi 225.000 dolarlık hisse sattı
+  baglanti: https://tr.investing.com/news/insider-trading-news/warby-parker-yoneticisi-225000-dolarlk-hisse-satt-93CH-4155859
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-11-13'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Modine Manufacturing hissesi mesai sonrası neden yükseliyor?
+  baglanti: https://tr.investing.com/news/stock-market-news/modine-manufacturing-hissesi-mesai-sonras-neden-yukseliyor-93CH-4155869
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-11-13'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Samsung Electronics hisseleri neden yükselişte?
+  baglanti: https://tr.investing.com/news/stock-market-news/samsung-electronics-hisseleri-neden-yukseliste-93CH-4155870
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-11-13'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: 'McGraw Hill BMO konferansında: Yapay zeka ve marjlar görünümü iyileştiriyor'
+  baglanti: https://tr.investing.com/news/transcripts/mcgraw-hill-bmo-konferansnda-yapay-zeka-ve-marjlar-gorunumu-iyilestiriyor-93CH-4155868
+  kaynak: Investing TR
+  kategori: piyasa
+  tarih: '2026-11-13'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: 'Analysis: Nvidia’s leadership crisis tests the chipmaker’s role as the
+    ‘central bank of AI’'
+  baglanti: https://www.cnbc.com/2026/11/11/nvidia-jensen-huang-ai-financial-system-risk.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: 'IRS announces 2027 401(k) contribution limits, raises savings cap: What
+    it means for your money'
+  baglanti: https://www.cnbc.com/2026/11/12/401k-contribution-limits-2027.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Alice Huang tied to Nvidia’s biggest Chinese competitor
+  baglanti: https://www.cnbc.com/2026/11/12/alice-huang-jensen-huang-nvidia-huawei.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Bain Capital’s head of real estate uses this strategy to counter the economy’s
+    ‘cocktail of disruption'
+  baglanti: https://www.cnbc.com/2026/11/12/bain-capitals-head-of-real-estate-on-the-cocktail-of-disruption.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Cerebras surges 17% after beating on quarterly revenue and announcing Microsoft
+    deal
+  baglanti: https://www.cnbc.com/2026/11/12/cerebras-systems-cbrs-q3-earnings-report-2026.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Cisco beats on earnings, says AI infrastructure revenue will double this
+    fiscal year
+  baglanti: https://www.cnbc.com/2026/11/12/cisco-csco-q1-2027-earnings.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Unions helped Democrats win big in 2026. Now they want action
+  baglanti: https://www.cnbc.com/2026/11/12/democrats-unions-midterms-2026.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Donald Trump Jr. exits advisory role at Kalshi prediction market
+  baglanti: https://www.cnbc.com/2026/11/12/donald-trump-jr-exits-kalshi-advisory-role.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: In a policy switch, the Fed says its October 2027 meeting will not see a
+    vote on interest rates
+  baglanti: https://www.cnbc.com/2026/11/12/in-policy-switch-fed-says-its-october-2027-meeting-will-not-see-a-vote-on-interest-rates.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Jensen and Lori Huang's Nvidia fortune is jointly controlled. How that makes
+    things complicated now that he's resigned
+  baglanti: https://www.cnbc.com/2026/11/12/inside-jensen-and-lori-huangs-jointly-controlled-nvidia-fortune.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: '‘A dark day for Nvidia’: Here’s what analysts have been saying about Jensen
+    Huang’s departure'
+  baglanti: https://www.cnbc.com/2026/11/12/jensen-huang-nvidia-affair-ceo.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Jensen Huang's exit from Nvidia raises critical questions about the future
+    of AI
+  baglanti: https://www.cnbc.com/2026/11/12/jensen-huangs-exit-from-nvidia-raises-questions-about-future-of-ai.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Widespread Microsoft outage takes down Outlook and other 365 services
+  baglanti: https://www.cnbc.com/2026/11/12/microsoft-outage-outlook-aws-google.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Nebius falls 16% as company expects increased 2026 capex spend, issues weak
+    outlook
+  baglanti: https://www.cnbc.com/2026/11/12/nebius-q3-earnings-report-2026.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Jensen Huang's Nvidia exit casts shadow over Wall Street’s $500 billion
+    AI financing bet
+  baglanti: https://www.cnbc.com/2026/11/12/nvidia-ceo-exit-ai-financing.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Cramer says Jensen Huang betrayed Nvidia shareholders. How to pick up the
+    pieces
+  baglanti: https://www.cnbc.com/2026/11/12/nvidia-jensen-huang-exit-cramer.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: 'Nvidia: Ex-prosecutor Joon Kim and Wachtell, Lipton bring big track record
+    to investigation'
+  baglanti: https://www.cnbc.com/2026/11/12/nvidia-jensen-huang-joon-kim-wachtell-china-spy.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Here's what Nvidia interim CEO Colette Kress and board chair Harvey Jones
+    wrote to Nvidia employees
+  baglanti: https://www.cnbc.com/2026/11/12/nvidia-kress-jones-employee-emails.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Nvidia stock closes down over 4% after CEO Jensen Huang announces resignation
+  baglanti: https://www.cnbc.com/2026/11/12/nvidia-nvda-jensen-huang-second-affair.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: 'Oil prices rise after Trump says no Iran deal needed: ''We''ve got their
+    Strait'''
+  baglanti: https://www.cnbc.com/2026/11/12/oil-prices-jump-after-trump-says-no-iran-deal-needed-weve-got-their-strait.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-13'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: The world's super-rich are piling into alternative investments. Here's why
+  baglanti: https://www.cnbc.com/2026/11/12/rich-wealth-alternative-assets-.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Scout Motors has 212,000 vehicle reservations as $2 billion South Carolina
+    plant nears completion
+  baglanti: https://www.cnbc.com/2026/11/12/scout-motors-reservations-south-carolina-plant.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Disney's 'Star Wars' is coming to Cosm domes ahead of 50th anniversary as
+    part of multiyear film deal
+  baglanti: https://www.cnbc.com/2026/11/12/star-wars-cosm-dome-screenings.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Trump says ‘we don’t need a deal with Iran’
+  baglanti: https://www.cnbc.com/2026/11/12/trump-iran-deal-hormuz-strait.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: 'Inside India newsletter: Trump''s poll setback fuels hope for U.S.-India
+    trade deal by year end'
+  baglanti: https://www.cnbc.com/2026/11/12/us-india-trade-tariffs-trump-modi.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-11'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Yankees President Randy Levine pushes college sports bill, discusses MLB
+    labor negotiations
+  baglanti: https://www.cnbc.com/2026/11/12/yankees-randy-levine-discusses-college-sports-bill-mlb-labor-deal.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Who will replace Jensen Huang? Here's our early thoughts on the search for
+    Nvidia's next CEO
+  baglanti: https://www.cnbc.com/investingclub/2026/11/12/jensen-huang-ceo-replacement-jim-cramer.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: United Airlines won’t let AI agents book your flight. Expert says you shouldn't
+    let a bot do that for you, anyway
+  baglanti: https://www.cnbc.com/make-it/2026/11/12/ai-agents-human-in-loop.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Without Jensen Huang, Nvidia's organizational structure isn't 'built to
+    last,' management expert says
+  baglanti: https://www.cnbc.com/make-it/2026/11/12/nvidia-jensen-huang-management-structure.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Jensen Huang is out and Nvidia stock is down—what market pros say about
+    buying dips
+  baglanti: https://www.cnbc.com/make-it/2026/11/12/nvidia-what-market-pros-say-about-buying-dips.html
+  kaynak: CNBC Piyasalar
+  kategori: piyasa
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: DTCC adds Solana to Wall Street tokenization plans, targeting 2027 rollout
+  baglanti: https://www.coindesk.com/business/2026/11/12/dtcc-adds-solana-to-wall-street-tokenization-plans-targeting-2027-rollout
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Gemini sells UK and European operations to stablecoin payments firm KAST
+    for under $10 million
+  baglanti: https://www.coindesk.com/business/2026/11/12/gemini-sells-uk-and-european-operations-to-stablecoin-payments-firm-kast-for-under-usd10-million
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Jupiter adds Anchorage-backed USDGO to its $1 billion Solana lending platform
+  baglanti: https://www.coindesk.com/business/2026/11/12/jupiter-adds-anchorage-backed-usdgo-to-its-usd1-billion-solana-lending-platform
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Nomura weighs Laser Digital sale as European losses hit four straight quarters
+  baglanti: https://www.coindesk.com/business/2026/11/12/nomura-weighs-laser-digital-sale-as-european-losses-hit-four-straight-quarters-bloomberg
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Polymarket trims workforce under investor pressure as Kalshi surges ahead
+  baglanti: https://www.coindesk.com/business/2026/11/12/polymarket-trims-workforce-under-investor-pressure-as-kalshi-surges-ahead
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: UK bank Griffin raises $20 million to expand into stablecoin payments
+  baglanti: https://www.coindesk.com/business/2026/11/12/uk-bank-griffin-raises-usd20-million-to-expand-into-stablecoin-payments
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: 'Crypto Long & Short: The GENIUS Act’s guarantees don’t cover DeFi lending'
+  baglanti: https://www.coindesk.com/coindesk-indices/2026/11/11/crypto-long-and-short-the-genius-act-s-guarantees-don-t-cover-defi-lending
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-11'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: 'Crypto for Advisors: The blockchain built to run financial markets'
+  baglanti: https://www.coindesk.com/coindesk-indices/2026/11/12/crypto-for-advisors-the-blockchain-built-to-run-financial-markets
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Bitcoin weakness erases September's bullish signal
+  baglanti: https://www.coindesk.com/daybook-us/2026/11/12/bitcoin-weakness-erases-september-s-bullish-signal
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Bitcoin dips with Nvidia as ETF outflows reach day five
+  baglanti: https://www.coindesk.com/markets/2026/11/12/bitcoin-dips-with-nvidia-as-etf-outflows-reach-day-five
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Nvidia perps crash 7% as CEO Jensen Huang reportedly faces the axe
+  baglanti: https://www.coindesk.com/markets/2026/11/12/bitcoin-listless-nvidia-perps-crash-7-as-ceo-jensen-huang-reportedly-faces-the-axe
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Canaan may sell more bitcoin for stock buybacks as mining-rig revenue falls
+    96%
+  baglanti: https://www.coindesk.com/markets/2026/11/12/canaan-may-sell-more-bitcoin-for-stock-buybacks-as-mining-rig-revenue-falls-96
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: MSCI is dropping Strategy from its index, and the exclusion could hit its
+    bitcoin-buying machine
+  baglanti: https://www.coindesk.com/markets/2026/11/12/msci-is-dropping-strategy-from-its-index-and-the-exclusion-could-hit-its-bitcoin-buying-machine
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Nvidia CEO Huang quits company he co-founded, led for 3 decades. Shares
+    slump
+  baglanti: https://www.coindesk.com/markets/2026/11/12/nvidia-shares-plunge-10-as-jensen-huang-resigns
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: The next Congress will write rules for AI and emerging tech. They should
+    use the stuff first.
+  baglanti: https://www.coindesk.com/opinion/2026/11/12/the-next-congress-will-write-rules-for-ai-and-emerging-tech-they-should-use-the-stuff-first
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Illinois crypto tax is impossible to enforce as written, crypto industry
+    tells court
+  baglanti: https://www.coindesk.com/policy/2026/11/12/illinois-crypto-tax-is-impossible-to-enforce-as-written-crypto-industry-tells-court
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: India’s financial crimes watchdog raids crypto exchanges CoinDCX and Delta
+    over alleged illegal cross-border trades
+  baglanti: https://www.coindesk.com/policy/2026/11/12/india-s-financial-crimes-watchdog-raids-crypto-exchanges-coindcx-and-delta-over-alleged-illegal-cross-border-trades
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Kalshi ends Donald Trump Jr.’s advisory contract over 1789 Capital’s Polymarket
+    investment
+  baglanti: https://www.coindesk.com/policy/2026/11/12/kalshi-ends-donald-trump-jr-s-advisory-contract-over-1789-capital-s-polymarket-investment
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: North Korea's Binance hack faces U.S. crackdown as DOJ targets $1.2 billion
+    in stolen crypto
+  baglanti: https://www.coindesk.com/policy/2026/11/12/north-korea-s-binance-hack-faces-u-s-crackdown-as-doj-targets-usd1-2-billion-in-stolen-crypto
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: U.S. President Trump names CFTC, SEC nominees for first time in a year
+  baglanti: https://www.coindesk.com/policy/2026/11/12/u-s-president-names-cftc-sec-nominees-for-first-time-in-a-year
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Bitcoin Core reveals bug that made thousands of nodes trust any stranger
+    on Tor
+  baglanti: https://www.coindesk.com/tech/2026/11/12/bitcoin-core-reveals-bug-that-made-thousands-of-nodes-trust-any-stranger-on-tor
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Ethereum researchers drop faster blocks to race toward quantum defenses
+    in 2027
+  baglanti: https://www.coindesk.com/tech/2026/11/12/ethereum-researchers-drop-faster-blocks-to-race-toward-quantum-defenses-in-2027
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: 'Live updates: Bitcoin slumps below $72,000 as Nvidia''s Huang resigns,
+    interest rates surge'
+  baglanti: https://www.coindesk.com/tech/2026/11/12/live-news-strategy-kicked-out-of-msci-indexes-as-nvidia-slump-rattles-markets
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Ripple’s bank-lending system moves closer to launch on the XRP Ledger
+  baglanti: https://www.coindesk.com/tech/2026/11/12/ripple-s-bank-lending-system-moves-closer-to-launch-on-the-xrp-ledger
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
+- baslik: Zcash holders to vote on pulling 50,000 ZEC, worth $50 million, from grants
+    treasury
+  baglanti: https://www.coindesk.com/tech/2026/11/12/zcash-holders-to-vote-on-pulling-50-000-zec-from-grants-treasury
+  kaynak: CoinDesk
+  kategori: kripto
+  tarih: '2026-11-12'
+  ilk_gorulme: '2026-11-13T01:02:10+00:00'
