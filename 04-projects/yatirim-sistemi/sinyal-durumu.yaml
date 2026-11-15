@@ -9,6 +9,10 @@ siniflar:
     acik: false
     yon: ''
     son_sinyal: '2026-11-13T09:26:30+00:00'
+  kripto:
+    acik: true
+    yon: artir
+    son_sinyal: ''
   nakit:
     acik: false
     yon: ''
