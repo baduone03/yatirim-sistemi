@@ -206,6 +206,21 @@ olcumler:
     GC=F: -0.019653
     QQQ: 0.053439
     THYAO.IS: 0.048454
+- karar_id: 2026-11-07-agresif-tilt
+  gun: 10
+  olcum_tarihi: '2026-11-17'
+  portfoy_degeri: 19730.62
+  portfoy_getirisi: -0.011379
+  fiyatlar:
+    BTC-USD: 3249871.8043
+    GC=F: 6259.7741
+    QQQ: 33312.6668
+    THYAO.IS: 320.25
+  getiriler:
+    BTC-USD: -0.144536
+    GC=F: -0.047302
+    QQQ: 0.01238
+    THYAO.IS: 0.070175
 - karar_id: 2026-11-07-nasdaq-35
   gun: 0
   olcum_tarihi: '2026-11-07'
@@ -228,3 +243,14 @@ olcumler:
   getiriler:
     GC=F: -0.019653
     QQQ: 0.053439
+- karar_id: 2026-11-07-nasdaq-35
+  gun: 10
+  olcum_tarihi: '2026-11-17'
+  portfoy_degeri: 19730.62
+  portfoy_getirisi: -0.011379
+  fiyatlar:
+    GC=F: 6259.7741
+    QQQ: 33312.6668
+  getiriler:
+    GC=F: -0.047302
+    QQQ: 0.01238
