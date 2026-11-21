@@ -10,19 +10,15 @@ siniflar:
     yon: azalt
     son_sinyal: '2026-11-21T01:40:05+00:00'
   kripto:
-    acik: true
-    yon: azalt
+    acik: false
+    yon: ''
     son_sinyal: '2026-11-21T01:40:05+00:00'
   maden:
-    acik: true
-    yon: azalt
+    acik: false
+    yon: ''
     son_sinyal: '2026-11-21T12:32:46+00:00'
   nakit:
-    acik: true
-    yon: azalt
+    acik: false
+    yon: ''
     son_sinyal: '2026-10-21T18:34:15+00:00'
-  nasdaq:
-    acik: true
-    yon: artir
-    son_sinyal: ''
 semboller: {}
