@@ -3,12 +3,12 @@
 # Silinirse latch kapali baslar: acik bir sinyal tetik esigini
 # yeniden asmak zorunda kalir (tek seferlik gurultu, veri kaybi degil).
 gun: '2026-11-22'
-gunluk_sayi: 1
+gunluk_sayi: 2
 siniflar:
   bist:
     acik: true
     yon: azalt
-    son_sinyal: '2026-11-22T00:35:09+00:00'
+    son_sinyal: '2026-11-22T20:42:15+00:00'
   kripto:
     acik: false
     yon: ''
