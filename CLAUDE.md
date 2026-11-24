@@ -222,6 +222,10 @@ ilgili alt klasorun `CLAUDE.md`'sindedir:
 
 ### Git ve GitHub Actions
 
+- **SISTEM DONDURULDU** (A, 2026-11-24): iki workflow'un da otomatik tetikleyicisi kapali
+  (`schedule`, `repository_dispatch`), yalnizca `workflow_dispatch` duruyor. Telegram'a mesaj
+  gitmez, bot cevap vermez. Geri acmak: workflow dosyalarindaki yorumlu tetikleyicileri geri al.
+  Cloudflare Worker hala Telegram webhook'u aliyor ama dispatch'i hicbir is dinlemiyor.
 - **calistirma GitHub Actions'ta**: repo `baduone03/yatirim-sistemi` (private), workflow hafta
   ici 16:00 UTC = 19:00 TR. Yerel Task Scheduler gorevi KALDIRILDI - ikisi ayni anda calisirsa
   Telegram'a gunde iki mesaj duser. `gunluk.ps1` yerel yedek olarak duruyor ama zamanlanmis

@@ -27,21 +27,12 @@ name: Yatirim Takibi
 # yani daha sik taramak sinyal SAYISINI artirmaz.
 
 on:
-  schedule:
-    # Saatler UTC. Turkiye kalici UTC+3, yaz saati yok.
-    #
-    # Dakika 7, 0 DEGIL: GitHub zamanlanmis kosulari "best effort" calistirir
-    # ve saat basi kuyrugun en kalabalik oldugu andir. Tam saatte tetiklenen
-    # is 10-40 dakika gecikebiliyor; 7. dakika bedava gecikme sigortasi.
-    - cron: '7 */2 * * *'     # 2 saatte bir, 7 gun - piyasa taramasi
-    - cron: '30 20 * * *'     # 23:30 TR - gun sonu ozeti (esik tam 23:30)
-    #
-    # Brifing icin AYRI CRON YOK: brifing TR 13:00'de basliyor ve
-    # yukaridaki '7 */2' gridi zaten TR 13:07'de kosuyor. Pazartesi'ye
-    # ozel '0 6' cron'u bu yuzden KALDIRILDI - hem gereksizdi hem de
-    # dakikasi 0 oldugu icin GitHub kuyrugunda en cok geciken slottu.
-    # Haftalik ozet de ayri cron istemez: Cuma gunu gun sonu kosusu
-    # HAFTALIK gorevine donusur.
+  # DONDURULDU (2026-11-24, Dodo karari): zamanlanmis kosular kapatildi,
+  # Telegram'a mesaj gitmez ve Actions dakikasi harcanmaz. Veriler ve kod
+  # repoda duruyor. Geri acmak icin eski tetikleyicileri geri ekle:
+  #   schedule:
+  #     - cron: '7 */2 * * *'     # 2 saatte bir tarama
+  #     - cron: '30 20 * * *'     # 23:30 TR gun sonu
   workflow_dispatch:          # Actions sekmesinden elle tetiklenebilir
     inputs:
       gorev:

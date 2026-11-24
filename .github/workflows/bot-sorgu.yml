@@ -31,22 +31,13 @@ name: Telegram Sorgu Botu
 # workflow'un onunde bir fren var - bkz. altyapi/telegram-webhook/worker.js.
 
 on:
-  repository_dispatch:
-    types: [telegram-mesaj]   # Cloudflare Worker bunu atar
-  schedule:
-    # EMNIYET AGI - gunde 2 kez, ~61 dk/ay. TR 09:07 ve 21:07.
-    #
-    # Webhook AKTIFKEN bu kosu hicbir sey yapmaz: getUpdates HTTP 409 doner
-    # ve script "Webhook aktif - yoklamaya gerek yok" deyip BASARIYLA cikar.
-    # Yani kurulu sistemde gunde 2 dakikalik sigorta primi.
-    #
-    # Webhook YOKKEN (veya Worker/Cloudflare cokmusken) eski yoklama yolu
-    # devreye girer ve bekleyen mesajlar cevaplanir. Bu sayede webhook
-    # kurulumu ile kod arasinda SIRA BAGIMLILIGI yok - hangisi once olursa
-    # olsun bot cevap veriyor.
-    #
-    # Webhook aylarca sorunsuz calistiktan sonra bu blok silinebilir.
-    - cron: '7 6,18 * * *'
+  # DONDURULDU (2026-11-24, Dodo karari): Worker'in attigi dispatch ve
+  # emniyet agi croni kapatildi; bota yazilan komutlar cevapsiz kalir.
+  # Geri acmak icin:
+  #   repository_dispatch:
+  #     types: [telegram-mesaj]
+  #   schedule:
+  #     - cron: '7 6,18 * * *'
   workflow_dispatch:          # elle tetikleme - test icin
 
 permissions:
